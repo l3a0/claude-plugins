@@ -10,11 +10,13 @@ Extract every highlight for a book from `read.amazon.com/notebook` into one comb
 DOM; the rest are truncated or entirely hidden by Amazon's clipping/export limit ("Some
 highlights have been hidden or truncated due to export limits") and must be recovered.
 
-Derived from three real runs: *Trade Your Way to Financial Freedom* (466 highlights, 41
+Derived from four real runs: *Trade Your Way to Financial Freedom* (466 highlights, 41
 truncated — recovered one-by-one from screenshots), *Trading and Exchanges* (1,211
 highlights, 283 truncated + **180 fully hidden** — recovered in bulk via the Mac app's
-position database + page OCR), and *Inside the Black Box* (520 highlights, 73 truncated +
-181 hidden — recovered via the overlay-geometry variant, median residual 0–1 char). Trust
+position database + page OCR), *Inside the Black Box* (520 highlights, 73 truncated +
+181 hidden — recovered via the overlay-geometry variant, median residual 0–1 char), and
+*Quantitative Trading* (235 highlights, 57 truncated + 0 hidden — recovered via
+cluster-jumps + prefix-anchored cuts, 44/57 at residual 0, rest ±2). Trust
 the gotchas below — each one cost real debugging.
 
 ## The one prerequisite that unblocks everything
@@ -67,7 +69,9 @@ Gotchas:
   (values from the hidden inputs `.kp-notebook-content-limit-state` and
   `.kp-notebook-annotations-next-page-start`; send `x-requested-with: XMLHttpRequest`), parse
   the returned HTML fragment for rows + refreshed inputs, loop until the token is empty
-  (~50–100 rows/page).
+  (~50–100 rows/page). The token can also be **circular**: one run had all 235 rows already in
+  the DOM yet a non-empty token, and the fetched pages re-served 139 exact duplicates — always
+  dedupe fetched rows against what you have on `(loc, text)` before believing a bigger count.
 - The export limit doesn't just truncate: past its budget it **hides highlights entirely** —
   the row has a location but NO text (only the banner). The scraper keeps these
   (`hidden: true, text: null`); never filter rows by text presence, filter by `loc`.
@@ -147,7 +151,9 @@ Reader mechanics (hard-won):
 - Page-flip: dispatch keydown **and keyup** for ArrowRight on several targets — `window`,
   `document`, `document.body`, `.kg-client-root`, `ion-app` — one target alone is unreliable,
   and the chevron `.click()` does nothing. **A leftover modal/panel silently swallows the keys**
-  (a stuck Go-to-Page modal is the classic wedge; when flips die and no overlay is open, reload
+  (a stuck Go-to-Page modal is the classic wedge; the OPEN annotations panel does it too — after
+  every panel-jump, close the panel before flipping, or the sweep re-captures the same screen
+  forever; when flips die and no overlay is open, reload
   the tab and reinstall your helpers). Keyboard-independent fallback (works after Aa-panel
   interactions kill the arrows): dispatch `mousedown` + `mouseup` MouseEvents at the center of
   `[aria-label="Next page"]` / `"Previous page"` — exactly one viewport per pair. Do NOT add
@@ -162,7 +168,10 @@ Reader mechanics (hard-won):
   not by fewest flips**: the render width = CSS viewport width × devicePixelRatio, capped at
   2048, so px-per-char ≈ font CSS px × dpr. Vision OCR is near-perfect at ≥~17 px/char
   (fontSizeIndex 4 at dpr 1, or smallest font on a Retina/dpr-2 window) and garbles at 11
-  (fontSizeIndex 0 at dpr 1). The smallest font is only correct on a dpr-2 window.
+  (fontSizeIndex 0 at dpr 1). The smallest font is only correct on a dpr-2 window. A window
+  WIDER than 2048 CSS px downscales the render (2560 → 2048 = 0.8×; an unresizable fullscreen
+  window can force this) — bump the font to compensate: fontSizeIndex 6 (~21 px → ~17 effective)
+  was verified near-perfect.
 
 ### Small-scale path (a few dozen truncated, all within the first 500)
 
@@ -170,6 +179,31 @@ As in the original run: jump via the annotations panel (`#notebook-grouped-item-
 first 500 exist), capture the screen with overlays painted from `.kg-client-highlight` rects
 (class token `<startPos>/<endPos>` = exact extent), read the yellow span, transcribe the
 completion into `completions.json`, batch by cluster.
+
+### Truncated-only path (no hidden rows — every blocked highlight has a known prefix)
+
+When nothing is fully hidden, skip both the full sweep and geometry x-cuts:
+
+1. **Cluster** the truncated highlights by DB start-position gap (< ~3000 positions). One run's
+   57 truncated highlights formed 14 clusters whose spans summed to ~15% of a full sweep —
+   ~44 captures total instead of ~300.
+2. **Per cluster:** open the annotations panel → jump to the cluster's first highlight
+   (`#notebook-grouped-item-<startPos>`) → **close the panel** (see the key-swallowing gotcha)
+   → capture → flip → capture … until the cluster's LAST token (`<start>/<end>` of its last
+   truncated highlight) has appeared and then left the screen. ~3 screens per cluster.
+3. **Cut by prefix anchor, not geometry.** Proportional-x boundary cuts assume monospace and
+   overshoot by 3–4 words in the book's proportional font. Instead: take the OCR lines inside
+   the token's vertical band (first-rect top → last-rect bottom, still filtering rects taller
+   than ~45 CSS px), join them (a line ending in `-` joins the next without a space), then
+   **find the known notebook prefix** in that text (normalize for matching only: en-dash →
+   hyphen, curly → straight, collapse spaces), align the prefix END with difflib (tolerates
+   OCR slips: dropped spaces like "I know"→"Iknow", AI→Al), and cut exactly
+   `(end − start + 1) − len(prefix)` chars from there, snapping the end to the word edge that
+   minimizes the residual. The value written to `completions.json` is that tail alone, so
+   **OCR errors inside the prefix region cost nothing** — the build reconstructs
+   `notebook prefix + completion`. Validate per highlight: prefix found + |residual| ≤ 3.
+   Multi-screen highlights: join fragments by dropping the longest suffix-prefix overlap
+   (≥ 20 chars) at each seam.
 
 ### Bulk path (hundreds blocked / anything past the 500-overlay cap)
 
@@ -241,3 +275,13 @@ is trusted.
 - OCR clips trailing digits in dollar amounts and small caption text: sweep recovered text with
   `\$\d+\.(?=\s|$)` and re-read hits from the page image; an arithmetic cross-check often pins the
   digits (2,340 of 23.4M milliseconds ⇒ "0.01 percent"). Also watch em-dashes read as hyphens.
+- **Display equations (standalone math blocks) are NOT in notebook text and NOT counted by the
+  position ruler** — same class as headings and list markers (verified: the notebook prefix of a
+  formula-spanning highlight skipped the equations entirely). OCR inserts them mid-highlight as
+  garbage ("fᵢ*=mᵢ/sᵢ²" read as "2 m/s") — delete them from recovered text and let the freed
+  chars extend the end cut; check the result against the page image.
+- OCR flattens Greek letters (θ → "O"/"0", μ → "u") and reads zero as letter O in prose
+  ("greater than O") — restore from context, using the notebook prefix's glyphs as the guide
+  when the same symbol appears there.
+- **Dictionary-sweep URL slugs specifically**: "your"→"vour" inside a printed URL survived every
+  other QA check (word sweeps skip slug fragments); URLs are also cheap to verify externally.
