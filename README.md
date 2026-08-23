@@ -3,6 +3,9 @@
 A personal collection of [Claude Code](https://code.claude.com) skills, published as a single
 plugin under the `l3a0` namespace. This repo is both the plugin and its own marketplace.
 
+I write about how these tools get built — and about technology, business, and finance — at
+[baowebdev.substack.com](https://baowebdev.substack.com).
+
 ## Install
 
 ```bash
