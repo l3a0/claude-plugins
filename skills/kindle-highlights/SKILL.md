@@ -10,10 +10,12 @@ Extract every highlight for a book from `read.amazon.com/notebook` into one comb
 DOM; the rest are truncated or entirely hidden by Amazon's clipping/export limit ("Some
 highlights have been hidden or truncated due to export limits") and must be recovered.
 
-Derived from two real runs: *Trade Your Way to Financial Freedom* (466 highlights, 41
-truncated — recovered one-by-one from screenshots) and *Trading and Exchanges* (1,211
+Derived from three real runs: *Trade Your Way to Financial Freedom* (466 highlights, 41
+truncated — recovered one-by-one from screenshots), *Trading and Exchanges* (1,211
 highlights, 283 truncated + **180 fully hidden** — recovered in bulk via the Mac app's
-position database + page OCR). Trust the gotchas below — each one cost real debugging.
+position database + page OCR), and *Inside the Black Box* (520 highlights, 73 truncated +
+181 hidden — recovered via the overlay-geometry variant, median residual 0–1 char). Trust
+the gotchas below — each one cost real debugging.
 
 ## The one prerequisite that unblocks everything
 
@@ -44,7 +46,10 @@ Navigate the tab to `https://read.amazon.com/notebook`. The `?asin=` parameter i
 the page may restore the last-viewed book — select the book by clicking its entry in the
 library sidebar (`#kp-notebook-library .kp-notebook-library-each-book`, id = ASIN) and confirm
 the annotations-pane title. Header shows `N Highlights | M Notes` — **the count has thousands
-commas** (`1,211`), so match `[\d,]+` when parsing it.
+commas** (`1,211`), so match `[\d,]+` when parsing it. The count can also be a LIE on a
+paginated notebook: one run showed "97 Highlights" for a 520-highlight book (the server
+rendered only the first page's count). Treat the Step-4 DB as the count authority, or just
+page until the token empties and count rows.
 
 ## Step 2 — scrape all highlights to a JSON file
 
@@ -57,11 +62,20 @@ typography (curly quotes, em-dashes, bullets). Then read that file with normal t
 Gotchas:
 - Small books load all rows at once, but **large sets lazy-load in batches** (~500/burst) —
   poll `.kp-notebook-row-separator` count until it equals the header count before scraping.
+  Synthetic window-scroll events may never trigger the next batch. The reliable path is the
+  pagination endpoint: GET `/notebook?asin=<ASIN>&contentLimitState=<state>&token=<tok>`
+  (values from the hidden inputs `.kp-notebook-content-limit-state` and
+  `.kp-notebook-annotations-next-page-start`; send `x-requested-with: XMLHttpRequest`), parse
+  the returned HTML fragment for rows + refreshed inputs, loop until the token is empty
+  (~50–100 rows/page).
 - The export limit doesn't just truncate: past its budget it **hides highlights entirely** —
   the row has a location but NO text (only the banner). The scraper keeps these
   (`hidden: true, text: null`); never filter rows by text presence, filter by `loc`.
 - A Blob download from a **background** tab is blocked — and Chrome blocks the **second**
-  automatic download from the same origin even in a focused tab. Fallback that always works:
+  automatic download from the same origin even in a focused tab. With "ask where to save each
+  file" enabled, every download instead raises a native Save-As dialog that page JS cannot
+  dismiss (the payload bytes do land in `~/Downloads/.com.google.Chrome.*` temp files, readable
+  directly). Fallback that always works:
   stash the payload on `window.__x`, run [scripts/receiver.py](scripts/receiver.py) locally,
   and `fetch('http://127.0.0.1:8931/json?name=…', {method:'POST', body: window.__x})` — the
   notebook AND reader pages' CSP both allow localhost fetches (the receiver answers the
@@ -115,9 +129,17 @@ Reader mechanics (hard-won):
 - **The reader renders only while its tab is visible.** Boot stalls and page-flips freeze in a
   hidden tab. Give it its own Chrome **window** (`osascript`: `make new window`) so other tabs
   and sessions don't freeze it; the window may sit behind others but must not be minimized.
-- **Highlight overlays render only for the first ~500 annotations** of the book (the client
-  fetches one 500-row page of `getAnnotations` and stops; the API needs an `X-ADP-Session-Token`
-  you can't reach). Beyond 500 there is NO yellow on the page — extents must come from Step 4.
+  A locked screen (or full occlusion) flips `document.visibilityState` to `hidden`: renders
+  freeze AND in-page `setTimeout` chains throttle to ~1/min, so a batched sweep silently
+  crawls instead of erroring. When a batch stalls, probe visibility first; resume when
+  `visible`, or drive each cycle externally (one JS call per flip survives throttling).
+- **Highlight overlays render for one 500-row page of `getAnnotations` at minimum** (the API
+  needs an `X-ADP-Session-Token` you can't reach). Books modestly over 500 may render ALL
+  overlays (verified: 520/520 painted); big books stop at ~500. Probe empirically — where
+  overlays exist they beat Step-4 arithmetic (see the overlay-geometry variant below); where
+  they don't, extents must come from Step 4. Overlays can also paint a beat AFTER the page
+  img — collect rects at capture time, not immediately post-flip, and expect the occasional
+  missing/partial overlay (a per-highlight glitch, not a cap).
 - Navigation: the `&location=N` URL parameter does nothing. Use the **Go-to-Page modal**
   (Reader menu → Go to Page): set the native `<input>` via the value-property setter + an
   `input` event, then click Go. Landing can be off by a page (screens ≠ print pages; one screen
@@ -126,14 +148,21 @@ Reader mechanics (hard-won):
   `document`, `document.body`, `.kg-client-root`, `ion-app` — one target alone is unreliable,
   and the chevron `.click()` does nothing. **A leftover modal/panel silently swallows the keys**
   (a stuck Go-to-Page modal is the classic wedge; when flips die and no overlay is open, reload
-  the tab and reinstall your helpers).
+  the tab and reinstall your helpers). Keyboard-independent fallback (works after Aa-panel
+  interactions kill the arrows): dispatch `mousedown` + `mouseup` MouseEvents at the center of
+  `[aria-label="Next page"]` / `"Previous page"` — exactly one viewport per pair. Do NOT add
+  the full pointer/mouse/click 5-event sequence: it double-fires.
 - **Capture without screenshots:** `fetch(blobUrl)` fails (CSP), but `drawImage` of the loaded
   `<img>` into a canvas is untainted → `canvas.toBlob` → POST to the localhost receiver. This
   yields the full-resolution page render (≈2048 px wide) regardless of OS screenshot policy.
 - Density setup still applies (snippets 7/8 in
   [scripts/reader_helpers.js](scripts/reader_helpers.js)): snapshot `KWR_Display_Settings`,
-  set smallest font + narrow margins, restore afterward. Settings are origin-wide localStorage —
-  never run two extraction sessions concurrently.
+  set narrow margins, restore afterward. Settings are origin-wide localStorage —
+  never run two extraction sessions concurrently. **Pick the font size by pixels-per-char,
+  not by fewest flips**: the render width = CSS viewport width × devicePixelRatio, capped at
+  2048, so px-per-char ≈ font CSS px × dpr. Vision OCR is near-perfect at ≥~17 px/char
+  (fontSizeIndex 4 at dpr 1, or smallest font on a Retina/dpr-2 window) and garbles at 11
+  (fontSizeIndex 0 at dpr 1). The smallest font is only correct on a dpr-2 window.
 
 ### Small-scale path (a few dozen truncated, all within the first 500)
 
@@ -163,6 +192,24 @@ Screenshot-per-highlight does not scale; do a **sweep + OCR + position-math** pi
    garble OCR order and lengths — reconstruct in reading order and tag the entry `≈ approximate`.
    Flag OCR-garbled regions by dictionary non-word rate (stem before checking) and re-read those
    from the page images by eye. Verify every low-confidence cut against its source image.
+   Calibrate the non-word threshold on the KNOWN notebook texts first — /usr/share/dict flags
+   5–11% of perfectly good finance prose, so flag outliers vs that baseline, not an absolute rate.
+
+**Overlay-geometry variant — preferred whenever overlays render for the blocked range.** Instead
+of sentence-boundary DP, collect per-screen overlay geometry during the sweep: for each
+`.kg-client-highlight` class-token `<start>/<end>`, record the first and last word-rects
+(sort rects by y then x), normalized against the page-img bounding rect. Then cut each blocked
+highlight from its own screens: take OCR lines whose centers fall inside [first-box top,
+last-box bottom] (spillover screens concatenate; each screen's token carries its own boxes),
+cut the boundary lines at the proportional x of the box edge snapped to a word edge, and trim
+boundary-word bleed against the Step-4 length. This turns recovery into local pixel cuts —
+median length residual 0–1 char over 236 cuts, no heading arithmetic. Two gotchas: an
+exhibit-spanning highlight wraps the figure image in one giant rect (height ≫ a word box's
+25-ish px — filter rects taller than 40 CSS px before picking first/last, and drop small-font
+figure-internal OCR lines while keeping `EXHIBIT`-prefixed caption lines); and word boxes are
+the DOM's, so **validate the cutter on the in-range FULL highlights against their notebook
+text first** — byte-exact + ≥99% rates tell you the true error classes before any blocked cut
+is trusted.
 
 ## Step 6 — QA before declaring done
 
@@ -184,4 +231,13 @@ Screenshot-per-highlight does not scale; do a **sweep + OCR + position-math** pi
   for consistency (or italicize everywhere — just be consistent).
 - Keep the scraped prefix byte-exact (the build does this automatically); only transcribe completions.
 - Table/figure-spanning highlights have no faithful linear form — transcribe in reading order and
-  tag them approximate rather than pretending precision.
+  tag them approximate rather than pretending precision. Their captions ("EXHIBIT N.M …") ARE part
+  of the notebook text; figure innards (axis labels, legends) are not.
+- **Measure the notebook's typography per book and match it** — count glyphs in the exported rows.
+  One book used curly double quotes (252:0) with STRAIGHT apostrophes (251:0); don't assume both curl.
+- **List markers ("1.", "•", "■") are neither rendered in notebook text nor counted by the position
+  ruler** — strip them from recovered text (extent-fit verified both ways). Footnote digits glued
+  after punctuation are usually absent from notebook text too (inconsistently) — strip for consistency.
+- OCR clips trailing digits in dollar amounts and small caption text: sweep recovered text with
+  `\$\d+\.(?=\s|$)` and re-read hits from the page image; an arithmetic cross-check often pins the
+  digits (2,340 of 23.4M milliseconds ⇒ "0.01 percent"). Also watch em-dashes read as hyphens.
