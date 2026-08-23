@@ -1,0 +1,8 @@
+{
+  "name": "l3a0",
+  "description": "l3a0's Claude Code skills. Currently: kindle-highlights — extract a book's Kindle highlights into one verbatim, location-cited Markdown file, recovering everything Amazon's export limit truncates or hides.",
+  "version": "0.1.0",
+  "author": {
+    "name": "l3a0"
+  }
+}

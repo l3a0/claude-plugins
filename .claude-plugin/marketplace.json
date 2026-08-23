@@ -1,0 +1,14 @@
+{
+  "name": "l3a0",
+  "description": "l3a0's personal Claude Code plugin marketplace — skills for extracting and working with Kindle highlights, with more to come.",
+  "owner": {
+    "name": "l3a0"
+  },
+  "plugins": [
+    {
+      "name": "l3a0",
+      "source": "./",
+      "description": "l3a0's Claude Code skills: kindle-highlights (verbatim Kindle highlight extraction with truncation recovery)."
+    }
+  ]
+}
