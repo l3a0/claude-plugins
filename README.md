@@ -28,6 +28,10 @@ from the Mac Kindle app's synced annotation positions plus the Cloud Reader's re
 
 Derived from two real extractions (466 and 1,211 highlights; the latter had 283 truncated and
 180 fully hidden — all recovered). Every gotcha in the skill was earned by real debugging.
+The build story — why the export limit exists, the three unlocks that beat it, and what a
+library of exports becomes — is written up in
+[How to Take Back Your Kindle Highlights](blog/how-to-take-back-your-kindle-highlights.md),
+also published on [Substack](https://baowebdev.substack.com).
 
 **Scope:** this exports *your own* highlights from *your own* Amazon account, by driving your
 own logged-in browser session and reading files the Kindle app stores on your Mac. The output
