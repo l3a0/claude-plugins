@@ -27,13 +27,22 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         q = parse_qs(u.query)
-        name = re.sub(r"[^A-Za-z0-9_.-]", "_", (q.get("name") or ["unnamed"])[0])
+        # basename + allowlist strip any path components from the client-supplied name
+        name = re.sub(r"[^A-Za-z0-9_.-]", "_", os.path.basename((q.get("name") or ["unnamed"])[0]))
         n = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(n)
         if u.path == "/page":
             out = os.path.join(PAGES, name if name.endswith(".png") else name + ".png")
         else:
             out = os.path.join(PAGES, name if name.endswith(".json") else name + ".json")
+        # resolve and confirm the final path stays inside PAGES (path-injection guard)
+        out = os.path.realpath(out)
+        if not out.startswith(os.path.realpath(PAGES) + os.sep):
+            self.send_response(400)
+            self._cors()
+            self.end_headers()
+            self.wfile.write(b"bad name")
+            return
         with open(out, "wb") as f:
             f.write(body)
         self.send_response(200)
