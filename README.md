@@ -21,13 +21,23 @@ skill's description.
 
 ### kindle-highlights
 
-Extract every highlight for a book from the Kindle notebook
-(`read.amazon.com/notebook`) into one combined, **verbatim, location-cited** Markdown file —
-including the highlights Amazon's export limit truncates or hides entirely, which are recovered
-from the Mac Kindle app's synced annotation positions plus the Cloud Reader's rendered pages.
+Export a heavily-highlighted book from Amazon's notebook page and some highlights come back
+cut off mid-sentence, while others come back as a bare location number with no text at all,
+under this notice:
 
-Derived from two real extractions (466 and 1,211 highlights; the latter had 283 truncated and
-180 fully hidden — all recovered). Every gotcha in the skill was earned by real debugging.
+> "Some highlights have been hidden or truncated due to export limits."
+
+Those are your own notes, in your own account, capped by a budget Amazon doesn't document and
+you can't raise. This skill gets them back: it extracts every highlight for a book from the
+Kindle notebook (`read.amazon.com/notebook`) into one combined, **verbatim, location-cited**
+Markdown file — including the highlights the export limit truncates or hides entirely, which
+are recovered from the Mac Kindle app's synced annotation positions plus the Cloud Reader's
+rendered pages.
+
+Proven on four real books: **2,432 highlights extracted, 815 of them export-blocked (454
+truncated + 361 fully hidden) — every one recovered**, with recovered text landing within a
+couple of characters of the Kindle app's own position ruler (median residual 0–1). Every
+gotcha in the skill was earned by real debugging across those runs.
 The build story — why the export limit exists, the three unlocks that beat it, and what a
 library of exports becomes — is written up in
 [How to Take Back Your Kindle Highlights](blog/how-to-take-back-your-kindle-highlights.md),
