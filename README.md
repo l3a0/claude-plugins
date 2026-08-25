@@ -1,5 +1,7 @@
 # l3a0's Claude Code plugins
 
+[![Plugin Security Scan](https://github.com/l3a0/claude-plugins/actions/workflows/plugin-security-scan.yml/badge.svg?branch=main)](https://github.com/l3a0/claude-plugins/actions/workflows/plugin-security-scan.yml)
+
 A personal collection of [Claude Code](https://code.claude.com) skills, published as a single
 plugin under the `l3a0` namespace. This repo is both the plugin and its own marketplace.
 
