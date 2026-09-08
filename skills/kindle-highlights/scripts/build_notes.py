@@ -2,7 +2,7 @@
 """Build one combined, location-cited Markdown file from a Kindle notebook scrape.
 
 Usage:
-    python3 build_notes.py <highlights.json> <out.md> [completions.json]
+    python3 build_notes.py <highlights.json> <out.md> [completions.json] [--edition "2nd ed."] [--publisher Wiley] [--year 2013]
 
 - <highlights.json> is produced by extract_highlights.js (has .book and .highlights).
 - <completions.json> (optional) maps "<loc>" -> recovered text. For a TRUNCATED
@@ -11,7 +11,7 @@ Usage:
   byte-exact). For a HIDDEN highlight (export limit withheld all text; scraped
   row has text=null, hidden=true) the value is the FULL text.
 
-Fill EDITION / PUBLISHER / YEAR below for a complete citation (not on the notebook page).
+Fill EDITION / PUBLISHER / YEAR below, or pass the flags, for a complete citation (not on the notebook page).
 Re-run any time; it's deterministic.
 """
 import json
@@ -31,10 +31,17 @@ def reconstruct(text, completion):
 
 
 def main():
-    if len(sys.argv) < 3:
+    global EDITION, PUBLISHER, YEAR
+    argv = list(sys.argv[1:])
+    for flag, name in (('--edition', 'EDITION'), ('--publisher', 'PUBLISHER'), ('--year', 'YEAR')):
+        if flag in argv:  # optional citation fields, so finalize.py can pass them through without editing this file
+            i = argv.index(flag)
+            globals()[name] = argv[i + 1]
+            del argv[i:i + 2]
+    if len(argv) < 2:
         sys.exit(__doc__)
-    src, out = sys.argv[1], sys.argv[2]
-    comp_path = sys.argv[3] if len(sys.argv) > 3 else None
+    src, out = argv[0], argv[1]
+    comp_path = argv[2] if len(argv) > 2 else None
 
     payload = json.load(open(src))
     book = payload.get("book", {})

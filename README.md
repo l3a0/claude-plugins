@@ -36,10 +36,12 @@ Markdown file — including the highlights the export limit truncates or hides e
 are recovered from the Mac Kindle app's synced annotation positions plus the Cloud Reader's
 rendered pages.
 
-Proven on four real books: **2,432 highlights extracted, 815 of them export-blocked (454
-truncated + 361 fully hidden) — every one recovered**, with recovered text landing within a
+Proven on five real books: **2,733 highlights extracted, 1,038 of them export-blocked (537
+truncated + 501 fully hidden) — every one recovered**, with recovered text landing within a
 couple of characters of the Kindle app's own position ruler (median residual 0–1). Every
-gotcha in the skill was earned by real debugging across those runs.
+gotcha in the skill was earned by real debugging across those runs, and the fifth run turned
+the recovery into scripts: align the extents, sweep the reader, match OCR words to the reader's
+own highlight overlays, check every span against its known length.
 The build story — why the export limit exists, the three unlocks that beat it, and what a
 library of exports becomes — is written up in
 [How to Take Back Your Kindle Highlights](blog/how-to-take-back-your-kindle-highlights.md),
