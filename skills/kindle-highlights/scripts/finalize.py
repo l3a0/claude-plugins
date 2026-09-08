@@ -3,11 +3,14 @@
 
 Run from the RUN DIRECTORY:
 
-    python3 finalize.py <out.md> [--highlights pages/<asin>_highlights.json] [--edition "2nd ed."] [--publisher Wiley] [--year 2013]
+    python3 finalize.py <out.md> [--highlights pages/<asin>_highlights.json] [--edition "2nd ed."] [--publisher Wiley] [--year 2013] [--strict]
 
 Optional run-directory files:
   loc_fixes.json   {"<loc>": [["<regex>", "<repl>"], ...]}   corrections for ONE highlight, verified against its crop
-  approx.json      [<loc>, ...]                               spans crossing a table/figure: tagged "≈ approximate"
+  approx.json      [<loc>, ...]                               spans crossing a table, figure or display equation: tagged "≈ approximate"
+
+A WARN line means a loc_fixes.json pattern no longer matches the assembler's current output. Treat it as a stop:
+re-key the pattern or drop it. --strict turns those warnings into a non-zero exit.
 """
 import argparse, json, os, re, subprocess, sys
 SCRIPTS = os.path.dirname(os.path.abspath(__file__))
@@ -16,6 +19,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument('out')
 ap.add_argument('--highlights', default=None, help='scrape JSON from extract_highlights.js (default pages/<asin>_highlights.json)')
 ap.add_argument('--edition', default=''); ap.add_argument('--publisher', default=''); ap.add_argument('--year', default='')
+ap.add_argument('--strict', action='store_true', help='exit non-zero when a loc_fixes.json pattern matched nothing')
 opts = ap.parse_args()
 C = json.load(open(os.path.join(RUN_DIR, 'completions.json')))
 LOCFIX = json.load(open(os.path.join(RUN_DIR, 'loc_fixes.json'))) if os.path.exists(os.path.join(RUN_DIR, 'loc_fixes.json')) else {}
@@ -25,10 +29,12 @@ H = {str(h['loc']): h for h in A['highlights']}
 HL_JSON = opts.highlights or os.path.join(RUN_DIR, 'pages', f"{A['book']['asin']}_highlights.json")
 
 final = {}
+MISSED = 0
 for loc, t in C.items():
     for pat, rep in LOCFIX.get(loc, []):
         t2 = re.sub(pat, rep, t)
         if t2 == t:
+            MISSED += 1
             print(f"WARN loc {loc}: fix {pat!r} matched nothing")
         t = t2
     final[loc] = t
@@ -44,16 +50,21 @@ print(r.stdout.strip()); print(r.stderr.strip())
 
 md = open(out).read()
 for loc in APPROX:
-    head = f"### Location {loc} · yellow · ↻ recovered"
-    assert head in md, loc
-    md = md.replace(head, head + " · ≈ approximate")
+    m = re.search(rf"^### Location {loc} · \w+ · ↻ recovered$", md, re.M)  # the colour is whatever build_notes wrote
+    if not m:
+        sys.exit(f"approx.json lists loc {loc}, which is not a recovered section in {out}")
+    md = md.replace(m.group(0), m.group(0) + " · ≈ approximate")
 if APPROX:
-    md = md.replace("and is marked with a `↻` tag.", "and is marked with a `↻` tag; a few spans that cross tables or figures are tagged `≈` — their text is faithful but the exact boundaries are best-effort.")
+    md = md.replace("and is marked with a `↻` tag.", "and is marked with a `↻` tag. A few spans that cross a table, a figure or a display equation are tagged `≈`. Their text is faithful. The exact boundaries are best-effort.")
 md = md.rstrip('\n') + '\n'
 open(out, 'w').write(md)
 
 # ---- QA ----
 print('--- QA')
+if MISSED:
+    print(f'loc fixes that matched nothing: {MISSED} (stale patterns — re-key them against the current assemble output, or drop the ones the recut path made redundant)')
+    if opts.strict:
+        sys.exit('stale loc_fixes.json: re-key the patterns, or drop --strict to accept')
 secs = re.findall(r'^### Location (\d+)', md, re.M)
 print('sections', len(secs), 'unique', len(set(secs)))
 print('pending markers', md.count('full_text_pending'), '| stray «', md.count('«'), '| ellipsis in body', sum(1 for l in md.splitlines() if l.startswith('> ') and '…' in l))

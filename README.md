@@ -39,9 +39,10 @@ rendered pages.
 Proven on five real books: **2,733 highlights extracted, 1,038 of them export-blocked (537
 truncated + 501 fully hidden) — every one recovered**, with recovered text landing within a
 couple of characters of the Kindle app's own position ruler (median residual 0–1). Every
-gotcha in the skill was earned by real debugging across those runs, and the fifth run turned
-the recovery into scripts: align the extents, sweep the reader, match OCR words to the reader's
-own highlight overlays, check every span against its known length.
+gotcha in the skill was earned by real debugging across those runs. The fifth run turned the recovery
+into scripts. They read each highlight's known character length from the Kindle app, sweep the reader,
+match recognized words to the reader's own highlight overlays, and check every recovered span against
+that length.
 The build story — why the export limit exists, the three unlocks that beat it, and what a
 library of exports becomes — is written up in
 [How to Take Back Your Kindle Highlights](blog/how-to-take-back-your-kindle-highlights.md),
@@ -67,8 +68,8 @@ Apple's Vision framework, and highlight positions come from the Mac Kindle app's
 3. **The current Mac Kindle app** (App Store; bundle id `com.amazon.Lassen` — not the classic
    Kindle.app), signed in to the same Amazon account, with the book downloaded. Its synced
    annotation database provides exact highlight extents with no export limit.
-4. **Xcode Command Line Tools** (`xcode-select --install`) — the bulk-recovery path compiles a
-   small Swift OCR helper (`swiftc`) that uses Apple Vision.
+4. **Xcode Command Line Tools** (`xcode-select --install`) — the recovery path compiles two small
+   Swift helpers with `swiftc` on first use: an Apple Vision text pass and a CoreGraphics band crop.
 5. **python3** — builds the final Markdown and runs a localhost receiver
    (`127.0.0.1:8931`) that the reader page POSTs captures to.
 

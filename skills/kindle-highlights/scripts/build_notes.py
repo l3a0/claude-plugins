@@ -36,6 +36,8 @@ def main():
     for flag, name in (('--edition', 'EDITION'), ('--publisher', 'PUBLISHER'), ('--year', 'YEAR')):
         if flag in argv:  # optional citation fields, so finalize.py can pass them through without editing this file
             i = argv.index(flag)
+            if i + 1 >= len(argv) or argv[i + 1].startswith('--'):
+                sys.exit(f'{flag} needs a value')
             globals()[name] = argv[i + 1]
             del argv[i:i + 2]
     if len(argv) < 2:
@@ -70,8 +72,8 @@ def main():
     pend_note = f" ({n_pending} still pending, flagged ⚠ truncated)" if n_pending else ""
     hid_bit = f" and {n_hidden} hidden entirely" if n_hidden else ""
     trunc_note = (
-        f" {n_trunc} of these were cut off by Amazon's export limit on the notebook page{hid_bit}; "
-        f"their full text was recovered from the Kindle Cloud Reader"
+        f" {n_trunc} of these were cut off by Amazon's export limit on the notebook page{hid_bit}. "
+        f"Their full text was recovered from the Kindle Cloud Reader"
         + (" and is marked with a `↻` tag" if RECOVERED_TAG else "")
         + f"{pend_note}."
     ) if n_trunc else ""

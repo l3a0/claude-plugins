@@ -6,7 +6,8 @@ Run from the RUN DIRECTORY (the folder holding pages/ with the reader_capture.js
 
     python3 cutter.py s000 s001 ...      # prints per-token lines; caches OCR in pages/<name>.ocr.jsonl
 
-Each capture's OCR runs once (ocr_words.swift, per-word boxes). cut() returns, per highlight token
+Needs `swiftc` (Xcode Command Line Tools). Each capture's OCR runs once (ocr_words.swift, per-word boxes),
+cached in pages/<name>.ocr.jsonl. cut() returns, per highlight token
 "<start>/<end>", the OCR lines whose words fall inside that token's rects, ordered left column first,
 then top to bottom. recut() re-OCRs one token's own band at 2x magnification (crop.swift) -- Vision
 drops whole body-text lines at page scale and reads shaded Example boxes badly; the magnified band
@@ -21,13 +22,20 @@ MAX_RECT_H_CSS = 45  # figure-wrapping rects are much taller than a word box
 
 
 def ensure_bin(name):
-    """Compile <name>.swift (next to this script) into bin/<name> once; return the binary path."""
-    bin_dir = os.path.join(SCRIPTS, 'bin')
+    """Compile <name>.swift (next to this script) into the RUN directory's bin/ once; return the binary path.
+
+    The build goes under the run directory, not the skill directory, so every write this pipeline makes stays
+    in one place and an installed (possibly read-only) plugin directory is never written to.
+    """
+    bin_dir = os.path.join(RUN_DIR, 'bin')
     os.makedirs(bin_dir, exist_ok=True)
     out = os.path.join(bin_dir, name)
     src = os.path.join(SCRIPTS, name + '.swift')
     if not os.path.exists(out) or os.path.getmtime(out) < os.path.getmtime(src):
-        subprocess.run(['swiftc', '-O', src, '-o', out], check=True)
+        try:
+            subprocess.run(['swiftc', '-O', src, '-o', out], check=True)
+        except FileNotFoundError:
+            sys.exit('swiftc not found: install the Xcode Command Line Tools with `xcode-select --install`')
     return out
 
 

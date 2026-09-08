@@ -7,8 +7,8 @@ Only the latest release of the `l3a0` plugin is supported. Update with
 
 | Version | Supported |
 | ------- | --------- |
-| 0.2.x (latest) | ✅ |
-| < 0.2 | ❌ |
+| 0.3.x (latest) | ✅ |
+| < 0.3 | ❌ |
 
 ## Reporting a Vulnerability
 

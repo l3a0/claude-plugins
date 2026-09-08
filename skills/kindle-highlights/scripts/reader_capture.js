@@ -3,7 +3,11 @@
  * re-run this file after every location.reload().
  *
  * Then drive it with small follow-up calls (each is one execute_javascript):
- *   __kh.snapshot                               // the display settings recorded at install — restore from this at the end
+ *   __kh.snapshot                               // display settings as of THIS install. Copy the string out at the FIRST
+ *                                               // install, before applySettings, and pass it back explicitly at the end:
+ *                                               // __kh.restoreSettings('<the string you saved>'). A helper installed after
+ *                                               // a reload snapshots the ALREADY-APPLIED settings, so the bare call restores
+ *                                               // the wrong thing.
  *   __kh.applySettings(4, 2)                    // font index 4 + two columns via localStorage, then reload (re-install after)
  *   __kh.jump(299484)                           // annotations panel: open → click #notebook-grouped-item-<pos> → close
  *   __kh.capture('s000').then(r => __kh.last = r)   // capture the current screen; poll __kh.last
@@ -82,8 +86,17 @@
     let it = null;
     for (let i = 0; i < 40 && !(it = document.querySelector('#notebook-grouped-item-' + pos)); i++) await K.sleep(250);
     if (!it) return { err: 'no panel item for ' + pos + ' (panel lists at most ~500 highlights)' };
-    (it.querySelector('[data-testid=notebook-item-label]') || it).click();
-    await K.sleep(900);
+    // The panel is a virtual list: an item far outside the viewport takes the click without navigating, so
+    // scroll it into view first. Without this the reader silently stays on the page it was already showing.
+    it.scrollIntoView({ block: 'center' });
+    await K.sleep(800);
+    const tgt = it.querySelector('[data-testid=notebook-item-label]') || it;
+    const b = tgt.getBoundingClientRect();
+    const ev = { bubbles: true, cancelable: true, clientX: b.left + b.width / 2, clientY: b.top + b.height / 2, button: 0 };
+    tgt.dispatchEvent(new MouseEvent('mousedown', ev));
+    tgt.dispatchEvent(new MouseEvent('mouseup', ev));
+    tgt.click();
+    await K.sleep(1200);
     const close = document.querySelector('[aria-label="Close Annotations"]');
     if (close) close.click();
     await K.sleep(1500);
@@ -115,9 +128,11 @@
     setTimeout(() => location.reload(), 300);
     return JSON.stringify({ applied: s.fontSizeIndex, cols: s.maxNumberColumns, reloading: true });
   };
+  // Pass the string saved at the FIRST install; the bare call falls back to this install's snapshot, which is
+  // the applied settings when the helper was re-installed after applySettings reloaded the page.
   K.restoreSettings = (snapshot) => {
     const snap = snapshot || K.snapshot;
-    if (!snap) return 'no snapshot recorded — pass the string you saved from __kh.snapshot';
+    if (!snap) return 'no snapshot recorded: pass the string you saved from __kh.snapshot';
     localStorage.setItem('KWR_Display_Settings', snap);
     setTimeout(() => location.reload(), 300);
     return 'restored ' + snap.slice(0, 60) + '…';
