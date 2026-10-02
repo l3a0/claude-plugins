@@ -29,7 +29,8 @@ exact access). Reports of particular interest:
 
 - Anything that could exfiltrate highlight data or credentials off-machine
   (the pipeline is designed to be local-only; the capture receiver binds
-  `127.0.0.1` and validates paths).
+  `127.0.0.1`, validates paths, and refuses any request whose `Origin` is not
+  `https://read.amazon.com`).
 - Path injection or command injection via scraped page content or filenames.
 - Prompt-injection vectors in skill instructions that could cause unintended
   actions.

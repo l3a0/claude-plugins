@@ -1,30 +1,55 @@
 #!/usr/bin/env python3
 """Localhost capture receiver for the kindle-highlights skill: POST /page saves a binary PNG (query ?name=...), POST /json saves JSON text (query ?name=...).
-Files land in SCRATCH/pages/. Answers CORS/PNA preflights."""
+Files land in SCRATCH/pages/. Answers CORS/PNA preflights from ALLOWED_ORIGINS only.
+Any other preflight or POST is refused with 403 before its body is read, including one with no Origin header, so a
+manual test must send one: curl -H "Origin: https://read.amazon.com" ... Each refusal is printed to stderr, because the
+page only sees "Failed to fetch"."""
 import http.server
 import os
 import re
+import sys
 from urllib.parse import urlparse, parse_qs
 
 SCRATCH = os.getcwd()  # captures land in ./pages under the launch directory
 PAGES = os.path.join(SCRATCH, "pages")
 os.makedirs(PAGES, exist_ok=True)
 PORT = 8931
+# the notebook (read.amazon.com/notebook) and the Cloud Reader (read.amazon.com/?asin=) are the only pages that POST
+# here. A text/plain POST is sent without a preflight, so the Origin check in do_POST is what stops a foreign page
+# writing into PAGES. Access-Control-Allow-Origin alone only hides the response from it.
+ALLOWED_ORIGINS = {"https://read.amazon.com"}
 
 
 class H(http.server.BaseHTTPRequestHandler):
+    def _allowed(self):
+        return self.headers.get("Origin") in ALLOWED_ORIGINS
+
+    def _refuse(self):
+        sys.stderr.write("refused %s from Origin %r\n" % (self.command, self.headers.get("Origin")))
+        self.send_response(403)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"origin not allowed")
+
     def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # echo the allowlist's own string rather than the request header, so no request text reaches a response header
+        origin = next(o for o in ALLOWED_ORIGINS if o == self.headers.get("Origin"))
+        self.send_header("Access-Control-Allow-Origin", origin)
+        self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "content-type")
         self.send_header("Access-Control-Allow-Private-Network", "true")
 
     def do_OPTIONS(self):
+        if not self._allowed():
+            return self._refuse()
         self.send_response(204)
         self._cors()
         self.end_headers()
 
     def do_POST(self):
+        if not self._allowed():
+            return self._refuse()
         u = urlparse(self.path)
         q = parse_qs(u.query)
         # basename + allowlist strip any path components from the client-supplied name

@@ -93,7 +93,12 @@ Gotchas:
   stash the payload on `window.__x`, run [scripts/receiver.py](scripts/receiver.py) locally,
   and `fetch('http://127.0.0.1:8931/json?name=…', {method:'POST', body: window.__x})` — the
   notebook AND reader pages' CSP both allow localhost fetches (the receiver answers the
-  CORS/private-network preflight).
+  CORS/private-network preflight). The receiver refuses with 403 any request whose `Origin` is not
+  `https://read.amazon.com`, so another page open in the browser cannot write into `pages/`. A manual
+  `curl` against it needs `-H "Origin: https://read.amazon.com"`. A refused `fetch` shows in the page only as
+  `TypeError: Failed to fetch`, and the receiver prints the refused origin to its stderr. Regional Kindle sites such
+  as `read.amazon.co.uk` are refused too, because no run has used one. Add the site's origin to `ALLOWED_ORIGINS` in
+  `receiver.py` to run there.
 - Each row yields `{loc, color, text, note, truncated, hidden}`. `truncated: true` with text
   means the text is only the opening and ends with `…`.
 
