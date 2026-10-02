@@ -32,7 +32,9 @@ class H(http.server.BaseHTTPRequestHandler):
         self.wfile.write(b"origin not allowed")
 
     def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", self.headers["Origin"])
+        # echo the allowlist's own string rather than the request header, so no request text reaches a response header
+        origin = next(o for o in ALLOWED_ORIGINS if o == self.headers.get("Origin"))
+        self.send_header("Access-Control-Allow-Origin", origin)
         self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "content-type")
