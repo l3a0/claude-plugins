@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Localhost capture receiver for the kindle-highlights skill: POST /page saves a binary PNG (query ?name=...), POST /json saves JSON text (query ?name=...).
 Files land in SCRATCH/pages/. Answers CORS/PNA preflights from ALLOWED_ORIGINS only.
-Every other request is refused with 403 before its body is read, including one with no Origin header, so a manual
-test must send one: curl -H "Origin: https://read.amazon.com" ..."""
+Any other preflight or POST is refused with 403 before its body is read, including one with no Origin header, so a
+manual test must send one: curl -H "Origin: https://read.amazon.com" ... Each refusal is printed to stderr, because the
+page only sees "Failed to fetch"."""
 import http.server
 import os
 import re
+import sys
 from urllib.parse import urlparse, parse_qs
 
 SCRATCH = os.getcwd()  # captures land in ./pages under the launch directory
@@ -23,6 +25,7 @@ class H(http.server.BaseHTTPRequestHandler):
         return self.headers.get("Origin") in ALLOWED_ORIGINS
 
     def _refuse(self):
+        sys.stderr.write("refused %s from Origin %r\n" % (self.command, self.headers.get("Origin")))
         self.send_response(403)
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
