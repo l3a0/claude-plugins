@@ -60,6 +60,10 @@ A repo drifts when two surfaces describe the same thing and only one gets update
 - **The plugin's version** sits in `.claude-plugin/plugin.json`. The supported-versions table in [SECURITY.md](SECURITY.md) tracks only the minor version, as `0.3.x`. So a patch bump changes `plugin.json` alone, the way [PR #5](https://github.com/l3a0/claude-plugins/pull/5) moved 0.2.1 to 0.2.2, and a minor bump changes both, the way [PR #13](https://github.com/l3a0/claude-plugins/pull/13) moved to 0.3.0.
 - **What the plugin holds** is described in four places, each worded differently: `.claude-plugin/plugin.json`, the marketplace and plugin entries in `.claude-plugin/marketplace.json`, and the repository's About text on GitHub. Each one names the skills, so adding a skill changes all four, and [README.md](README.md)'s `## Skills` section with them.
 - **The run counts.** `skills/kindle-highlights/SKILL.md` carries each run's own figures, and [README.md](README.md) carries their totals: five books, 2,733 highlights, 1,038 of them blocked by the export limit. A new run moves both.
+- **The capture receiver's guards** are described in three places besides `receiver.py` itself, so a change to what the receiver accepts changes all three.
+  1. The opening paragraph of this file.
+  2. The scope list in [SECURITY.md](SECURITY.md).
+  3. The receiver gotcha under Step 2 of `skills/kindle-highlights/SKILL.md`.
 - **The blog post** in `blog/how-to-take-back-your-kindle-highlights.md` is also published on Substack, and nothing syncs the two copies.
 
 Before reporting a change done, sweep the prose surfaces for what the change could have invalidated, and end the response with a short **Consistency sweep** note listing what was checked, what was updated, and what is still stale. For a pure-internal refactor that changes no observable behavior, say "no prose-facing surfaces affected" so it is clear the check was considered rather than forgotten.
