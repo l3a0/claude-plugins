@@ -2,7 +2,7 @@
 
 claude-plugins is the owner's personal collection of Claude Code skills, published as one plugin under the `l3a0` namespace. The repository is both the plugin and its own marketplace. `.claude-plugin/plugin.json` describes the plugin, and `.claude-plugin/marketplace.json` lists it. Each skill lives under `skills/<name>/`. One skill ships today, `kindle-highlights`, whose `SKILL.md` carries the method and whose `scripts/` folder carries the helpers it runs.
 
-**Every rule in a skill was earned on a real run.** `skills/kindle-highlights/SKILL.md` names the five books it has run against and what each run recovered. Each change to the skill so far has come from one of those runs: [PR #2](https://github.com/l3a0/claude-plugins/pull/2), [PR #3](https://github.com/l3a0/claude-plugins/pull/3) and [PR #13](https://github.com/l3a0/claude-plugins/pull/13). A skill also runs against the user's own logged-in browser session and local app data, so the pipeline stays on the user's machine. [SECURITY.md](SECURITY.md) states that scope, and the capture receiver enforces it by binding `127.0.0.1` and refusing a write outside its pages folder.
+**Every gotcha in a skill was earned on a real run.** `skills/kindle-highlights/SKILL.md` names the five books it has run against and what each run recovered. [PR #2](https://github.com/l3a0/claude-plugins/pull/2), [PR #3](https://github.com/l3a0/claude-plugins/pull/3) and [PR #13](https://github.com/l3a0/claude-plugins/pull/13) each folded one run's lessons into the skill. The one skill change that did not come from a run is [PR #5](https://github.com/l3a0/claude-plugins/pull/5), which hardened the capture receiver after a CodeQL alert. A skill also runs against the user's own logged-in browser session and local app data, and is designed to keep that data on the user's machine. [SECURITY.md](SECURITY.md) states that scope. The capture receiver binds `127.0.0.1` and refuses a write outside its pages folder, the guard [PR #5](https://github.com/l3a0/claude-plugins/pull/5) added.
 
 Status: the repo has no test suite, no design doc, no build plan and no milestones. [README.md](README.md) and each `SKILL.md` carry the reasoning. Two kinds of check run on every pull request:
 
@@ -29,6 +29,8 @@ Clarity comes first. Write plain sentences a reader understands on one read. Pre
 
 **Cut what carries nothing.** Throat-clearing, significance-announcing pivots, self-effort asides, hedging, redundancy, decorative modifiers that survive the subtraction test, unsubstantiated superlatives, reversal scaffolding, reassurance tags, and a closing moral that restates the heading. The global file carries the worked examples for each.
 
+**Restyle an existing file in a change of its own.** `README.md` and `SKILL.md` predate these rules and still carry em dashes and the second person. An edit to one line follows the rules for that line and leaves the rest of the file alone, since a restyle swept into an unrelated change hides the change it rode in with.
+
 **Link every issue and pull request number (owner directive, 2026-09-26).** In a chat reply, a message to another session, or a Markdown file in this repository, each number is a Markdown link: `[#NN](https://github.com/l3a0/claude-plugins/issues/NN)` for an issue and `[PR #NN](https://github.com/l3a0/claude-plugins/pull/NN)` for a pull request. [Issue 6](https://github.com/l3a0/claude-plugins/issues/6) and [PR #13](https://github.com/l3a0/claude-plugins/pull/13) are written that way. A number written out in prose, like "issue 6", takes the same link around the words. Link every mention, not only the first, including numbers inside lists, tables and summaries. A bare `#NN` in chat is text the owner has to copy into a browser, and GitHub renders a bare `#NN` in a repository file as plain text too. A report that links its first number and leaves the rest bare fails the same way. A number that belongs to another repository links there.
 
 The prefix still matters. Issues and pull requests share one number space, so a bare number cannot tell the reader whether it names scope or work in review. An issue is `#NN` and a pull request is `PR #NN`.
@@ -40,9 +42,11 @@ Two places keep the bare form.
 
 ## Markdown hygiene
 
-No CI job runs markdownlint here yet, and the repo carries no markdownlint config, so nothing enforces these rules and each change checks them by hand. markdownlint's defaults are not the standard either, because they cap lines at 80 columns, which every Markdown file in the repo already exceeds. The rules that bite most: use real headings, never a bold line as a heading (MD036). No trailing whitespace (MD009). No stacked blank lines (MD012). End the file with exactly one newline (MD047). Table delimiter rows use single-space padding, so `| --- |` and never `|---|` (MD060). Escape an "approximately" tilde in prose as `\~`, since a bare tilde can render as strikethrough on some surfaces. Code fences are exempt.
+No CI job runs markdownlint here yet, and the repo carries no markdownlint config, so nothing enforces these rules and each change checks them by hand. markdownlint's defaults are not the standard either, because they cap lines at 80 columns, which `README.md`, `SKILL.md`, the blog post and this file already exceed. The rules that bite most: use real headings, never a bold line as a heading (MD036). No trailing whitespace (MD009). No stacked blank lines (MD012). End the file with exactly one newline (MD047). Table delimiter rows use single-space padding, so `| --- |` and never `|---|` (MD060). Escape an "approximately" tilde in prose as `\~`, since a bare tilde can render as strikethrough on some surfaces. Code fences are exempt.
 
 After any edit, sweep. Both commands also match inside code spans and fences, so read each hit before changing it.
+
+The first sweep already reports four lines in `SKILL.md`, which predate this file. Fix those in a change of their own, per the restyle rule under `## Writing style`.
 
 ```bash
 rg -n --pcre2 '(?<![\s~\\`<])~' --glob '*.md' .
@@ -51,14 +55,14 @@ rg -n '\|-{1,}\|' --glob '*.md' .
 
 ## Cross-surface consistency
 
-A repo drifts when two surfaces describe the same thing and only one gets updated. The fix is to give each surface exactly one job, so nothing is stated twice. Where a fact has to appear in more than one place, the list below names every copy, so an edit to one is an edit to all of them.
+A repo drifts when two surfaces describe the same thing and only one gets updated. The fix is to give each surface exactly one job, so nothing is stated twice. Where a fact has to appear in more than one place, the list below names every place, so an edit to one is checked against the others.
 
-- **The plugin's version** sits in `.claude-plugin/plugin.json` and in the supported-versions table in [SECURITY.md](SECURITY.md). [PR #13](https://github.com/l3a0/claude-plugins/pull/13) moved both to 0.3.0 together.
-- **The plugin's one-line description** appears four times: in `.claude-plugin/plugin.json`, twice in `.claude-plugin/marketplace.json`, and in the repository's About text on GitHub. Adding a skill changes all four, and [README.md](README.md)'s `## Skills` section with them.
+- **The plugin's version** sits in `.claude-plugin/plugin.json`. The supported-versions table in [SECURITY.md](SECURITY.md) tracks only the minor version, as `0.3.x`. So a patch bump changes `plugin.json` alone, the way [PR #5](https://github.com/l3a0/claude-plugins/pull/5) moved 0.2.1 to 0.2.2, and a minor bump changes both, the way [PR #13](https://github.com/l3a0/claude-plugins/pull/13) moved to 0.3.0.
+- **What the plugin holds** is described in four places, each worded differently: `.claude-plugin/plugin.json`, the marketplace and plugin entries in `.claude-plugin/marketplace.json`, and the repository's About text on GitHub. Each one names the skills, so adding a skill changes all four, and [README.md](README.md)'s `## Skills` section with them.
 - **The run counts.** `skills/kindle-highlights/SKILL.md` carries each run's own figures, and [README.md](README.md) carries their totals: five books, 2,733 highlights, 1,038 of them blocked by the export limit. A new run moves both.
 - **The blog post** in `blog/how-to-take-back-your-kindle-highlights.md` is also published on Substack, and nothing syncs the two copies.
 
-Before reporting a change done, sweep the prose surfaces for what the change could have invalidated, and end the response with a short **Consistency sweep** note listing what was checked, what was updated, and what is still stale. For a pure-internal refactor that moves no line numbers and changes no observable behavior, say "no prose-facing surfaces affected" so it is clear the check was considered rather than forgotten.
+Before reporting a change done, sweep the prose surfaces for what the change could have invalidated, and end the response with a short **Consistency sweep** note listing what was checked, what was updated, and what is still stale. For a pure-internal refactor that changes no observable behavior, say "no prose-facing surfaces affected" so it is clear the check was considered rather than forgotten.
 
 A mechanical consequence of an edit is part of that edit, not a separate decision. When a change leaves a generated artifact stale, regenerate it in the same change without asking.
 
@@ -80,7 +84,7 @@ An earlier version of this rule asked for explicit approval before every commit.
 
 Three things still hold.
 
-1. `main` requires a pull request. An active repository ruleset enforces it. Owners can bypass that rule, but do not: branch, push, and open a PR, even for a one-line docs change.
+1. `main` requires a pull request. An active repository ruleset enforces it, and it also asks for one approving review. The owner is the only collaborator, so a merge goes through the owner's bypass. Never use that bypass to push to `main`: branch, push, and open a PR, even for a one-line docs change.
 2. A commit carries only what the session actually did. Unrelated edits found on the way past are filed as their own issue, per the closing rule below, and never swept into the branch.
 3. Work outside the session's own deliverable still waits for the owner. That covers this file and anything outside the repository, such as the owner's `~/.claude/` folder.
 
@@ -97,7 +101,7 @@ Review by fanning out independent lenses, then verifying each finding adversaria
 1. Fixing the instance rather than the class, such as a false claim corrected in one file while it still stands in three more.
 2. Fixing past the class, such as generalising a change into places it does not belong.
 
-Verify by executing, not by reading. With no test suite here, that means running the changed script against a fixture and checking what it produced, the way [PR #13](https://github.com/l3a0/claude-plugins/pull/13) exercised its changed scripts on a fixture covering each behaviour its review fixed.
+Verify by executing, not by reading. Break the code and confirm a check notices. A check that still passes on broken code does not cover what it claims to cover. With no test suite here, that means a fixture the changed script fails on before the fix and passes on after it, the way [PR #13](https://github.com/l3a0/claude-plugins/pull/13) reproduced a `finalize.py` bug on a fixture before fixing it.
 
 **Watch the checks and fix what they find.** A pull request is not handed over until its checks have run and settled. Pushing is not the end of the work, because the branch that passes locally is not the branch CI builds. CI builds the merge of the branch and its base, and the base moves.
 
@@ -105,11 +109,11 @@ So watch the run rather than assume it. `gh pr checks <n> --watch` blocks until 
 
 Three behaviours make the rule sharper than "look for a green tick". The first two were measured on pull requests in the sibling `marketlake` repo, and the third on the template this file was seeded from.
 
-1. **A conflicting pull request gets no run at all.** A `pull_request` workflow builds the merge ref, and a branch that conflicts has none, so no run is created. [PR #414](https://github.com/l3a0/marketlake/pull/414) there showed three green CodeQL entries and no `test` run whatsoever. An absent check reads as a short rollup rather than as a failure, so count what ran instead of scanning for red.
+1. **A conflicting pull request gets no run at all.** A `pull_request` workflow builds the merge ref, and a branch that conflicts has none, so no run is created. [PR #414](https://github.com/l3a0/marketlake/pull/414) there showed three green CodeQL entries and no `test` run whatsoever. An absent check reads as a short rollup rather than as a failure, so count what ran instead of scanning for red. Here the security scan also runs on every push, so a conflicting branch still shows one green `scan` entry from the push run.
 2. **Green goes stale.** A run is computed against one merge ref, and a later merge to the base replaces it. [PR #433](https://github.com/l3a0/marketlake/pull/433) there read green after the branch had already conflicted underneath it. Re-read the rollup whenever the base has moved.
 3. **Red goes stale the same way, and costs more.** A failure inherited from the base survives in the rollup after the base has been fixed. The template's [PR #3](https://github.com/l3a0/repo-template/pull/3) carried a red `test` check from a run computed 25 seconds before the pull request that fixed its base merged. Rebasing made it green, and a monitor reading the older snapshot reported the failure again afterwards. A red check is a claim about one merge ref at one moment, so re-read it before acting, and check whether the pull request has already merged before fixing anything.
 
-Fix the cause rather than the symptom. A lint rule that fails on one file usually fails on its siblings, so sweep for the class. Re-running a job changes nothing the second time unless the failure was the runner rather than the code. Where a failure comes from another branch's merge rather than from this change, say so on the pull request instead of absorbing an unrelated fix into it.
+Fix the cause rather than the symptom. A check that fails on one file usually fails on its siblings, so sweep for the class. Re-running a job changes nothing the second time unless the failure was the runner rather than the code. Where a failure comes from another branch's merge rather than from this change, say so on the pull request instead of absorbing an unrelated fix into it.
 
 **A filed issue carries its labels.** Filing is not finished when the issue exists. An issue with no label appears in no view scoped by kind, so only a sweep for unlabelled issues finds it, and nothing brings it back on its own. The repo has no milestones today, so a label is the only grouping an issue has. A filed issue is finished when it says two things.
 
