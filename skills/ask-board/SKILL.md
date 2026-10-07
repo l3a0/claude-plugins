@@ -112,7 +112,7 @@ The minutes, the ledgers and the seats' notes are the history of past sittings. 
 6. Blind draft of the synthesis.
 7. Verdict, minutes and ledgers.
 
-Cap a whole sitting at thirteen agent runs. The blind round, the callbacks in step 4 and the secretary in step 6 all count, and so does a continued agent. Reserve one run for the secretary from the start. Thirteen is six seats in the blind round, all six called back, and the secretary, so the largest sitting this skill describes never has to drop a callback.
+Cap a whole sitting at thirteen agent runs. The blind round, the callbacks in step 4 and the secretary in step 6 all count, and so does a continued agent. Reserve one run for the secretary from the start. Thirteen is six seats in the blind round, all six called back, and the secretary, so a six-seat sitting with no relaunch never has to drop a callback. A relaunch in step 3 can still cost one, because it is decided before step 4 knows whether the round splits.
 
 ### 1. Intake
 
