@@ -1,4 +1,4 @@
-name: Board guard tests
+name: Board checks
 on: [pull_request, push]
 permissions:
   contents: read
@@ -9,4 +9,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: sh tests/test_board_guard.sh
+      - name: Guard hook tests
+        run: sh tests/test_board_guard.sh
+      - name: Seat files match their generator
+        run: python3 scripts/gen_seats.py --check
