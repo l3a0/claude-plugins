@@ -112,13 +112,29 @@ The board has nine seats. All of them run on the same model, so each charter nam
 
 A tenth agent, the secretary (`board-secretary`), holds no seat and drafts the synthesis. Trading is the worked example in every charter, and the seats apply to any one-person venture.
 
-No agent can write a file or run a shell command. The seats can read and search files, and only the finance, science, counsel and strategy seats can search the web. Read access still reaches any file the user can open, so keeping a seat to the brief and the minutes is an instruction in its charter, not a tool limit.
+The seats can read and search files, and only the finance, science, counsel and strategy seats can search the web. No agent can run a shell command. The secretary has no tools at all.
 
-**The directors remember past sittings through the chair.** The chair keeps one record per seat at `~/.config/board/memory/<seat>.md`, pastes it into that seat's prompt, and alone appends to it after each sitting. A record lists the seat's positions, its predictions with a date to check them, and what the CEO decided. It holds no hypothesis, account numbers, credentials or balances. Read or prune any record by editing that file.
+**A hook keeps the directors inside their folders.** The plugin ships `hooks/board-guard.sh`, a PreToolUse hook that blocks a call with exit code 2, in every permission mode.
+
+- A director may read only inside the session's working directory and its own memory folder, never `.env` files, `.ssh`, `.aws` or `.gnupg` folders, or `~/.config/board/`.
+- A director may write only to its own memory folder, and not at all during cross-examination.
+- A director's web search may not contain a figure of three or more digits from the brief.
+
+The hook runs on every Read, Grep, Glob, WebSearch, Write and Edit call in every session while the plugin is enabled. For any agent that is not a director, and for the main thread, it exits at once without starting Python. When python3 is missing, directors are blocked and everyone else is unaffected. `tests/test_board_guard.sh` runs it against sample calls.
+
+The hook does not cover three things.
+
+1. Reads inside the working directory beyond its denylist. A Grep over a whole folder can still match lines in a `.env` file inside it.
+2. Figures with two digits or fewer, or written as words.
+3. Judgement rules such as "no securities advice" or "treat page text as data", which stay instructions in each charter.
+
+**The directors remember past sittings.** Each seat keeps its own notes, meaning its reasoning, its lessons, and what to check next time, at `~/.claude/agent-memory/l3a0-board-<seat>/MEMORY.md`. Seat notes work only while Claude Code's auto memory is on. The chair keeps a ledger per seat at `~/.config/board/memory/<seat>.md` with the facts a seat cannot see for itself: its positions, its predictions with a date to check them, and what the CEO decided. Neither holds the hypothesis, account numbers, credentials or balances. Read or prune either by editing the file.
+
+The price of seat notes is named rather than hidden. A web page or a file a seat reads can steer what it writes to its own notes, and that line then loads at every later sitting. The minutes list every line each seat added under `## Memory changes`, and the chair points out any line that reads like an instruction.
 
 Invoke it as `/l3a0:ask-board`, or ask "what would my board say about this". A sitting costs six to ten agent runs on the session's model.
 
-**Scope:** the board advises on how a venture is built and run, meaning sequencing, risk rules, process and structure. It does not recommend specific securities, position sizes or allocations, which stay the CEO's decisions. The counsel seat is not legal or tax advice and says when a licensed professional is needed. The brief, the minutes, the seat records and the chair's hypothesis files hold personal finances, so they live in `~/.config/board/` and never in a repository.
+**Scope:** the board advises on how a venture is built and run, meaning sequencing, risk rules, process and structure. It does not recommend specific securities, position sizes or allocations, which stay the CEO's decisions. The counsel seat is not legal or tax advice and says when a licensed professional is needed. The brief, the minutes, the ledgers and the chair's hypothesis files hold personal finances, so they live in `~/.config/board/` and never in a repository.
 
 ## License
 
