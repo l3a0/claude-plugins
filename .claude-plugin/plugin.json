@@ -1,7 +1,7 @@
 {
   "name": "l3a0",
   "description": "l3a0's Claude Code skills. kindle-highlights extracts a book's Kindle highlights into one verbatim, location-cited Markdown file, recovering everything Amazon's export limit truncates or hides. ask-board convenes a board of ten advisor agents, each with its own objective, and a secretary who drafts the synthesis, on a sole operator's strategic decision.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "author": {
     "name": "l3a0",
     "url": "https://baowebdev.substack.com"

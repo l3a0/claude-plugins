@@ -139,7 +139,7 @@ The hook does not cover three things.
 
 The price of seat notes is named rather than hidden. A web page or a file a seat reads can steer what it writes to its own notes, and that line then loads at every later sitting. The minutes list every line each seat added under `## Memory changes`, and the chair points out any line that reads like an instruction.
 
-Invoke it as `/l3a0:ask-board`, or ask "what would my board say about this". A sitting costs six to ten agent runs on the session's model.
+Invoke it as `/l3a0:ask-board`, or ask "what would my board say about this". A sitting costs six to thirteen agent runs on the session's model.
 
 **Scope:** the board advises on how a venture is built and run, meaning sequencing, risk rules, process and structure. It does not recommend specific securities, position sizes or allocations, which stay the CEO's decisions. Counsel and the accountant give concrete legal and tax advice, with the authority, the deadline, the form and the dollar effect, and send the CEO to an attorney, a CPA or an enrolled agent only for an irreversible step, a large amount, or a matter involving litigation, a regulator or someone else's money. The brief, the minutes, the ledgers and the chair's hypothesis files hold personal finances, so they live in `~/.config/board/` and never in a repository.
 

@@ -40,7 +40,7 @@ The board advises on how the venture is built and run: sequencing, risk rules, p
 
 Counsel and the accountant give real legal and tax advice. Each recommendation names the action, the authority with a link, the deadline as a date, the form or filing, the dollar effect worked from the brief, and whether the step can be reversed and at what cost. They send the CEO to an attorney, or to a CPA or an enrolled agent, only when a step cannot be reversed, when the amount at stake exceeds the brief's threshold or $10,000 by default, or when litigation, a regulator or another person's money is involved. Even then they answer first. Each memo ends with one line saying the board is an AI and that filings rest with the CEO.
 
-The price of a sitting is between six and ten agent runs on the session's model. A question with one obvious answer does not need a board, so answer it directly and offer a sitting only if the CEO wants one.
+The price of a sitting is between six and thirteen agent runs on the session's model. A question with one obvious answer does not need a board, so answer it directly and offer a sitting only if the CEO wants one.
 
 ## Where the files live
 
@@ -112,7 +112,7 @@ The minutes, the ledgers and the seats' notes are the history of past sittings. 
 6. Blind draft of the synthesis.
 7. Verdict, minutes and ledgers.
 
-Cap a whole sitting at ten agent runs. The blind round, the callbacks in step 4 and the secretary in step 6 all count, and so does a continued agent. Reserve one run for the secretary from the start.
+Cap a whole sitting at thirteen agent runs. The blind round, the callbacks in step 4 and the secretary in step 6 all count, and so does a continued agent. Reserve one run for the secretary from the start. Thirteen is six seats in the blind round, all six called back, and the secretary, so the largest sitting this skill describes never has to drop a callback.
 
 ### 1. Intake
 
