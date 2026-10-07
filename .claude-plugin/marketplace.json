@@ -8,7 +8,7 @@
     {
       "name": "l3a0",
       "source": "./",
-      "description": "l3a0's Claude Code skills: kindle-highlights (verbatim Kindle highlight extraction with truncation recovery) and ask-board (a board of nine advisor agents for a sole operator's strategic decisions)."
+      "description": "l3a0's Claude Code skills: kindle-highlights (verbatim Kindle highlight extraction with truncation recovery) and ask-board (a board of nine advisor agents and a secretary for a sole operator's strategic decisions)."
     }
   ]
 }

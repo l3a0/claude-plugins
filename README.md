@@ -88,14 +88,15 @@ Apple's Vision framework, and highlight positions come from the Mac Kindle app's
 
 One model answering a strategic question blends every concern into one voice, so the places where the concerns disagree never surface. This skill gives a sole operator a board of directors instead. Each director is a separate agent with its own objective, and none of them sees the others' first answers. The disagreement reaches the CEO as a split with the metric that decides it.
 
-Ask a question such as "I want to start a quant trading shop with my own money. Should a working strategy come first?" The main thread chairs a sitting in six steps.
+Ask a question such as "I want to start a quant trading shop with my own money. Should a working strategy come first?" The main thread chairs a sitting in seven steps.
 
-1. **Intake.** It rewrites the question as a decision and sets aside the CEO's own hypothesis. It loads the company brief and the most recent minutes, and on the first run it asks four questions to start the brief.
+1. **Intake.** It rewrites the question as a decision and sets aside the CEO's own hypothesis. It loads the company brief, the recent minutes and every past decision, so a rejected plan does not come back without new evidence. On the first run it asks four questions to start the brief.
 2. **Seating.** It picks four to six seats the decision needs. The independent director sits every time.
-3. **Blind round.** The seated directors write memos in parallel without seeing the hypothesis, so none of them anchors on it.
-4. **Cross-examination.** When the memos disagree on what comes first, the seats on each side and the independent director see the hypothesis and each other's memos, then rebut and vote on the hypothesis.
-5. **Fact check.** The chair checks each rule, threshold or cost the advice rests on against a source, and marks what it could not check.
-6. **Minutes.** The chair writes the synthesis: the verdict count, the agreements, each split with its deciding metric, the questions only the CEO can answer, and a recommended decision with its first three actions.
+3. **Blind round.** The seated directors write memos in parallel without seeing the hypothesis, so none of them anchors on it. Each memo carries a pre-mortem, a base rate, and every factual claim tagged VERIFIED with a source or ASSUMED.
+4. **Cross-examination or a rival plan.** When the memos disagree on what comes first, the seats on each side and the independent director see the hypothesis and each other's memos, then rebut. A seat may change its verdict only by naming a new fact or a flaw in its own memo. When the memos all agree, the independent director builds the strongest rival plan instead.
+5. **Fact check.** The chair checks base rates first, then each assumed rule, threshold or cost the advice rests on, and marks what it could not check.
+6. **Blind draft.** A secretary agent that never sees the hypothesis drafts the synthesis and weighs each split by its arguments rather than by headcount.
+7. **Minutes.** The chair adds the verdict count, a table of each seat's blind and final verdicts that flags any change made without a reason, and the decision with its status: adopted, rejected or deferred.
 
 The board has nine seats. All of them run on the same model, so each charter names what the seat optimizes, what it will sacrifice, and the question it always asks.
 
@@ -109,11 +110,15 @@ The board has nine seats. All of them run on the same model, so each charter nam
 8. **Strategist** (`board-strategist`) asks who is on the other side of the trade and why they lose.
 9. **Independent Director** (`board-independent`) asks what would have to be true for the opposite plan to win.
 
-Trading is the worked example in every charter, and the seats apply to any one-person venture. Every seat is read-only. None of them can run commands or edit files, and only the finance, science, counsel and strategy seats can search the web.
+A tenth agent, the secretary (`board-secretary`), holds no seat and drafts the synthesis. Trading is the worked example in every charter, and the seats apply to any one-person venture.
 
-Invoke it as `/l3a0:ask-board`, or ask "what would my board say about this". A sitting costs four to ten agent runs on the session's model.
+Every agent can read and search files, and none can run a shell command. Only the finance, science, counsel and strategy seats can search the web.
 
-**Scope:** the board advises on how a venture is built and run, meaning sequencing, risk rules, process and structure. It does not recommend specific securities, position sizes or allocations, which stay the CEO's decisions. The counsel seat is not legal or tax advice and says when a licensed professional is needed. The brief and the minutes hold personal finances, so they live in `~/.config/board/` and never in a repository.
+**The directors remember past sittings.** Each agent keeps a memory that Claude Code stores at `~/.claude/agent-memory/l3a0-board-<seat>/`. Turning memory on also gives an agent Write and Edit, so the rule that it writes only inside that folder lives in each charter rather than in a tool restriction. A seat records the positions it took, the predictions it made with a date to check them, and the decisions the CEO took against its advice. The secretary keeps only notes on its own drafting. Read or prune any of it by editing or deleting the `MEMORY.md` in that folder.
+
+Invoke it as `/l3a0:ask-board`, or ask "what would my board say about this". A sitting costs five to ten agent runs on the session's model.
+
+**Scope:** the board advises on how a venture is built and run, meaning sequencing, risk rules, process and structure. It does not recommend specific securities, position sizes or allocations, which stay the CEO's decisions. The counsel seat is not legal or tax advice and says when a licensed professional is needed. The brief and the minutes hold personal finances, so they live in `~/.config/board/` and never in a repository. Agent memory stores no account numbers, credentials or balances.
 
 ## License
 
