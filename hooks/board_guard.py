@@ -36,13 +36,20 @@ The rules:
    three or more digits that also appears in ~/.config/board/brief.md. Both
    sides are NFKC-normalised, separators between digits are removed, and
    leading zeros are dropped before comparing. A missing brief allows it.
+10. WebFetch is allowed only for the seats in FETCH_AGENTS, only over https,
+    and only to a host in FETCH_DOMAINS, one of their subdomains, or any
+    .gov host. A URL with userinfo, a port or an IP-literal host is refused.
+    The figure check of rule 9 runs over the URL, decoded and raw, and over
+    the prompt.
 """
 
+import ipaddress
 import json
 import os
 import re
 import sys
 import unicodedata
+from urllib.parse import unquote, urlsplit
 
 BOARD_PREFIX = "l3a0:board-"
 
@@ -54,12 +61,31 @@ ALLOWED_TOOLS = {
     "Grep",
     "Glob",
     "WebSearch",
+    "WebFetch",
     "Write",
     "Edit",
     "ToolSearch",
     "SubagentHandback",
     "StructuredOutput",
 }
+
+# Only these seats may fetch, and only primary sources: statutes,
+# regulations, tax authorities and market regulators.
+FETCH_AGENTS = {"l3a0:board-counsel", "l3a0:board-accountant"}
+FETCH_DOMAINS = (
+    "irs.gov",
+    "treasury.gov",
+    "ecfr.gov",
+    "govinfo.gov",
+    "uscode.house.gov",
+    "law.cornell.edu",
+    "sec.gov",
+    "finra.org",
+    "cftc.gov",
+    "nfa.futures.org",
+    "federalregister.gov",
+    "taxadmin.org",
+)
 
 SECRET_DIRS = {".ssh", ".aws", ".gnupg"}
 GLOB_CHARS = re.compile(r"[*?\[{]")
@@ -242,18 +268,63 @@ def strings_in(value):
             yield from strings_in(item)
 
 
-def check_search(tool_input):
-    if not isinstance(tool_input.get("query"), str):
-        raise Denied("the search query is missing")
+def brief_figures():
+    """The brief's figures, or None when there is no brief."""
     brief = os.path.join(os.path.expanduser("~"), ".config", "board", "brief.md")
     try:
         with open(brief, encoding="utf-8") as handle:
-            secret = figures(handle.read())
+            return figures(handle.read())
     except FileNotFoundError:
+        return None
+
+
+def check_search(tool_input):
+    if not isinstance(tool_input.get("query"), str):
+        raise Denied("the search query is missing")
+    secret = brief_figures()
+    if secret is None:
         return
     for text in strings_in(tool_input):
         if figures(text) & secret:
             raise Denied("the search contains a figure from the brief")
+
+
+def host_allowed(host):
+    if host.endswith(".gov"):
+        return True
+    return any(host == domain or host.endswith("." + domain) for domain in FETCH_DOMAINS)
+
+
+def check_fetch(tool_input, agent):
+    if agent not in FETCH_AGENTS:
+        raise Denied(f"{agent} may not use WebFetch")
+    url = tool_input.get("url")
+    if not isinstance(url, str) or url == "":
+        raise Denied("the url is missing")
+    check_trim(url, "url")
+    if any(char.isspace() or ord(char) < 32 or char == "\\" for char in url):
+        raise Denied("the url holds whitespace, a control character or a backslash")
+    parts = urlsplit(url)
+    if parts.scheme != "https":
+        raise Denied("the url is not https")
+    if "@" in parts.netloc:
+        raise Denied("the url carries userinfo")
+    host = parts.hostname or ""
+    if parts.netloc.lower() != host:
+        raise Denied("the url carries a port or an unusual host form")
+    try:
+        ipaddress.ip_address(host.strip("[]"))
+        raise Denied("the url uses an IP address")
+    except ValueError:
+        pass
+    if not host_allowed(host):
+        raise Denied(f"{host} is not a primary-source site on the allowlist")
+    secret = brief_figures()
+    if secret is None:
+        return
+    for text in [url, unquote(url), *strings_in(tool_input)]:
+        if figures(text) & secret:
+            raise Denied("the fetch contains a figure from the brief")
 
 
 def decide(data):
@@ -275,6 +346,9 @@ def decide(data):
         raise Denied("the session runs from the home folder or above it. Start the sitting from a project folder")
     if tool == "WebSearch":
         check_search(tool_input)
+        return None
+    if tool == "WebFetch":
+        check_fetch(tool_input, agent)
         return None
     if tool not in ("Read", "Grep", "Glob", "Write", "Edit"):
         return None

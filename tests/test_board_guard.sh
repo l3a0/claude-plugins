@@ -152,6 +152,30 @@ check "33d deny: a board agent calls an unknown future tool" 2 "$(board FutureTo
 check "33e allow: a board agent calls ToolSearch" 0 "$(board ToolSearch '{"query":"select:WebSearch"}')"
 check "33f allow: a non-board agent calls Bash" 0 "$(printf '{"cwd":"%s","agent_type":"Explore","tool_name":"Bash","tool_input":{"command":"ls"}}' "$work")"
 
+# WebFetch: only counsel and the accountant, only primary-source hosts.
+seat() { printf '{"cwd":"%s","agent_id":"a3","agent_type":"l3a0:board-%s","tool_name":"%s","tool_input":%s}' "$work" "$1" "$2" "$3"; }
+fetch() { printf '{"url":"%s","prompt":"%s"}' "$1" "${2:-Summarise the rule}"; }
+check "36 allow: counsel fetches an irs.gov page" 0 "$(seat counsel WebFetch "$(fetch https://www.irs.gov/publications/p550)")"
+check "36b allow: the accountant fetches an irs.gov page" 0 "$(seat accountant WebFetch "$(fetch https://www.irs.gov/publications/p550)")"
+check "36c allow: counsel fetches a state .gov page" 0 "$(seat counsel WebFetch "$(fetch https://www.tax.ny.gov/pit/)")"
+check "36d allow: the accountant fetches law.cornell.edu" 0 "$(seat accountant WebFetch "$(fetch https://www.law.cornell.edu/uscode/text/26/475)")"
+check "37 deny: counsel fetches a host off the allowlist" 2 "$(seat counsel WebFetch "$(fetch https://example.com/tax)")"
+check "37b deny: a lookalike host irs.gov.evil.com" 2 "$(seat counsel WebFetch "$(fetch https://irs.gov.evil.com/p550)")"
+check "37c allow: evilirs.gov, because every .gov host is allowed" 0 "$(seat counsel WebFetch "$(fetch https://evilirs.gov/p550)")"
+check "37c2 deny: a lookalike host evilirs.gov.com" 2 "$(seat counsel WebFetch "$(fetch https://evilirs.gov.com/p550)")"
+check "37d deny: a lookalike host evilfinra.org" 2 "$(seat counsel WebFetch "$(fetch https://evilfinra.org/rules)")"
+check "37e deny: http rather than https" 2 "$(seat counsel WebFetch "$(fetch http://www.irs.gov/p550)")"
+check "37f deny: userinfo in the url" 2 "$(seat counsel WebFetch "$(fetch https://user@www.irs.gov/p550)")"
+check "37g deny: an IP-literal host" 2 "$(seat counsel WebFetch "$(fetch https://23.1.2.3/p550)")"
+check "37h deny: an IPv6-literal host" 2 "$(seat counsel WebFetch "$(fetch 'https://[2001:db8::1]/p550')")"
+check "37i deny: a port" 2 "$(seat counsel WebFetch "$(fetch https://www.irs.gov:8443/p550)")"
+check "37j deny: a padded url" 2 "$(seat counsel WebFetch "$(fetch ' https://www.irs.gov/p550')")"
+check "38 deny: a brief figure in the url query" 2 "$(seat accountant WebFetch "$(fetch 'https://www.irs.gov/search?q=25000')")"
+check "38b deny: a percent-encoded brief figure in the url" 2 "$(seat accountant WebFetch "$(fetch 'https://www.irs.gov/search?q=%32%35000')")"
+check "38c deny: a brief figure in the prompt" 2 "$(seat accountant WebFetch "$(fetch https://www.irs.gov/p550 'Is a loss of 25,000 deductible')")"
+check "39 deny: the CFO fetches irs.gov" 2 "$(seat cfo WebFetch "$(fetch https://www.irs.gov/p550)")"
+check "39b deny: the CTO fetches irs.gov" 2 "$(seat cto WebFetch "$(fetch https://www.irs.gov/p550)")"
+
 # An allowed Grep comes back with the exclusions appended last.
 check "34 allow: Grep with a user glob gets exclusions appended" 0 "$(board Grep '{"pattern":"x","glob":".en[v]"}')"
 if python3 -c '
