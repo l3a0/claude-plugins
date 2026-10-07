@@ -1,6 +1,6 @@
 {
   "name": "l3a0",
-  "description": "l3a0's personal Claude Code plugin marketplace — skills for extracting and working with Kindle highlights, with more to come.",
+  "description": "l3a0's personal Claude Code plugin marketplace. Skills for extracting Kindle highlights and for convening a board of advisor agents on a strategic decision.",
   "owner": {
     "name": "l3a0"
   },
@@ -8,7 +8,7 @@
     {
       "name": "l3a0",
       "source": "./",
-      "description": "l3a0's Claude Code skills: kindle-highlights (verbatim Kindle highlight extraction with truncation recovery)."
+      "description": "l3a0's Claude Code skills: kindle-highlights (verbatim Kindle highlight extraction with truncation recovery) and ask-board (a board of ten advisor agents and a secretary for a sole operator's strategic decisions)."
     }
   ]
 }

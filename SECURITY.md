@@ -7,8 +7,8 @@ Only the latest release of the `l3a0` plugin is supported. Update with
 
 | Version | Supported |
 | ------- | --------- |
-| 0.3.x (latest) | ✅ |
-| < 0.3 | ❌ |
+| 0.4.x (latest) | ✅ |
+| < 0.4 | ❌ |
 
 ## Reporting a Vulnerability
 
@@ -34,3 +34,16 @@ exact access). Reports of particular interest:
 - Path injection or command injection via scraped page content or filenames.
 - Prompt-injection vectors in skill instructions that could cause unintended
   actions.
+- The `ask-board` agents advise on a venture whose brief and minutes under
+  `~/.config/board/` hold personal finances, and some seats search the web.
+  The boundary is the PreToolUse hook in `hooks/board-guard.sh`. It limits a
+  board agent to a short list of tools, confines its reads to the working
+  directory and its own memory folder, excludes secret names from its
+  recursive searches, confines its writes to that memory folder, keeps the
+  brief's figures out of its web searches, and lets only the counsel and
+  accountant seats fetch pages, from a primary-source domain allowlist. In scope are any way past that hook, a fetched page that
+  steers an agent, and anything that moves the brief, the minutes, the
+  ledgers or a seat's notes off the machine. Out of scope by design: an
+  injected line landing in a seat's own `MEMORY.md`, which the minutes list
+  under `## Memory changes`, and injected text on a page from an allowed
+  domain, since the domain list rather than the page is the boundary.

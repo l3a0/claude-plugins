@@ -1,0 +1,18 @@
+{
+  "description": "Confines the ask-board agents to a short list of tools, to reading the session's working directory and their own memory folder, to writing only that memory folder, and to web searches without the brief's figures.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/board-guard.sh"],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
