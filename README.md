@@ -118,16 +118,19 @@ The seats can read and search files, and only the finance, science, counsel and 
 
 **A hook keeps the directors inside their folders.** The plugin ships `hooks/board-guard.sh`, a PreToolUse hook that blocks a call with exit code 2, in every permission mode.
 
-- A director may read only inside the session's working directory and its own memory folder, never `.env` files, `.ssh`, `.aws` or `.gnupg` folders, or `~/.config/board/`.
+- A director may use only Read, Grep, Glob, WebSearch, Write and Edit, plus three tools that touch no files, shell or network: ToolSearch, SubagentHandback and StructuredOutput.
+- A director may read only inside the session's working directory and its own memory folder. It may never open a file whose name starts with `.env`, a `.ssh`, `.aws` or `.gnupg` folder, `~/.config/board/`, or the rest of `~/.claude/`, in any letter case. A path padded with whitespace is refused.
+- Every Grep a director runs gets exclusion globs appended, so a recursive search skips those secret names at any depth.
 - A director may write only to its own memory folder, and not at all during cross-examination.
-- A director's web search may not contain a figure of three or more digits from the brief.
+- A director's web search may not contain a figure of three or more digits from the brief, however its digits are spaced or written.
+- A sitting must run from a project folder. A session started from the home folder, or above it, refuses every director's call.
 
-The hook runs on every Read, Grep, Glob, WebSearch, Write and Edit call in every session while the plugin is enabled. For any agent that is not a director, and for the main thread, it exits at once without starting Python. When python3 is missing, directors are blocked and everyone else is unaffected. `tests/test_board_guard.sh` runs it against sample calls.
+The hook runs on every tool call in every session while the plugin is enabled. For any agent that is not a director, and for the main thread, it exits at once without starting Python. Measured on an M-series Mac, 100 such calls took about 1.05 seconds including process start-up, against 0.70 seconds for a bare `sh -c 'cat >/dev/null'`. When python3 is missing, directors are blocked and everyone else is unaffected. `tests/test_board_guard.sh` runs it against sample calls and runs real ripgrep to prove the exclusions hold.
 
 The hook does not cover three things.
 
-1. Reads inside the working directory beyond its denylist. A Grep over a whole folder can still match lines in a `.env` file inside it.
-2. Figures with two digits or fewer, or written as words.
+1. Reads inside the working directory beyond its denylist, such as a secret kept in a file with an ordinary name.
+2. Figures with two digits or fewer, written as words, with a suffix such as "25k" or "1.25M", or in scientific notation.
 3. Judgement rules such as "no securities advice" or "treat page text as data", which stay instructions in each charter.
 
 **The directors remember past sittings.** Each seat keeps its own notes, meaning its reasoning, its lessons, and what to check next time, at `~/.claude/agent-memory/l3a0-board-<seat>/MEMORY.md`. Seat notes work only while Claude Code's auto memory is on. The chair keeps a ledger per seat at `~/.config/board/memory/<seat>.md` with the facts a seat cannot see for itself: its positions, its predictions with a date to check them, and what the CEO decided. Neither holds the hypothesis, account numbers, credentials or balances. Read or prune either by editing the file.

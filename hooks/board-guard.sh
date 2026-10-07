@@ -1,12 +1,14 @@
 #!/bin/sh
 # PreToolUse guard for the ask-board agents.
 #
-# Claude Code runs this before every Read, Grep, Glob, WebSearch, Write and
-# Edit call in every session while the plugin is enabled. Only calls from an agent whose
-# agent_type starts with "l3a0:board-" are checked. Every other caller, the
-# main thread included, exits 0 here without starting Python.
+# Claude Code runs this before every tool call in every session while the
+# plugin is enabled. Only calls from an agent whose agent_type starts with
+# "l3a0:board-" are checked. Every other caller, the main thread included,
+# exits 0 here without starting Python.
 #
-# Exit 0 allows the call. Exit 2 blocks it, in every permission mode.
+# Exit 0 allows the call, and for a board agent's Grep the Python check
+# prints an updatedInput that adds exclusion globs. Exit 2 blocks the call,
+# in every permission mode.
 # Claude Code treats any other exit code as a non-blocking error and lets the
 # call through, so for a board agent every failure below turns into exit 2.
 

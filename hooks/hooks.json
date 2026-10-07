@@ -1,9 +1,9 @@
 {
-  "description": "Limits the ask-board agents to reading the session's working directory and their own memory folder, writing only that memory folder, and searching the web without the brief's figures.",
+  "description": "Confines the ask-board agents to a short list of tools, to reading the session's working directory and their own memory folder, to writing only that memory folder, and to web searches without the brief's figures.",
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Grep|Glob|WebSearch|Write|Edit",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
