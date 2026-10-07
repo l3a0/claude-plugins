@@ -84,6 +84,37 @@ Apple's Vision framework, and highlight positions come from the Mac Kindle app's
 4. Emits one Markdown file with `### Location N` sections, blockquoted verbatim text, and
    flags for anything recovered or approximate, then runs a QA pass.
 
+### ask-board
+
+One model answering a strategic question blends every concern into one voice, so the places where the concerns disagree never surface. This skill gives a sole operator a board of directors instead. Each director is a separate agent with its own objective, and none of them sees the others' first answers. The disagreement reaches the CEO as a split with the metric that decides it.
+
+Ask a question such as "I want to start a quant trading shop with my own money. Should a working strategy come first?" The main thread chairs a sitting in six steps.
+
+1. **Intake.** It rewrites the question as a decision and sets aside the CEO's own hypothesis. It loads the company brief and the most recent minutes, and on the first run it asks four questions to start the brief.
+2. **Seating.** It picks four to six seats the decision needs. The independent director sits every time.
+3. **Blind round.** The seated directors write memos in parallel without seeing the hypothesis, so none of them anchors on it.
+4. **Cross-examination.** When the memos disagree on what comes first, the seats on each side and the independent director see the hypothesis and each other's memos, then rebut and vote on the hypothesis.
+5. **Fact check.** The chair checks each rule, threshold or cost the advice rests on against a source, and marks what it could not check.
+6. **Minutes.** The chair writes the synthesis: the verdict count, the agreements, each split with its deciding metric, the questions only the CEO can answer, and a recommended decision with its first three actions.
+
+The board has nine seats. All of them run on the same model, so each charter names what the seat optimizes, what it will sacrifice, and the question it always asks.
+
+1. **Chief Financial Officer** (`board-cfo`) asks whether the plan beats an index fund after costs and the CEO's time.
+2. **Chief Risk Officer** (`board-risk`) asks what the maximum loss is and what stops trading when it hits.
+3. **Chief Scientist** (`board-scientist`) asks what out-of-sample evidence exists and how many variants were tried.
+4. **Chief Technology Officer** (`board-cto`) asks whether the live path reproduces the backtest number.
+5. **Chief Operating Officer** (`board-coo`) asks what happens when the CEO is sick for a week or the broker API is down.
+6. **Chief Information Security Officer** (`board-ciso`) asks where the broker keys live and who can withdraw.
+7. **General Counsel and Tax** (`board-counsel`) asks which rules a choice touches and which of them has a deadline.
+8. **Strategist** (`board-strategist`) asks who is on the other side of the trade and why they lose.
+9. **Independent Director** (`board-independent`) asks what would have to be true for the opposite plan to win.
+
+Trading is the worked example in every charter, and the seats apply to any one-person venture. Every seat is read-only. None of them can run commands or edit files, and only the finance, science, counsel and strategy seats can search the web.
+
+Invoke it as `/l3a0:ask-board`, or ask "what would my board say about this". A sitting costs four to ten agent runs on the session's model.
+
+**Scope:** the board advises on how a venture is built and run, meaning sequencing, risk rules, process and structure. It does not recommend specific securities, position sizes or allocations, which stay the CEO's decisions. The counsel seat is not legal or tax advice and says when a licensed professional is needed. The brief and the minutes hold personal finances, so they live in `~/.config/board/` and never in a repository.
+
 ## License
 
 [MIT](LICENSE)
