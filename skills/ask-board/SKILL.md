@@ -40,7 +40,7 @@ The board advises on how the venture is built and run: sequencing, risk rules, p
 
 Counsel and the accountant give real legal and tax advice. Each recommendation names the action, the authority with a link, the deadline as a date, the form or filing, the dollar effect worked from the brief, and whether the step can be reversed and at what cost. They send the CEO to an attorney, or to a CPA or an enrolled agent, only when a step cannot be reversed, when the amount at stake exceeds the brief's threshold or $10,000 by default, or when litigation, a regulator or another person's money is involved. Even then they answer first. Each memo ends with one line saying the board is an AI and that filings rest with the CEO.
 
-The price of a sitting is between six and fourteen agent runs on the session's model. A question with one obvious answer does not need a board, so answer it directly and offer a sitting only if the CEO wants one.
+The price of a sitting is between six and twenty-two agent runs on the session's model. A question with one obvious answer does not need a board, so answer it directly and offer a sitting only if the CEO wants one.
 
 ## Where the files live
 
@@ -112,7 +112,7 @@ The minutes, the ledgers and the seats' notes are the history of past sittings. 
 6. Blind draft of the synthesis.
 7. Verdict, minutes and ledgers.
 
-Cap a whole sitting at fourteen agent runs. The blind round, the callbacks in step 4 and the secretary in step 6 all count, and so does a continued agent. Reserve one run for the secretary from the start. Fourteen is six seats in the blind round, one relaunch, all six called back, and the secretary, so a six-seat sitting always has room for its first relaunch and never has to drop a callback.
+Cap a whole sitting at twenty-two agent runs. The blind round, the callbacks in step 4 and the secretary in step 6 all count, and so does a continued agent. Reserve one run for the secretary from the start. Twenty-two is all ten seats in the blind round, one relaunch, all ten called back, and the secretary, so a sitting of any size has room for its first relaunch and never has to drop a callback.
 
 ### 1. Intake
 
@@ -139,9 +139,9 @@ If the decision concerns a repository, note its absolute path for the seats to r
 
 ### 2. Seat the board
 
-Pick the four to six seats the decision needs. board-independent sits every time. Read the ledger of each seat that sits from `~/.config/board/memory/<seat>.md`, or note that it has none yet. Also read each seated seat's `~/.claude/agent-memory/l3a0-board-<seat>/MEMORY.md`, if it exists, and keep its text. Step 7 compares against it.
+Seat every seat whose question in the seat table the decision touches, at least four and up to all ten. A seat left out leaves its question unasked, and a seat whose question does not apply costs a run and adds nothing. board-independent sits every time. Read the ledger of each seat that sits from `~/.config/board/memory/<seat>.md`, or note that it has none yet. Also read each seated seat's `~/.claude/agent-memory/l3a0-board-<seat>/MEMORY.md`, if it exists, and keep its text. Step 7 compares against it.
 
-Typical sittings, as a starting point rather than a rule:
+Typical sittings, as a starting point rather than a rule. Add any other seat whose question the decision touches:
 
 - What to build or do first: CFO, Risk, Scientist, CTO, Strategist, Independent.
 - Going live with real money: Risk, CTO, COO, CISO, Independent.

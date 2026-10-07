@@ -91,7 +91,7 @@ One model answering a strategic question blends every concern into one voice, so
 Ask a question such as "I want to start a quant trading shop with my own money. Should a working strategy come first?" The main thread chairs a sitting in seven steps.
 
 1. **Intake.** It sets aside the CEO's own hypothesis in a file only the chair reads, and rewrites the question as an open choice among labelled options, at least two of them not the hypothesis. It loads the company brief, the recent minutes and every past decision, so a rejected plan does not come back without new evidence. It asks for any of four brief fields still blank.
-2. **Seating.** It picks four to six seats the decision needs. The independent director sits every time. When the skill started on its own, it asks once before convening.
+2. **Seating.** It seats every director whose question the decision touches, at least four and up to all ten. The independent director sits every time. When the skill started on its own, it asks once before convening.
 3. **Blind round.** The seated directors write memos in parallel without knowing which option the CEO favors, so none of them anchors on it. Each memo carries a pre-mortem, a base rate, and every factual claim tagged VERIFIED with a source or ASSUMED.
 4. **Cross-examination or a rival plan.** When the memos disagree on which option comes first, seats from each side and the independent director learn which option the CEO favors, then rebut. A seat may change its verdict only by naming a new fact or a flaw in its own memo. When the memos all agree, the independent director builds the strongest rival plan instead.
 5. **Fact check.** The chair spends about ten lookups, base rates first, then the assumed rules, thresholds and costs the advice rests on. Anything unchecked stays ASSUMED.
@@ -139,7 +139,7 @@ The hook does not cover three things.
 
 The price of seat notes is named rather than hidden. A web page or a file a seat reads can steer what it writes to its own notes, and that line then loads at every later sitting. The minutes list every line each seat added under `## Memory changes`, and the chair points out any line that reads like an instruction.
 
-Invoke it as `/l3a0:ask-board`, or ask "what would my board say about this". A sitting costs six to fourteen agent runs on the session's model.
+Invoke it as `/l3a0:ask-board`, or ask "what would my board say about this". A sitting costs six to twenty-two agent runs on the session's model.
 
 **Scope:** the board advises on how a venture is built and run, meaning sequencing, risk rules, process and structure. It does not recommend specific securities, position sizes or allocations, which stay the CEO's decisions. Counsel and the accountant give concrete legal and tax advice, with the authority, the deadline, the form and the dollar effect, and send the CEO to an attorney, a CPA or an enrolled agent only for an irreversible step, a large amount, or a matter involving litigation, a regulator or someone else's money. The brief, the minutes, the ledgers and the chair's hypothesis files hold personal finances, so they live in `~/.config/board/` and never in a repository.
 
