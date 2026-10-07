@@ -2,7 +2,7 @@
 
 The board reads this brief at every sitting. A seat ties its advice to the figures here, so a vague brief produces generic advice. Keep this file at `~/.config/board/brief.md` and never in a repository, because it holds personal finances.
 
-The first four sections are what a sitting needs. Fill the rest as the venture grows.
+The first four sections are what a sitting needs. Write "not given" for any figure left out on purpose. Fill the rest as the venture grows.
 
 ## Capital at risk
 
@@ -20,7 +20,7 @@ The hours the CEO can give the venture in a normal week, and in a bad one.
 
 ## Goal
 
-What the venture is for, with a horizon and a number where one exists.
+What the venture is for, with a horizon and a number where one exists. Name an outcome, such as "replace half of salary income within five years", not a means, such as "build a trading bot". A means is a plan for the board to weigh.
 
 - Goal:
 - Horizon:
@@ -45,7 +45,7 @@ One paragraph on what it is and what it sells or trades.
 
 ## Current state
 
-What exists today: repositories and their paths, accounts and brokers, data sources, live or paper strategies, and their results so far.
+What exists today: repositories and their paths, accounts and brokers, data sources, live or paper strategies, and their results so far. Name the broker and account type only, with no account numbers, logins or keys.
 
 -
 
@@ -61,6 +61,6 @@ Loss limits, kill switches and who or what enforces them.
 
 ## Open questions
 
-Questions earlier sittings left for the CEO.
+Questions earlier sittings left for the CEO. The chair appends to this list after each sitting.
 
 -

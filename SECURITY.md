@@ -34,3 +34,7 @@ exact access). Reports of particular interest:
 - Path injection or command injection via scraped page content or filenames.
 - Prompt-injection vectors in skill instructions that could cause unintended
   actions.
+- The `ask-board` agents read the brief and minutes under `~/.config/board/`,
+  which hold personal finances, and some seats search the web. In scope are a
+  fetched page that steers an agent, and anything that moves the brief, the
+  minutes or the seat records off the machine.
