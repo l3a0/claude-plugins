@@ -40,7 +40,7 @@ The board advises on how the venture is built and run: sequencing, risk rules, p
 
 Counsel and the accountant give real legal and tax advice. Each recommendation names the action, the authority with a link, the deadline as a date, the form or filing, the dollar effect worked from the brief, and whether the step can be reversed and at what cost. They send the CEO to an attorney, or to a CPA or an enrolled agent, only when a step cannot be reversed, when the amount at stake exceeds the brief's threshold or $10,000 by default, or when litigation, a regulator or another person's money is involved. Even then they answer first. Each memo ends with one line saying the board is an AI and that filings rest with the CEO.
 
-The price of a sitting is between six and thirteen agent runs on the session's model. A question with one obvious answer does not need a board, so answer it directly and offer a sitting only if the CEO wants one.
+The price of a sitting is between six and fourteen agent runs on the session's model. A question with one obvious answer does not need a board, so answer it directly and offer a sitting only if the CEO wants one.
 
 ## Where the files live
 
@@ -112,7 +112,7 @@ The minutes, the ledgers and the seats' notes are the history of past sittings. 
 6. Blind draft of the synthesis.
 7. Verdict, minutes and ledgers.
 
-Cap a whole sitting at thirteen agent runs. The blind round, the callbacks in step 4 and the secretary in step 6 all count, and so does a continued agent. Reserve one run for the secretary from the start. Thirteen is six seats in the blind round, all six called back, and the secretary, so a six-seat sitting with no relaunch never has to drop a callback. A relaunch in step 3 can still cost one, because it is decided before step 4 knows whether the round splits.
+Cap a whole sitting at fourteen agent runs. The blind round, the callbacks in step 4 and the secretary in step 6 all count, and so does a continued agent. Reserve one run for the secretary from the start. Fourteen is six seats in the blind round, one relaunch, all six called back, and the secretary, so a six-seat sitting always has room for its first relaunch and never has to drop a callback.
 
 ### 1. Intake
 
@@ -162,7 +162,7 @@ Launch every seated agent in one message, so they run in parallel and in the bac
 
 No prompt says which option the CEO favors. A seat that reads "I think X is right" anchors on X, and the blind round exists to find out what each seat says without that anchor. The past minutes go in without their verdicts because those show which option the CEO favored in earlier sittings. Each seat replies with a memo of about 300 words, in the eight parts its charter lists: first move by option label, reasoning, failure, pre-mortem, base rate, what would change its mind, questions for the CEO, and confidence. Every factual claim in it is tagged VERIFIED with a source, or ASSUMED.
 
-Wait for every notification before reading the memos together. Do not predict a memo that has not arrived. A seat that fails, returns nothing, or returns more than twice its word limit is recorded as "no memo". Relaunch it once only if the cap still leaves room after the secretary and the callbacks step 4 will need. Otherwise the sitting continues without it.
+Wait for every notification before reading the memos together. Do not predict a memo that has not arrived. A seat that fails, returns nothing, or returns more than twice its word limit is recorded as "no memo". Relaunch it once only if the cap still leaves room after the secretary and a callback for every seat that sits. Count every seat, because the relaunched memo can turn agreement into a split before step 4 runs. Otherwise the sitting continues without it.
 
 When there is a hypothesis, score each memo against it as the seat's blind verdict. It agrees when its first move is the hypothesis's label, disagrees when it puts another option first, and is conditional when it accepts the hypothesis only after a precondition. When there is no hypothesis, skip this scoring.
 
