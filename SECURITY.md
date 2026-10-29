@@ -47,3 +47,16 @@ exact access). Reports of particular interest:
   injected line landing in a seat's own `MEMORY.md`, which the minutes list
   under `## Memory changes`, and injected text on a page from an allowed
   domain, since the domain list rather than the page is the boundary.
+- The `ask-team` role agents have Read, Grep, Glob and Bash, and no hook
+  confines them. That they edit nothing is an instruction in each agent file,
+  not an enforced boundary, so a role agent runs with the session's own
+  permissions. In scope is any way the plugin itself grants them more than
+  that, such as a hook that loosens the session's permissions for them. A
+  role agent that ignores its instruction under the session's own
+  permissions is out of scope, since the session's permission mode is the
+  boundary there.
+- `update-build-board` and `sync-prune-next` act on GitHub as the user's
+  `gh` login, setting labels, posting comments, dispatching a workflow, and
+  deleting local worktrees and branches. In scope is any path where text in
+  an issue, a comment or a page steers one of those actions, or where the
+  pruning loop calls unpushed work safe.

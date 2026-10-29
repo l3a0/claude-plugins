@@ -7,9 +7,11 @@ the role's definition comes from, the limits, and the finding format. Edit the
 shared sections here and nowhere else, then regenerate, so the eight files
 cannot drift apart.
 
-The default definitions come from docs/team-charter.md ## Roles in
-l3a0/ithildin-runtime at 3c2242c, with that file's citations of book
-locations dropped. A repository's own docs/team-charter.md overrides them.
+What each role protects, does and vetoes comes from docs/team-charter.md
+## Roles in l3a0/ithildin-runtime at 3c2242c, with that file's citations of
+book locations dropped. The question each role always asks and its checks are
+this plugin's own, since the charter has neither. A repository's own
+docs/team-charter.md overrides the defaults.
 
 Run from anywhere:
 
@@ -24,7 +26,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "agents"
 
 INTRO = (
-    "You hold one role on an engineering team reviewing a plan, a design or a pull request. "
+    "You hold one role on an engineering team reviewing a plan, a design, a pull request or prose that quotes results. "
     "Each role reviews the same subject without seeing the other roles' findings, so the "
     "places where their objectives disagree stay visible instead of blending into one voice. "
     "Every role runs on the same model, so this role's value comes from holding its own "
@@ -33,7 +35,7 @@ INTRO = (
 
 TAIL = """## Where this role's definition comes from
 
-The definition above is the default. It comes from the team charter in l3a0/ithildin-runtime, where trading is the worked example. When the repository under review has its own `docs/team-charter.md`, read it before anything else. Its section for this role decides what the role protects, does and vetoes, and it overrides the default above wherever the two differ. Its premise and hard limits bind this review too. When it has no section for this role, say so in one line and review against the default.
+The definition above is the default. What the role protects, does and vetoes comes from the team charter in l3a0/ithildin-runtime, where trading is the worked example, and the question it always asks is this plugin's own. When the repository under review has its own `docs/team-charter.md`, read it before anything else. Its section for this role decides what the role protects, does and vetoes, and it overrides the default above wherever the two differ. Its premise and hard limits bind this review too. When it has no section for this role, say so in one line and review against the default.
 
 The checks above are this role's own, and they still apply under a repository's charter unless the charter says otherwise. Where a check names something the repository does not have, such as an order path in a repository that places no orders, say so in one line and move on rather than inventing a finding.
 
@@ -130,7 +132,7 @@ ROLES = [
         "title": "Risk engineer",
         "summary": "Protects that the probability of ruin stays near zero.",
         "protects": "the probability of ruin stays near zero.",
-        "does": "owns the risk model and the pre-trade gate. The gate's first limits are the simple ones Rishi Narang lists in Inside the Black Box as the most common risk controls: maximum order size, maximum position per instrument, maximum portfolio size, maximum open orders, net exposure, and an automatic unwind and stop at a preset loss. Each is cheap to compute on every order. Owns the halt on stale data, and the kill switch.",
+        "does": "owns the risk model and the pre-trade gate. The gate's first limits are the simple ones Rishi Narang lists in Inside the Black Box as the most common risk controls for high-frequency strategies: maximum order size, maximum position per instrument, maximum portfolio size, maximum open orders, net exposure, and an automatic unwind and stop at a preset loss. They suit a slower platform too, because each is cheap to compute on every order. Owns the halt on stale data, and the kill switch.",
         "vetoes": "any change to the order path, the gate or the limits, as a required reviewer.",
         "asks": "Can any order reach a broker without passing the gate?",
         "checks": [
@@ -195,7 +197,7 @@ def numbered(items):
 def render(r):
     description = (
         f"{r['title']} role on an engineering team. {r['summary']} "
-        "Launched by the l3a0 ask-team skill to review a plan, a design or a pull request "
+        "Launched by the l3a0 ask-team skill to review a plan, a design, a pull request or prose that quotes results "
         "blind to the other roles. Reads, searches and runs commands, and edits no file. "
         "Do not use outside an ask-team review."
     )
@@ -238,6 +240,11 @@ def main():
     parser.add_argument("--check", action="store_true", help="exit 1 if any file differs")
     args = parser.parse_args()
     stale = []
+    expected = {f"team-{r['slug']}.md" for r in ROLES}
+    if args.check:
+        for path in sorted(OUT.glob("team-*.md")):
+            if path.name not in expected:
+                stale.append(path.relative_to(ROOT))
     for r in ROLES:
         path = OUT / f"team-{r['slug']}.md"
         text = render(r)
@@ -248,9 +255,11 @@ def main():
             path.write_text(text, encoding="utf-8")
     if stale:
         for path in stale:
-            print(f"{path} differs from scripts/gen_team.py. Run python3 scripts/gen_team.py.")
+            print(f"{path} differs from scripts/gen_team.py, or names no role in it. Run python3 scripts/gen_team.py.")
         return 1
-    if not args.check:
+    if args.check:
+        print(f"All {len(ROLES)} team role files match scripts/gen_team.py.")
+    else:
         print(f"wrote {len(ROLES)} role files")
     return 0
 
