@@ -16,7 +16,7 @@ docs/team-charter.md overrides the defaults.
 Run from anywhere:
 
     python3 scripts/gen_team.py           # write the eight files
-    python3 scripts/gen_team.py --check   # exit 1, naming each file that differs
+    python3 scripts/gen_team.py --check   # exit 1, naming each file that differs or names no role
 """
 import argparse
 import pathlib
