@@ -152,6 +152,14 @@ check "33d deny: a board agent calls an unknown future tool" 2 "$(board FutureTo
 check "33e allow: a board agent calls ToolSearch" 0 "$(board ToolSearch '{"query":"select:WebSearch"}')"
 check "33f allow: a non-board agent calls Bash" 0 "$(printf '{"cwd":"%s","agent_type":"Explore","tool_name":"Bash","tool_input":{"command":"ls"}}' "$work")"
 
+# The ask-team role agents share the plugin's l3a0: prefix but not the board's.
+# The guard must pass them through and stay as strict for the board's agents.
+team() { printf '{"cwd":"%s","agent_id":"a3","agent_type":"l3a0:team-%s","tool_name":"%s","tool_input":%s}' "$work" "$1" "$2" "$3"; }
+check "33g allow: a team agent calls Bash" 0 "$(team test-engineer Bash '{"command":"ls"}')"
+check "33h allow: a team agent reads outside the working directory" 0 "$(team risk-engineer Read "$(read_of "$tmp/proj/work2/notes.md")")"
+check "33i allow: a team agent whose input also names a board agent_type" 0 "$(team security-reviewer Bash '{"command":"ls","agent_type":"l3a0:board-cfo"}')"
+check "33j deny: a board agent named like a team role still calls Bash" 2 "$(printf '{"cwd":"%s","agent_type":"l3a0:board-team-architect","tool_name":"Bash","tool_input":{"command":"ls"}}' "$work")"
+
 # WebFetch: only counsel and the accountant, only primary-source hosts.
 seat() { printf '{"cwd":"%s","agent_id":"a3","agent_type":"l3a0:board-%s","tool_name":"%s","tool_input":%s}' "$work" "$1" "$2" "$3"; }
 fetch() { printf '{"url":"%s","prompt":"%s"}' "$1" "${2:-Summarise the rule}"; }
