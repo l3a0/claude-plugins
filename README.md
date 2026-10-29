@@ -158,7 +158,7 @@ The board answers what a venture should do. The team answers whether the code do
 
 The roles come from l3a0/ithildin-runtime's team charter, and a repository's own `docs/team-charter.md` overrides each role's default definition. A review seats three to six of them, plus completeness and over-reach lenses on a pull request, and stays under ten agent runs where the subject allows. The role agents can read, search and run commands, and they edit no file. That limit is an instruction in each agent file rather than a hook, and the board's hook does not apply to them. Questions about money, live trading, contracts or law go to `/l3a0:ask-board` instead. `scripts/gen_team.py` generates the eight role files, and CI runs it with `--check`.
 
-Invoke it as `/l3a0:ask-team`, or ask the team to review an issue, a design or a pull request.
+Invoke it as `/l3a0:ask-team`, or ask the team to review an issue, a design, a pull request or a blog post. A pull request review or a post review can also call it in lens mode, where the team's verified findings go back to the caller, which posts and fixes them in its own review.
 
 ### update-build-board
 

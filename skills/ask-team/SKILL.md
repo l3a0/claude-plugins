@@ -1,6 +1,6 @@
 ---
 name: ask-team
-description: Convene a repository's engineering team on a plan, a design or a pull request. Separate role agents, one per role, each review the same subject blind to the others, holding only what their role protects and may veto. Verifiers then try to refute each finding by executing code, and only what survives is acted on. Use when asked to "ask the team", "convene the team", "have the team review" an issue, a design doc or a pull request, to audit an issue's plan before a build starts, or for the per-role lenses a repository's team charter names for its review step. Not for owner decisions about money, live trading, contracts or law, which go to the board through /l3a0:ask-board.
+description: Convene a repository's engineering team on a plan, a design, a pull request or a blog post. Separate role agents, one per role, each review the same subject blind to the others, holding only what their role protects and may veto. Verifiers then try to refute each finding by executing code, and only what survives is acted on. Use when asked to "ask the team", "convene the team", "have the team review" an issue, a design doc or a pull request, to audit an issue's plan before a build starts, or for the per-role lenses a repository's team charter names for its review step. A pull request review or a post review such as review-post also calls it in lens mode, where it returns verified findings to the caller and posts and fixes nothing. Not for owner decisions about money, live trading, contracts or law, which go to the board through /l3a0:ask-board.
 ---
 
 # Ask the team
@@ -54,12 +54,13 @@ When a finding turns on one of these, the skill does not decide it. It lists the
 
 ### 1. Name the subject
 
-The subject is one of four things, and each needs its anchor.
+The subject is one of five things, and each needs its anchor.
 
 1. **An issue's plan, before a build starts.** The issue number, and the commit of `main` the plan is read against. Where the repository's `CLAUDE.md` asks for a plan audit before work starts, this is that audit, run once per relevant role.
 2. **A design doc or a design pull request.** The file, the branch and the commit.
 3. **A pull request.** The number and its head commit.
 4. **A technical question that crosses modules.** The question, the options, and the files each option would change.
+5. **A blog post or other prose that quotes results.** The file and the commit, and the tests or log entries its numbers come from.
 
 Write down what is out of scope, so a role does not review the whole repository. Check whether the repository has a `docs/team-charter.md`, and note its commit, because every role prompt names it.
 
@@ -77,6 +78,7 @@ Seat the roles whose objective the subject can hurt, between three and six. Seat
 | Any code or test change | Test engineer |
 | Startup, scheduling, alarms, the dead-man check, deployment | Operator |
 | A credential, a broker permission, a dependency, a workflow, anything public | Security reviewer |
+| A blog post or other prose that quotes results | Quant researcher, for exploratory or registered labels and out-of-sample claims. Data engineer, for vintage, vendor and data claims. Test engineer, for every quoted number traced to the test that pins it. Seat any other role only when the post discusses its area |
 
 Three seats are required whatever the count.
 
@@ -143,6 +145,24 @@ Post one comment on the pull request or issue whose first line is the review hea
 4. `### For the owner`, listing any question that goes to the board, or saying there is none.
 
 Price the review with the owner's `loop-cost` skill where it is installed, counting every role, lens and verifier transcript, and put the figure at the end of the comment.
+
+## Lens mode, inside another review
+
+Another review can call this skill for the team's lenses beside its own, on the owner's ruling of 2026-10-29 that the pull request and blog review skills consult the team for their feedback. The caller owns the branch and the review comment, so in this mode the skill runs steps 1 to 4 and returns, and skips steps 5 and 6.
+
+1. **The caller names the subject and its anchor**, as step 1 lists them, and what is out of scope. The skill adds nothing to that scope.
+2. **The skill seats the roles the subject touches**, by the table in step 2, and runs them blind, as step 3 says. The caller's own lenses are not shown to the roles, and the roles' findings are not shown to the caller's lenses until both have reported, so neither side anchors on the other.
+3. **The skill verifies by executing**, as step 4 says, and drops what is refuted.
+4. **It returns the surviving findings to the caller**, in the finding format of step 3, followed by one line per refuted finding with the reason, and any question for the owner under `### For the owner`.
+5. **It posts no comment and applies no fix.** The caller applies what it accepts on its own branch and folds the findings into its own review comment, under its own heading, so a board reads one review per round.
+6. **Its runs count toward the caller's cost.** The return names how many role and verifier runs it made, so the caller's `## Cost` figure covers them. The ten-run bound of step 4 applies to the team's runs alone.
+
+Two callers use this mode.
+
+1. **A pull request review**, under the owner's rule that every pull request is reviewed by blind lenses before the owner reads it, and under a repository's `## Pull requests` section that carries that rule. The team's roles join the completeness and over-reach lenses there, and the caller runs those two itself rather than asking this skill to.
+2. **A review of a blog post before the owner reads it**, such as l3a0/quantitative-trading's `review-post` skill. The subject is the post, seated by the blog-post row of step 2's table.
+
+A caller's own skill names this mode where it lists its lenses, so a reader of that skill finds it.
 
 ## Building is not a review
 

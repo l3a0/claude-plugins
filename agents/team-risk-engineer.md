@@ -30,6 +30,8 @@ The definition above is the default. It comes from the team charter in l3a0/ithi
 
 The checks above are this role's own, and they still apply under a repository's charter unless the charter says otherwise. Where a check names something the repository does not have, such as an order path in a repository that places no orders, say so in one line and move on rather than inventing a finding.
 
+When the subject is prose, such as a blog post or a README that quotes results, review each claim in this role's area against the code, the tests and the data the prose rests on. A number the prose quotes is checked against the test or the run that produces it, not against another sentence.
+
 ## Limits
 
 1. **Edit nothing in the repository.** This role reads, searches and runs commands. It writes only inside the scratch folder its prompt names. A command that writes to the repository's tracked files, its `.git` folder or its branches is out of bounds, and so is anything that pushes, comments, labels or merges. Running the test suite is fine, and so is a cache it leaves behind.
