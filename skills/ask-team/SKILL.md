@@ -1,6 +1,6 @@
 ---
 name: ask-team
-description: Convene a repository's engineering team on a plan, a design, a pull request or a blog post. Separate role agents, one per role, each review the same subject blind to the others, holding only what their role protects and may veto. Verifiers then try to refute each finding by executing code, and only what survives is acted on. Use when asked to "ask the team", "convene the team", "have the team review" an issue, a design doc or a pull request, to audit an issue's plan before a build starts, or for the per-role lenses a repository's team charter names for its review step. A pull request review or a post review such as review-post can call it in lens mode, where it returns verified findings to the caller and posts and fixes nothing. Not for owner decisions about money, live trading, contracts or law, which go to the board through /l3a0:ask-board.
+description: Convene a repository's engineering team on a plan, a design, a pull request or a blog post. Separate role agents, one per role, each review the same subject blind to the others, holding only what their role protects and may veto. Verifiers then try to refute each finding by executing code, and only what survives is acted on. Use when asked to "ask the team", "convene the team", "have the team review" an issue, a design doc, a pull request or a blog post, to audit an issue's plan before a build starts, or for the per-role lenses a repository's team charter names for its review step. A pull request review or a post review such as review-post can call it in lens mode, where it returns verified findings to the caller and posts and fixes nothing. Not for owner decisions about money, live trading, contracts or law, which go to the board through /l3a0:ask-board.
 ---
 
 # Ask the team
@@ -78,7 +78,7 @@ Seat the roles whose objective the subject can hurt, between three and six. Seat
 | Any code or test change | Test engineer |
 | Startup, scheduling, alarms, the dead-man check, deployment | Operator |
 | A credential, a broker permission, a dependency, a workflow, anything public | Security reviewer |
-| A blog post or other prose that quotes results | Quant researcher, for exploratory or registered labels and out-of-sample claims. Data engineer, for vintage, vendor and data claims. Test engineer, for every quoted number traced to the test that pins it. Seat any other role only when the post discusses its area |
+| A blog post or other prose that quotes results | Quant researcher, for exploratory or registered labels and out-of-sample claims. Data engineer, for vintage, vendor and data claims. Test engineer, for every quoted number traced to the test that pins it. For a post this row replaces the others, including the security reviewer's "anything public", so seat any other role only when the post discusses its area |
 
 Three seats are required whatever the count.
 
@@ -137,7 +137,7 @@ For a plan audit, a surviving finding goes on the issue, because the build sessi
 
 ### 6. Post and price
 
-Post one comment on the pull request or issue whose first line is the review heading the repository's build board reads, which the `update-build-board` skill's moment 5 names. A final review headed `## Review complete`, posted after the last push, satisfies every board that skill knows. It holds four parts.
+Post one comment on the pull request or issue whose first line is the review heading the repository's build board reads, which the `update-build-board` skill's moment 5 names. A final pull request comment headed `## Review complete`, posted after the last push, satisfies every board that skill knows. It holds four parts.
 
 1. The roles and lenses seated, the anchor commit, and the charter's commit or its absence.
 2. What was found and fixed, one numbered line each.
@@ -148,14 +148,14 @@ Price the review with the owner's `loop-cost` skill where it is installed, count
 
 ## Lens mode, inside another review
 
-Another review can call this skill for the team's lenses beside its own, on the owner's ruling of 2026-10-29 UTC that the pull request and blog review skills consult the team for their feedback. The caller owns the branch and the review comment, so in this mode the skill runs steps 1 to 4 and returns, and skips steps 5 and 6.
+Another review can call this skill for the team's lenses beside its own, on the owner's ruling of 2026-10-29 UTC that the pull request and blog review skills consult the team for their feedback. The caller owns the branch and the review comment, so in this mode the skill runs steps 1 to 4 and returns, and skips steps 5 and 6. It also skips step 2's two pull request lenses, which the caller runs.
 
 1. **The caller names the subject and its anchor**, as step 1 lists them, and what is out of scope. The skill adds nothing to that scope.
 2. **The skill seats the roles the subject touches**, by the table in step 2, and runs them blind, as step 3 says. The caller's own lenses are not shown to the roles, and the roles' findings are not shown to the caller's lenses until both have reported, so neither side anchors on the other.
 3. **The skill verifies by executing**, as step 4 says, and drops what is refuted.
 4. **It returns the surviving findings to the caller**, in the finding format of step 3, followed by one line per refuted finding with the reason, and any question for the owner under `### For the owner`.
 5. **It posts no comment and applies no fix.** The caller applies what it accepts on its own branch and folds the findings into its own review comment, under its own heading, so a board reads one review per round.
-6. **Its runs count toward the caller's cost.** The return names how many role and verifier runs it made, so the caller's `## Cost` figure covers them. The ten-run bound of step 4 applies to the team's runs alone.
+6. **Its runs count toward the caller's cost.** The return lists each role and verifier run's `output_file` path or spawn description, so the caller's `loop-cost` run finds their transcripts and its `## Cost` figure covers them. The ten-run bound of step 4 applies to the team's runs alone.
 
 Two callers are meant to use this mode.
 

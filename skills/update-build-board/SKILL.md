@@ -46,7 +46,7 @@ fi
 echo "$REPO board=$BOARD pin=${PIN:-none} generator=${GEN:-template}"
 ```
 
-Check that `$PIN` is not empty before trusting anything `template` returns, because an empty pin means the `uses:` line did not match. The page, the stub, the icon and l3a0/marketlake's generator sit inside each repository's skill folders, and each repository's board workflow still runs them. So a repository that drops its own copy of this skill deletes only `SKILL.md` and keeps those files. `board=none` means the repository has no board this skill knows, so stop and report it. A repository that moves its page or its generator to a path this block does not test updates the block in a plugin release, per the next section.
+Check that `$PIN` is not empty before trusting anything `template` returns, because an empty pin means the `uses:` line did not match. l3a0/quantitative-trading, l3a0/repo-template and l3a0/marketlake keep the page, the stub and the icon inside their skill folders, and marketlake keeps its generator there too. Each one's board workflow publishes the page and the icon from there, the shared workflow serving the template's copies to every caller, and each one's tests run the stub. So a repository that drops its own copy of this skill deletes only `SKILL.md` and keeps those files. `board=none` means the repository has no board this skill knows, so stop and report it. A repository that moves its page or its generator to a path this block does not test updates the block in a plugin release, per the next section.
 
 ## Generator compatibility
 
@@ -232,7 +232,7 @@ Three parts of the grammar differ by generator.
 
 ## The data, and where each field comes from
 
-The page loads each section of `board.json` into the variable of the same name in capitals, so `prs` becomes `PRS`, and the rest of this section uses those names. The shared and l3a0/quantitative-trading generators write each section other than `state` and `tracker` as `{"schema": 1, "items": [...]}`, while l3a0/marketlake's writes a bare list. So a reader that must work on every board unwraps a section first, as `jq '(.working | if type=="object" then .items else . end)[]'` does. Their `prs` also keeps merged and closed entries, so a reader asking for open pull requests filters on `state == "open"`. Change what GitHub holds. Never hand-write a sentence in the page stating a number the data already carries, because that sentence outlives the number.
+The page loads each section of `board.json` into the variable of the same name in capitals, so `prs` becomes `PRS`, and the rest of this section uses those names. The shared and l3a0/quantitative-trading generators write each section other than `state` as `{"schema": 1, "items": [...]}`, while l3a0/marketlake's writes a bare list. So a reader that must work on every board unwraps a section first, as `jq '(.working | if type=="object" then .items else . end)[]'` does. Their `prs` also keeps merged and closed entries, so a reader asking for open pull requests filters on `state == "open"`. Change what GitHub holds. Never hand-write a sentence in the page stating a number the data already carries, because that sentence outlives the number.
 
 ### Shared and l3a0/quantitative-trading generators
 
@@ -305,7 +305,7 @@ The numbers and the fixed sets are checked because the page writes those fields 
 
 ### When two labels disagree
 
-An issue carrying two `band:N` labels, both `working:` labels, two kinds, or two different `Board order:` lines has no single value. Every generator takes the lowest band, the `build` kind, the kind the tables above put first and the first line, and lists each conflict rather than failing, except that l3a0/marketlake's generator takes `parent` over `deferred` without listing it, because one stray label would otherwise freeze the whole board. The shared and l3a0/quantitative-trading generators list conflicts in the run's job summary. l3a0/marketlake's lists them in the summary table its build prints, which a status round reads, because nobody reads the Action's own job summary there. Read the list after setting either, and fix the label the conflict names.
+An issue carrying two `band:N` labels, both `working:` labels, two kinds, or two different `Board order:` lines has no single value. Every generator takes the lowest band, the `build` kind, the kind the tables above put first and the first line, and lists each conflict rather than failing, because one stray label would otherwise freeze the whole board. The one exception is l3a0/marketlake's generator, which takes `parent` over `deferred` without listing it. The shared and l3a0/quantitative-trading generators list conflicts in the run's job summary. l3a0/marketlake's lists them in the summary table its build prints, which a status round reads, because nobody reads the Action's own job summary there. Read the list after setting either, and fix the label the conflict names.
 
 ## In each repository
 

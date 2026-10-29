@@ -130,7 +130,7 @@ osascript -l JavaScript run.js
 
 The page fetches on load and draws once the answer arrives, which is after the script's last line, so the printing waits for it rather than running at once.
 
-That run draws the default view, which hides every card `NEXT` does not rank. Run it a second time with the Show all view, because most of the columns and most of the board note only render there. The stub has no `localStorage`, so one line before the script supplies a stored choice. It answers "1" for the page's own key and nothing for any other, so a page reading a renamed key draws the short view and the run shows it. The shared page's key starts with `board-all:`, and l3a0/quantitative-trading's is `qt-board-all`. The block picks the stub by reading the page's script, because it runs from the scratch directory, where the setup block's `$BOARD` is not set.
+That run draws the default view, which hides every card `NEXT` does not rank. Run it a second time with the Show all view, because most of the columns and most of the board note only render there. The stub has no `localStorage`, so one line before the script supplies a stored choice. It answers "1" for the page's own key and nothing for any other, so a page reading a renamed key draws the short view and the run shows it. The shared page's key starts with `board-all:`, and l3a0/quantitative-trading's is `qt-board-all`. The block picks the stub by reading the page's script, because it runs in a later shell than the setup block, where `$BOARD` is not set.
 
 ```bash
 (cat dom-stub.js serve.js

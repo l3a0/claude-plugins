@@ -240,11 +240,12 @@ def main():
     parser.add_argument("--check", action="store_true", help="exit 1 if any file differs")
     args = parser.parse_args()
     stale = []
+    strays = []
     expected = {f"team-{r['slug']}.md" for r in ROLES}
     if args.check:
         for path in sorted(OUT.glob("team-*.md")):
             if path.name not in expected:
-                stale.append(path.relative_to(ROOT))
+                strays.append(path.relative_to(ROOT))
     for r in ROLES:
         path = OUT / f"team-{r['slug']}.md"
         text = render(r)
@@ -253,9 +254,11 @@ def main():
                 stale.append(path.relative_to(ROOT))
         else:
             path.write_text(text, encoding="utf-8")
-    if stale:
-        for path in stale:
-            print(f"{path} differs from scripts/gen_team.py, or names no role in it. Run python3 scripts/gen_team.py.")
+    for path in strays:
+        print(f"{path} names no role in scripts/gen_team.py. Delete it, or add the role to ROLES.")
+    for path in stale:
+        print(f"{path} differs from scripts/gen_team.py. Run python3 scripts/gen_team.py.")
+    if stale or strays:
         return 1
     if args.check:
         print(f"All {len(ROLES)} team role files match scripts/gen_team.py.")
