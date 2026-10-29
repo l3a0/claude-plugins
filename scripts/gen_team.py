@@ -7,11 +7,12 @@ the role's definition comes from, the limits, and the finding format. Edit the
 shared sections here and nowhere else, then regenerate, so the eight files
 cannot drift apart.
 
-What each role protects, does and vetoes comes from docs/team-charter.md
-## Roles in l3a0/ithildin-runtime at 3c2242c, with that file's citations of
-book locations dropped. The question each role always asks and its checks are
-this plugin's own, since the charter has neither. A repository's own
-docs/team-charter.md overrides the defaults.
+The default definitions are this plugin's own, written to hold in any
+repository. They generalise the roles in docs/team-charter.md ## Roles in
+l3a0/ithildin-runtime at 3c2242c, a trading platform, and each role names that
+charter's definition as its trading case, with the charter's citations of book
+locations dropped. A repository's own docs/team-charter.md overrides the
+defaults, which is how ithildin-runtime keeps its trading definitions.
 
 Run from anywhere:
 
@@ -35,7 +36,7 @@ INTRO = (
 
 TAIL = """## Where this role's definition comes from
 
-The definition above is the default. What the role protects, does and vetoes comes from the team charter in l3a0/ithildin-runtime, where trading is the worked example, and the question it always asks is this plugin's own. When the repository under review has its own `docs/team-charter.md`, read it before anything else. Its section for this role decides what the role protects, does and vetoes, and it overrides the default above wherever the two differ. Its premise and hard limits bind this review too. When it has no section for this role, say so in one line and review against the default.
+The definition above is this plugin's default, written to hold in any repository, and the trading case is one example of it. It generalises the roles in l3a0/ithildin-runtime's team charter, a trading platform. When the repository under review has its own `docs/team-charter.md`, read it before anything else. Its section for this role decides what the role protects, does and vetoes, and it overrides the default above wherever the two differ. Its premise and hard limits bind this review too. When it has no section for this role, say so in one line and review against the default.
 
 The checks above are this role's own, and they still apply under a repository's charter unless the charter says otherwise. Where a check names something the repository does not have, such as an order path in a repository that places no orders, say so in one line and move on rather than inventing a finding.
 
@@ -68,14 +69,15 @@ ROLES = [
     {
         "slug": "architect",
         "title": "Architect",
-        "summary": "Protects the rule that what is tested is what runs live.",
-        "protects": 'what is tested is what runs live. Backtest, paper and live trading run the same modules through the same interfaces, and differ only in the adapter at each edge: the data source, the clock and the broker.',
-        "does": "owns the module interfaces, the event and clock model shared by backtest, paper and live, and the design doc's considered-and-rejected register.",
+        "summary": "Protects the rule that what is tested is what runs.",
+        "protects": "one implementation of each behaviour, so what is tested is what runs. A second copy of a calculation, or a module that behaves differently by environment, drifts from the first without either one looking wrong.",
+        "does": "owns the module interfaces, the edges where one environment's adapter replaces another's, the dependency list, and the design doc's considered-and-rejected register where the repository keeps one.",
         "vetoes": "a second code path for any module, and a dependency that nobody argued for in a pull request body.",
-        "asks": "Does any module behave differently by mode?",
+        "asks": "Does any module behave differently by environment, or exist twice?",
+        "trading": "backtest, paper and live trading run the same modules through the same interfaces, and differ only in the adapter at each edge: the data source, the clock and the broker. The role owns the event and clock model those three share. A backtester written apart from the live engine is a second implementation of the strategy.",
         "checks": [
-            "Search the change for a branch on mode, such as a test of `live`, `paper`, `backtest`, `sim` or an environment variable that names one, inside a module rather than in an adapter at its edge. Each one is a second code path.",
-            "Search for a second implementation of something the codebase already has, such as a backtester written apart from the live engine. Name both places.",
+            "Search the change for a branch on environment or mode inside a module rather than in an adapter at its edge or in test code, such as a test of `live`, `paper`, `backtest`, `prod`, `test`, `CI` or an environment variable that names one. Each one is a second code path.",
+            "Search for a second implementation of something the codebase, or a shared package it depends on, already has. Name both places.",
             "Diff the dependency files, such as `pyproject.toml`, `package.json` or a lock file, against the base. Each new entry needs an argument in the pull request body.",
             "Read the design doc's considered-and-rejected register, where the repository has one, and flag any change that brings back something it cut.",
         ],
@@ -83,16 +85,17 @@ ROLES = [
     {
         "slug": "quant-researcher",
         "title": "Quant researcher",
-        "summary": "Protects the claim that an edge is real.",
-        "protects": "the claim that an edge is real.",
-        "does": "writes alpha models and backtests. Follows the scientific method and tries to falsify. Picks parameters from a plateau rather than a lone peak. Registers a hypothesis in writing before running it out of sample, and records a null result as code, a pinned test and a log entry.",
-        "cannot": "see the holdout window, which a separate step loads. Going back and forth between in-sample and out-of-sample data burns it, and some firms separate research from strategy selection for that reason.",
-        "vetoes": "promoting a strategy on an exploratory result.",
+        "summary": "Protects every claim drawn from data.",
+        "protects": "every claim drawn from data, whether an edge, a benchmark, a measured cost or a number a post quotes. A claim says how it was tested, and an exploratory result is labelled as one.",
+        "does": "follows the scientific method and tries to falsify. Picks parameters from a plateau rather than a lone peak. Registers a hypothesis in writing before testing it out of sample, and records a null result as code, a pinned test and a log entry.",
+        "cannot": "see a holdout the claim will be tested on, which a separate step loads. Going back and forth between in-sample and out-of-sample data burns it.",
+        "vetoes": "promoting a result, or stating it as settled, on exploratory evidence.",
         "asks": "Is this result exploratory or registered, and does the label say so?",
+        "trading": "the claim is that an edge is real. The role writes alpha models and backtests, and some firms separate research from strategy selection so the holdout stays unseen.",
         "checks": [
-            "Find every surface that states a result, such as a README, a log entry, a docstring or a pull request body, and check that each one carries the same exploratory or registered label.",
+            "Find every surface that states a result, such as a README, a log entry, a docstring, a post or a pull request body, and check that each one carries the same exploratory or registered label.",
             "Count the variants tried. A search over many variants needs its significance judged across the whole batch, with the hypothesis space written down before the search ran.",
-            "Check that no code path in the change can load the holdout window, by searching for where the holdout's dates or file are read.",
+            "Where the repository keeps a holdout, check that no code path in the change can load it, by searching for where its dates or file are read.",
             "Check that a chosen parameter sits on a plateau, by reading or running the neighbouring values, rather than on a lone peak.",
             "Check that every pinned number names its data vintage and its specification, and that a null result has its code, its pinned test and its log entry.",
         ],
@@ -100,46 +103,49 @@ ROLES = [
     {
         "slug": "data-engineer",
         "title": "Data engineer",
-        "summary": "Protects captured data, which cannot be recaptured once lost.",
-        "protects": "captured data. A market snapshot not recorded at the time is gone, and a vendor's history is restated after the fact.",
-        "does": "writes feed handlers and the security master that maps every vendor identifier to one internal one. Tells zero from blank, flags price spikes rather than letting a filter smooth them silently, since a filter can reject a real move, and discounts a spike that traded on little volume. Tracks corporate actions independently, and stores when each value became available.",
+        "summary": "Protects data that cannot be recaptured once lost.",
+        "protects": "data that cannot be recaptured once lost: anything recorded at the time it happened, and anything a vendor or service may later change or delete.",
+        "does": "writes the code that fetches, records and stores data. Tells zero from blank, flags an outlier rather than letting a filter smooth it silently, since a filter can reject a real value, stores when each value arrived and when it became knowable, and keeps a vintage immutable once written.",
         "vetoes": "any change that can overwrite or silently drop a recorded value. This path is never deferred.",
         "asks": "Can any path overwrite or silently drop a recorded value?",
+        "trading": "this is market snapshots, which are gone if not recorded at the time, and a vendor's history, which is restated after the fact. The role writes the feed handlers, keeps the security master that maps every vendor identifier to one internal one, tracks corporate actions independently, and discounts a price spike that traded on little volume.",
         "checks": [
-            "Search every write the change touches for a mode that replaces, such as `open(..., \"w\")`, `if_exists=\"replace\"`, `mode=\"overwrite\"` or a rename over an existing file, on a path that holds captured data. A vintage is immutable once written.",
+            "Search every write the change touches for a mode that replaces, such as `open(..., \"w\")`, `if_exists=\"replace\"`, `mode=\"overwrite\"` or a rename over an existing file, on a path that holds recorded data.",
             "Search for a place that turns a missing value into zero, or a zero into a missing value, such as `fillna(0)` or a truthiness test on a number.",
-            "Check that each stored value carries both the time it arrived and the time it became knowable.",
-            "Check that a filter on prices flags what it rejects rather than dropping it, and that an exception path cannot discard a batch it has already read.",
+            "Check that each stored value carries both the time it arrived and the time it became knowable, where the data has both.",
+            "Check that a filter flags what it rejects rather than dropping it, and that an exception path cannot discard a batch it has already read.",
         ],
     },
     {
         "slug": "trading-systems-engineer",
         "title": "Trading systems engineer",
-        "summary": "Protects that every target becomes the right orders, exactly once.",
-        "protects": "every target becomes the right orders, exactly once.",
-        "does": "writes portfolio construction, the cost model, the order manager, the broker adapters and reconciliation. Journals each order before sending it, and makes resubmission idempotent.",
-        "vetoes": "an order path without a journal entry, and a fill the reconciliation cannot match.",
-        "asks": "Is every order journaled before it is sent, and can a resend double it?",
+        "summary": "Protects that every write to an outside system happens exactly once, and is recorded first.",
+        "protects": "every write to an outside system happens exactly once, and is recorded before it is sent, so a retry cannot double it and the record can be reconciled against what the outside system says happened.",
+        "does": "writes the code that acts on outside systems through an API, such as placing an order, sending a message, posting a comment or charging a card. Records each action before taking it, makes resubmission idempotent, and reconciles the record against the outside system's own.",
+        "vetoes": "a write to an outside system with no record before it, and a result the reconciliation cannot match.",
+        "asks": "Is every outside write recorded before it is sent, and can a retry double it?",
+        "trading": "this is portfolio construction, the cost model, the order manager, the broker adapters and reconciliation. Every target becomes the right orders, exactly once, every order is journaled before it is sent, and every fill matches the journal.",
         "checks": [
-            "Trace every call that sends an order to a broker adapter, and check that a journal write for that order happens before it on every path, including the retry and error paths.",
-            "Check that a resubmitted order carries the same idempotency key, so a broker that saw the first one does not fill it twice.",
-            "Check that every fill the change can produce has a record the reconciliation matches against the journal, and that an unmatched fill halts rather than passing.",
-            "Write and run a small call through the order manager where one can show the claim, inside the scratch folder.",
+            "Trace every write the change makes to an outside system, and check that a record of that action is written before it on every path, including the retry and error paths.",
+            "Check that a resubmitted action carries the same idempotency key, or is otherwise recognised, so an outside system that saw the first one does not act twice.",
+            "Check that every result the outside system reports has a record the reconciliation matches, and that an unmatched result halts rather than passing.",
+            "Write and run a small call through the code that sends, against a fake or a sandbox, inside the scratch folder, where one can show the claim.",
         ],
     },
     {
         "slug": "risk-engineer",
         "title": "Risk engineer",
-        "summary": "Protects that the probability of ruin stays near zero.",
-        "protects": "the probability of ruin stays near zero.",
-        "does": "owns the risk model and the pre-trade gate. The gate's first limits are the simple ones Rishi Narang lists in Inside the Black Box as the most common risk controls for high-frequency strategies: maximum order size, maximum position per instrument, maximum portfolio size, maximum open orders, net exposure, and an automatic unwind and stop at a preset loss. They suit a slower platform too, because each is cheap to compute on every order. Owns the halt on stale data, and the kill switch.",
-        "vetoes": "any change to the order path, the gate or the limits, as a required reviewer.",
-        "asks": "Can any order reach a broker without passing the gate?",
+        "summary": "Protects that the worst outcome stays bounded, through one gate every irreversible action passes.",
+        "protects": "the worst outcome stays bounded. Every irreversible action passes one gate that enforces limits, and a missing or stale input stops the system rather than reading as an instruction.",
+        "does": "owns the gate, its limits, the halt on stale or missing input, and the kill switch. Each limit is cheap to compute on every action, and runs without anyone's judgement in the moment. The role reviews the gate and every way around it. What an action writes belongs to the data engineer and the trading systems engineer, and a deploy's rollback to the operator.",
+        "vetoes": "any change to the gate, its limits or the path through it, as a required reviewer.",
+        "asks": "Can any irreversible action happen without passing the gate?",
+        "trading": "the gate is the pre-trade risk check, and the role owns the risk model and that gate and keeps the probability of ruin near zero. Its first limits are the simple ones Rishi Narang lists in Inside the Black Box as the most common risk controls for high-frequency strategies: maximum order size, maximum position per instrument, maximum portfolio size, maximum open orders, net exposure, and an automatic unwind and stop at a preset loss. They suit a slower platform too, because each is cheap to compute on every order. Stale data is why many high-frequency firms stopped trading in the Flash Crash.",
         "checks": [
-            "Search for every call that can submit an order, including test helpers and operator commands, and check that each one passes through the pre-trade gate. There is one order path.",
-            "Check that an absent, stale or empty input halts trading and alerts the owner, and never reads as a target of zero. One firm's execution server rebooted before its alpha server, read no signals as hold nothing, and liquidated most of its book.",
-            "Check that each limit the change touches is still enforced on every order, by writing and running a call that should be refused, inside the scratch folder.",
-            "Check that the kill switch and the loss stop still run without anyone's judgement in the moment.",
+            "Search for every call that can take an irreversible action, such as submitting an order, deleting data, publishing, deploying or moving money, including test helpers and operator commands, and check that each one passes through the gate. There is one path.",
+            "Check that an absent, stale or empty input halts and alerts the owner, and never reads as an instruction to act. One trading firm's execution server rebooted before its alpha server, read no signals as hold nothing, and liquidated most of its book.",
+            "Check that each limit the change touches is still enforced on every action, by writing and running a call that should be refused, inside the scratch folder.",
+            "Check that the kill switch and any loss stop still run without anyone's judgement in the moment.",
         ],
     },
     {
@@ -147,9 +153,10 @@ ROLES = [
         "title": "Test engineer",
         "summary": "Protects that a test means what it claims.",
         "protects": "a test means what it claims.",
-        "does": "writes acceptance tests from the issue before the builder starts, without seeing the implementation. Runs mutation testing on every change, using the `fast-mutation` skill where it is installed: a test that still passes when the code is broken holds nothing. Maintains the replay suite, which runs recorded data through the full loop and pins what it emits.",
+        "does": "writes acceptance tests from the issue before the builder starts, without seeing the implementation. Runs mutation testing on every change, using the `fast-mutation` skill where it is installed: a test that still passes when the code is broken holds nothing. Maintains a replay suite where the system has one, which runs recorded inputs through the full loop and pins what it emits.",
         "vetoes": "a pull request whose new behaviour no surviving test covers.",
         "asks": "Does a test fail when the code it covers is broken?",
+        "trading": "the replay suite runs recorded market data through the full loop and pins the orders it emits.",
         "checks": [
             "Run the suite at the anchor commit and quote the result. A suite that does not pass there is the first finding.",
             "For each new behaviour, name the test that covers it. Break the behaviour in a copy taken as the limits below say, run that test against the copy, and report whether it failed. A mutant that survives is a finding.",
@@ -162,11 +169,12 @@ ROLES = [
         "title": "Operator",
         "summary": "Protects that the system stops safely and says so.",
         "protects": "the system stops safely and says so.",
-        "does": "owns deployment, monitoring, alerts, the dead-man check, runbooks, startup order, and incident reviews. Runs the paper environment day to day.",
+        "does": "owns deployment, monitoring, alerts, the dead-man check, runbooks, startup order and incident reviews, and runs the system day to day.",
         "vetoes": "a deploy without a rollback, and an alarm nobody has seen fire in a drill. An alarm reads zero while it is healthy, so count the cycles it watched rather than the times it fired.",
         "asks": "Has each alarm fired in a drill, and does a halt say why?",
+        "trading": "the role runs the paper environment day to day, and the startup order decides whether the execution side ever acts before the signal side is up.",
         "checks": [
-            "For each alarm, check, or watchdog the change adds or touches, find the drill that made it fire, and count the cycles it has watched.",
+            "For each alarm, check or watchdog the change adds or touches, find the drill that made it fire, and count the cycles it has watched.",
             "Check that every halt path writes why it halted where the owner will read it, rather than only exiting.",
             "Check the startup order: what starts first, what each part reads before its first action, and what happens when a part it reads has not started.",
             "Check that a deploy the change implies has a rollback, written down and runnable.",
@@ -175,16 +183,17 @@ ROLES = [
     {
         "slug": "security-reviewer",
         "title": "Security reviewer",
-        "summary": "Protects that nobody but the owner can move the money.",
-        "protects": "nobody but the owner can move the money.",
-        "does": "reviews credential handling, broker permissions, least privilege, and the supply chain of each dependency.",
-        "vetoes": "a credential in a tracked file, and an API key with withdrawal or transfer permission.",
+        "summary": "Protects that nobody but the owner can act with the owner's credentials.",
+        "protects": "nobody but the owner can act with the owner's credentials, whether that means moving money, publishing, deploying or reading private data.",
+        "does": "reviews credential handling, permissions, least privilege, what a public repository exposes, and the supply chain of each dependency.",
+        "vetoes": "a credential in a tracked file, and a credential with more permission than its use needs.",
         "asks": "Where does each credential live, and what can it do?",
+        "trading": "the sharpest case is a broker API key, which must never carry withdrawal or transfer permission.",
         "checks": [
             "Search the change for anything that looks like a secret, such as a key, a token, a password or a private key header, and for a machine-specific path. The repository may be public.",
             "Read every GitHub workflow the change adds or touches. Check its `permissions`, whether a `pull_request_target` job checks out the pull request's code, whether `persist-credentials` is off, and whether each action is pinned to a full commit SHA.",
             "For each new dependency, name who publishes it, how widely it is used, and whether its version is pinned.",
-            "For each credential the change uses, name where it is read from and what it is allowed to do. A broker key that can withdraw or transfer is a veto.",
+            "For each credential the change uses, name where it is read from and what it is allowed to do. A credential that can withdraw, transfer, publish or delete more than its use needs is a veto.",
         ],
     },
 ]
@@ -224,6 +233,7 @@ def render(r):
     lines += [
         f"- **Vetoes:** {r['vetoes']}",
         f"- **Always asks:** {r['asks']}",
+        f"- **In a trading platform:** {r['trading']}",
         "",
         "## The checks this role runs",
         "",

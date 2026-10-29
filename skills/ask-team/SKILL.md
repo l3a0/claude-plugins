@@ -11,22 +11,22 @@ The main thread is the delivery lead. It picks the roles, writes their prompts, 
 
 The role agents are not standing agents. Each one runs for one review and ends, so a role is an objective a session takes on for one piece of work rather than a member who remembers the last review. The agents keep no memory between reviews for the same reason.
 
-This skill was drafted for l3a0/ithildin-runtime, whose `docs/team-charter.md` at `3c2242c` defines the eight roles, and generalised for this plugin. Trading is the worked example in every role, and the roles apply to any repository whose code can lose data, place orders or hold credentials.
+This skill was drafted for l3a0/ithildin-runtime, a trading platform whose `docs/team-charter.md` at `3c2242c` defines the eight roles. The plugin's defaults generalise each role to the property it guards in any repository, such as one implementation of each behaviour, data that cannot be recaptured, or an outside write that must happen exactly once. Each role then names its trading case as one example, the way the board's seats do. A role whose property a repository does not have is not seated there.
 
 ## The roles
 
-Each role is an agent in this plugin, launched with the Agent tool's `subagent_type` set to the name below. The agent file carries the role's default definition and adds the checks that role runs. What a role protects, does and vetoes comes from the charter's `## Roles`. The question it always asks and its checks are this plugin's own, since the charter has neither. When the repository under review has a `docs/team-charter.md`, its section for a role overrides that role's default, and the agent reads it first. `scripts/gen_team.py` generates the eight agent files, so their shared sections are edited there and nowhere else.
+Each role is an agent in this plugin, launched with the Agent tool's `subagent_type` set to the name below. The agent file carries the role's default definition and adds the checks that role runs. The defaults are this plugin's own. They generalise ithildin-runtime's charter, whose definitions survive as each role's trading case. When the repository under review has a `docs/team-charter.md`, its section for a role overrides that role's default, and the agent reads it first. That is how ithildin-runtime keeps its trading definitions. `scripts/gen_team.py` generates the eight agent files, so their shared sections are edited there and nowhere else.
 
 | Role | `subagent_type` | Protects | Always asks |
 | --- | --- | --- | --- |
-| Architect | `l3a0:team-architect` | What is tested is what runs live | Does any module behave differently by mode? |
-| Quant researcher | `l3a0:team-quant-researcher` | The claim that an edge is real | Is this result exploratory or registered, and does the label say so? |
-| Data engineer | `l3a0:team-data-engineer` | Captured data | Can any path overwrite or silently drop a recorded value? |
-| Trading systems engineer | `l3a0:team-trading-systems-engineer` | Every target becomes the right orders, exactly once | Is every order journaled before it is sent, and can a resend double it? |
-| Risk engineer | `l3a0:team-risk-engineer` | The probability of ruin stays near zero | Can any order reach a broker without passing the gate? |
+| Architect | `l3a0:team-architect` | One implementation of each behaviour, so what is tested is what runs | Does any module behave differently by environment, or exist twice? |
+| Quant researcher | `l3a0:team-quant-researcher` | Every claim drawn from data, such as an edge or a number a post quotes | Is this result exploratory or registered, and does the label say so? |
+| Data engineer | `l3a0:team-data-engineer` | Data that cannot be recaptured once lost | Can any path overwrite or silently drop a recorded value? |
+| Trading systems engineer | `l3a0:team-trading-systems-engineer` | Every write to an outside system happens exactly once, recorded first, such as an order or a posted message | Is every outside write recorded before it is sent, and can a retry double it? |
+| Risk engineer | `l3a0:team-risk-engineer` | The worst outcome stays bounded, through one gate every irreversible action passes | Can any irreversible action happen without passing the gate? |
 | Test engineer | `l3a0:team-test-engineer` | A test means what it claims | Does a test fail when the code it covers is broken? |
 | Operator | `l3a0:team-operator` | The system stops safely and says so | Has each alarm fired in a drill, and does a halt say why? |
-| Security reviewer | `l3a0:team-security-reviewer` | Nobody but the owner can move the money | Where does each credential live, and what can it do? |
+| Security reviewer | `l3a0:team-security-reviewer` | Nobody but the owner can act with the owner's credentials | Where does each credential live, and what can it do? |
 
 The owner is not a role agent. The owner rules on what an issue reserves, merges, and switches anything to live.
 
@@ -71,19 +71,19 @@ Seat the roles whose objective the subject can hurt, between three and six. Seat
 | The subject touches | Seat |
 | --- | --- |
 | Module interfaces, shared types, a new dependency, the import rule | Architect |
-| An alpha model, a backtest, a pinned number, a research claim | Quant researcher |
-| Bars, vintages, snapshots, the security master, anything that writes data | Data engineer |
-| Orders, the journal, a broker adapter, reconciliation | Trading systems engineer |
-| The order path, the risk gate, a limit, the kill switch, a halt | Risk engineer |
+| A research claim, a backtest, a benchmark, a pinned number | Quant researcher |
+| A fetch, a capture, a vintage, a snapshot, anything that writes recorded data | Data engineer |
+| A write to an outside system through an API, such as an order, a sent message or a GitHub comment, its record, retries, reconciliation | Trading systems engineer |
+| An irreversible action, such as an order, a delete, a publish or a deploy, its gate, a limit, the kill switch, a halt | Risk engineer |
 | Any code or test change | Test engineer |
 | Startup, scheduling, alarms, the dead-man check, deployment | Operator |
-| A credential, a broker permission, a dependency, a workflow, anything public | Security reviewer |
+| A credential, a permission, a dependency, a workflow, anything public | Security reviewer |
 | A blog post or other prose that quotes results | Quant researcher, for exploratory or registered labels and out-of-sample claims. Data engineer, for vintage, vendor and data claims. Test engineer, for every quoted number traced to the test that pins it. For a post this row replaces the others, including the security reviewer's "anything public", so seat any other role only when the post discusses its area |
 
 Three seats are required whatever the count.
 
 1. The test engineer on every pull request that changes code.
-2. The risk engineer on anything touching the order path.
+2. The risk engineer on anything touching the path to an irreversible action, such as the order path.
 3. The security reviewer on anything that adds a credential, a dependency or a GitHub workflow.
 
 A repository whose charter names a required reviewer for some path, as l3a0/ithildin-runtime's names the risk engineer for the order path, adds that seat under its own rule.

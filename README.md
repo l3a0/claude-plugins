@@ -147,16 +147,16 @@ Invoke it as `/l3a0:ask-board`, or ask "what would my board say about this". A s
 
 The board answers what a venture should do. The team answers whether the code does it safely. A single review blends every concern into one voice, so this skill splits a review of a plan, a design, a pull request or a blog post across eight role agents that cannot see each other. Each role holds one objective and names the vetoes it may cast. Verifiers then try to refute each finding by running code, and only what survives is acted on.
 
-1. **Architect** (`team-architect`) asks whether any module behaves differently by mode.
+1. **Architect** (`team-architect`) asks whether any module behaves differently by environment, or exists twice.
 2. **Quant researcher** (`team-quant-researcher`) asks whether a result is exploratory or registered, and whether the label says so.
 3. **Data engineer** (`team-data-engineer`) asks whether any path can overwrite or silently drop a recorded value.
-4. **Trading systems engineer** (`team-trading-systems-engineer`) asks whether every order is journaled before it is sent, and whether a resend can double it.
-5. **Risk engineer** (`team-risk-engineer`) asks whether any order can reach a broker without passing the gate.
+4. **Trading systems engineer** (`team-trading-systems-engineer`) asks whether every write to an outside system is recorded before it is sent, and whether a retry can double it. An order is the trading case.
+5. **Risk engineer** (`team-risk-engineer`) asks whether any irreversible action can happen without passing the gate.
 6. **Test engineer** (`team-test-engineer`) asks whether a test fails when the code it covers is broken.
 7. **Operator** (`team-operator`) asks whether each alarm has fired in a drill, and whether a halt says why.
 8. **Security reviewer** (`team-security-reviewer`) asks where each credential lives and what it can do.
 
-What each role protects, does and vetoes comes from l3a0/ithildin-runtime's team charter, and a repository's own `docs/team-charter.md` overrides each role's default definition. A review seats three to six of them, plus completeness and over-reach lenses on a pull request, and stays under ten agent runs where the subject allows. The role agents can read, search and run commands, and they edit no file. That limit is an instruction in each agent file rather than a hook, and the board's hook does not apply to them. Questions about money, live trading, contracts or law go to `/l3a0:ask-board` instead. `scripts/gen_team.py` generates the eight role files, and CI runs it with `--check`.
+Each role's default is written to hold in any repository, generalised from l3a0/ithildin-runtime's team charter, and names that trading platform's definition as its trading case. A repository's own `docs/team-charter.md` overrides the defaults. A role whose property a repository lacks is not seated. A review seats three to six of them, plus completeness and over-reach lenses on a pull request, and stays under ten agent runs where the subject allows. The role agents can read, search and run commands, and they edit no file. That limit is an instruction in each agent file rather than a hook, and the board's hook does not apply to them. Questions about money, live trading, contracts or law go to `/l3a0:ask-board` instead. `scripts/gen_team.py` generates the eight role files, and CI runs it with `--check`.
 
 Invoke it as `/l3a0:ask-team`, or ask the team to review an issue, a design, a pull request or a blog post. A pull request review or a post review can also call it in lens mode, where the team's verified findings go back to the caller, which posts and fixes them in its own review.
 
