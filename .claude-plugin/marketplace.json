@@ -1,6 +1,6 @@
 {
   "name": "l3a0",
-  "description": "l3a0's personal Claude Code plugin marketplace. Skills for extracting Kindle highlights and for convening a board of advisor agents on a strategic decision.",
+  "description": "l3a0's personal Claude Code plugin marketplace. Skills for extracting Kindle highlights, for convening a board of advisor agents on a strategic decision or an engineering team on a code or post review, and for keeping a repository's build board true.",
   "owner": {
     "name": "l3a0"
   },
@@ -8,7 +8,7 @@
     {
       "name": "l3a0",
       "source": "./",
-      "description": "l3a0's Claude Code skills: kindle-highlights (verbatim Kindle highlight extraction with truncation recovery) and ask-board (a board of ten advisor agents and a secretary for a sole operator's strategic decisions)."
+      "description": "l3a0's Claude Code skills: kindle-highlights (verbatim Kindle highlight extraction with truncation recovery), ask-board (a board of ten advisor agents and a secretary for a sole operator's strategic decisions), ask-team (eight engineering role agents that review blind, with verifiers that refute by executing), and update-build-board and sync-prune-next (a repository's GitHub build board and its status round)."
     }
   ]
 }

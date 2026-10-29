@@ -15,3 +15,5 @@ jobs:
         run: sh tests/test_board_guard.sh
       - name: Seat files match their generator
         run: python3 scripts/gen_seats.py --check
+      - name: Team role files match their generator
+        run: python3 scripts/gen_team.py --check
