@@ -75,14 +75,30 @@ The band rule is what a caller without `ranking: order` gets: a card ranks only 
 
 The skill and the generator share formats: the label names, the comment and body lines, the review heading, the inputs, and the list of changes that start no run. A repository pins the generator to one commit, while this skill moves whenever the plugin updates. [l3a0/repo-template#24](https://github.com/l3a0/repo-template/issues/24) kept the skill as a per-repository file for exactly that reason, and the owner asked on 2026-10-29 UTC to move it into the plugin anyway. The price is that a plugin update and a generator change can land apart, so this section names what the formats here were checked against.
 
-The formats here were checked against the generator at `bde82a9e674432f6db928701821d99a73129d623` on l3a0/repo-template's `main`, and that is the pin to use. Every input in `### The inputs a caller passes` is declared and typed from `14656aa` on, and `bde82a9` changed only a test after it. A caller passing an input the called workflow does not declare fails, so `icon` needs a pin at or after `9c6d7e2`, `data-label` one at or after `26e5010`, and every input after `data-label` one at or after `14656aa`. Never pin `4c546fc`. At that commit the `default-branch-head` input carries no type, GitHub refuses the reusable workflow, and every run ends with no jobs. `14656aa` fixed the declaration, and `bde82a9` added the test that catches it.
+The formats here were checked against the generator at `bde82a9e674432f6db928701821d99a73129d623` on l3a0/repo-template's `main`, and `bde82a9` is the pin to use. Every other place in this plugin that needs a pin points here rather than naming one.
+
+A caller passing an input the called workflow does not declare fails, so each input needs a pin at or after the commit that first declared it. `git log -S` on `.github/workflows/build-board.yml` measured these.
+
+| Input | First declared at |
+| --- | --- |
+| `title` | `4bb3f7f`, the first shared workflow |
+| `icon` | `9c6d7e2` |
+| `data-label` | `26e5010` |
+| `subtitle`, `note`, `default-branch-head` | `8abb7a5` |
+| `label-colors`, `sort-labels` | `ec53810` |
+| `review-heading`, `settled-rollup` | `8b59b93` |
+| `milestone-default` | `2593289` |
+| `owner-body-lines` | `4c546fc` |
+| `ranking` | `14656aa` |
+
+Every input is declared and typed from `14656aa` on, and `bde82a9` changed only a test after it. Never pin `4c546fc`. At that commit the `default-branch-head` input carries no type, GitHub refuses the reusable workflow, and every run ends with no jobs. So `owner-body-lines` is first usable at `14656aa`, which fixed the declaration, and `bde82a9` added the test that catches it.
 
 | Repository | Pinned at | Formats that pin reads | Caller read at |
 | --- | --- | --- | --- |
 | l3a0/repo-template | `main` | everything this skill states, at `bde82a9` when this was checked | `bde82a9` |
 | l3a0/ithildin-runtime | `9c6d7e23d6381339c09102608c0958caca1401ce` | the formats of `4bb3f7f`, which `9c6d7e2` did not change, without the fixes listed below | `9a2d722` |
 | l3a0/quantitative-trading | `cf2959a3e48aeec3d71a6ade5fc9641fc9e82073` | the formats of `9c6d7e2` plus the `data-label` input, without the fixes listed below | `f1c4c0b` |
-| l3a0/marketlake | its own generator, until the commit [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942) pins, at or after `bde82a9` | everything this skill states, once pinned | `2118fdd` |
+| l3a0/marketlake | its own generator, until [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942) pins the commit its row in `## Which board this repository runs` names | everything this skill states, once pinned | `2118fdd` |
 
 A pin before `4c546fc` reads the same labels and lines, but lacks some or all of six fixes that hold for every caller whatever its inputs. Each names the commit it landed in.
 
@@ -90,7 +106,7 @@ A pin before `4c546fc` reads the same labels and lines, but lacks some or all of
 2. `Board order: 0` sorts ahead of a card with no order, rather than as if it had none. Fixed in the page at `a8794fb`.
 3. A body or comment saved with Windows line endings, as GitHub's web editor saves one, reads the same as one with Unix line endings. Before, an order or verdict line ending in a carriage return was not read. Fixed at `4c546fc`.
 4. A `Board after:` line refuses a reference to another repository and a link whose text and address name different issues. Before, every `#N` on the line read as this repository's issue N, so `owner/name#N` did too. Fixed at `4c546fc`.
-5. A number in a marker line or a `Part of` reference carries at most 15 digits. Fixed at `4c546fc`.
+5. A number in a marker line or a `Part of` reference carries no more digits than the grammar's `MAX_DIGITS` bullet allows. Fixed at `4c546fc`.
 6. The run summary lists the markers the board did not use, in the four rows `## The markers and their grammar` names. Added at `c61d3cf`.
 
 Three rules keep the skill and the generator in step.
@@ -103,7 +119,12 @@ One repository has tests that read this skill's text. They pin these strings, so
 
 1. `test_the_skill_quotes_the_allowance_the_script_adds` in l3a0/repo-template asserts the phrase "a 600-minute allowance".
 2. l3a0/repo-template's tests assert the `PIN=` line above, the line `gh workflow run board.yml --repo "$REPO"` on its own with no `--ref` after it, the text `` `with: icon: <path>` `` in `page.md` and `` `with: data-label: blocked-on-data` `` here, and that every numbered moment under `## What a session sets, and when` naming a "blocked by" link or a sub-issue says "dispatch the board".
-3. Once its plugin pin moves to this release, they can also assert `` `with: title: `` and `` `with: review-heading: Review complete` ``, `` `with: settled-rollup: "true"` ``, `` `with: owner-body-lines: "true"` ``, `` `with: milestone-default: MVP <n>` `` and `` `with: ranking: order` `` here, and `` `with: subtitle: ` ``, `` `with: note: ` ``, `` `with: default-branch-head: "true"` ``, `` `with: label-colors: "true"` ``, `` `with: sort-labels: "true"` `` and `` `board-ms:<owner/repo>` `` in `page.md`.
+3. They assert `` `with: title: `` and `` `with: review-heading: Review complete` ``, `` `with: settled-rollup: "true"` ``, `` `with: owner-body-lines: "true"` ``, `` `with: milestone-default: MVP <n>` `` and `` `with: ranking: order` `` here, and `` `with: subtitle: ` ``, `` `with: note: ` ``, `` `with: default-branch-head: "true"` ``, `` `with: label-colors: "true"` ``, `` `with: sort-labels: "true"` `` and `` `board-ms:<owner/repo>` `` in `page.md`. Every `` `with: <name>: `` form in either file has to name an input the workflow declares.
+4. They read the heading `### The inputs a caller passes` and its table, whose rows start with each input's name in a code span, comma-separated where a row holds several. The names have to equal the inputs the workflow declares.
+5. They read the phrase "at most 15 digits", once, in the grammar.
+6. They run the build command whose first line is `rm -f <scratch>/board.json`, from a stand-in caller, and check that every input reaches the generator. Four of their mutants rewrite its text in place, so keep these pieces verbatim: `if k != "icon"`, `f"--{k}=`, `, *flags])` and `str(v).lower() if isinstance(v, bool) else v`.
+7. They run every `jq` filter in this skill and in `sync-prune-next` against a golden board and compare each with an expected output, so a new or reworded filter fails until the tests carry its output.
+8. They run the setup block's `sed` line that prints the caller's `with:` block.
 
 ## Where the board lives
 
@@ -145,18 +166,20 @@ The caller's triggers are these.
 ```bash
 rm -f <scratch>/board.json
 template scripts/build_board.py > <scratch>/build_board.py &&
-uv run --no-project --python '>=3.12' --with pyyaml python - <scratch>/build_board.py "$REPO" <scratch> <<'PY'
+uv run --no-project --python '>=3.12' --with pyyaml==6.0.3 python - <scratch>/build_board.py "$REPO" <scratch> <<'PY'
 import subprocess, sys, yaml
 jobs = yaml.safe_load(open(".github/workflows/board.yml"))["jobs"]
 inputs = next(iter(jobs.values())).get("with") or {}
-flags = [f"--{k}={str(v).lower() if isinstance(v, bool) else v}" for k, v in inputs.items() if k != "icon"]
+flags = [f"--{k}={'' if v is None else str(v).lower() if isinstance(v, bool) else v}" for k, v in inputs.items() if k != "icon"]
 generator, repo, out = sys.argv[1:]
 sys.exit(subprocess.call([sys.executable, generator, "build", "--repo", repo,
     "--workflow", ".github/workflows/board.yml", "--out", out, *flags]))
 PY
 ```
 
-The build passes the caller's inputs, other than `icon`, which only the workflow reads. A build without them reads the defaults, so under `ranking: order` it would rank nothing and under `review-heading` it would count the wrong reviews. The generator needs Python 3.12 or later, and a bare `python3` can be an older one, such as the 3.9 at `/usr/bin/python3` on macOS, which fails on import. `uv run --python '>=3.12'` finds or fetches a version that works, and `--no-project` is safe because the generator imports only the standard library. `--with pyyaml` is for reading the caller, which the generator does not need.
+The build passes the caller's inputs, other than `icon`, which only the workflow reads. A build without them reads the defaults, so under `ranking: order` it would rank nothing and under `review-heading` it would count the wrong reviews. The generator needs Python 3.12 or later, and a bare `python3` can be an older one, such as the 3.9 at `/usr/bin/python3` on macOS, which fails on import. `uv run --python '>=3.12'` finds or fetches a version that works, and `--no-project` is safe because the generator imports only the standard library. `--with pyyaml==6.0.3` is for reading the caller, which the generator does not need, and the exact version keeps every round and l3a0/repo-template's tests of this command on the same parser.
+
+The command reads the caller's `with:` values literally, as PyYAML parses them, and passes an input written with no value as empty. GitHub parses the file itself and evaluates expressions, so a `${{ }}` expression, or a YAML 1.1 form such as `yes` or `010`, reads differently here from what GitHub passes the workflow. Write each input as a plain string, and an on-or-off input as `"true"`.
 
 Each build prints what it read to the terminal, including a summary table of what the read cost in GraphQL requests and points and what it found in the markers sessions set, and writes `<scratch>/board.json`. A run that fails says why, exits non-zero and writes nothing, because the generator stops on any read it cannot trust rather than writing a board that reads as correct.
 
@@ -184,11 +207,13 @@ Each moment below is one where the page's answer changes and nothing GitHub reco
 5. **A review lands on a pull request.** Post it as a pull request comment whose first line is the heading the caller's generator reads. A review headed anything else counts as none, and its card sits in "Waiting on my review" until somebody notices.
 
    - **With no `review-heading` input**, the generator reads an owner's pull request comment, never a submitted review, whose body, after leading whitespace, opens with `## Review` followed by a word boundary. `## Reviewer` is not one. It counts whenever it was posted. Without one, the card's `review` reads "review in progress" while it carries a `working:` label, and "no review posted" otherwise.
-   - **Under `with: review-heading: Review complete`**, the generator reads only a comment or a submitted review whose whole first line is `## Review complete`, posted by the owner after the head commit's `committedDate`. A submitted review counts only when it names the head commit, and it reaches the board at the next run of any other kind, because submitting one starts no run. A heading that only starts with those words, like `## Review completeness check`, does not count, and neither does a marker from an earlier round, because the commits pushed since then are code that review never saw. A session can post some lenses' results while another lens still runs, so a partial review stays headed something else. Any review comment was once enough in l3a0/marketlake, and that sent [l3a0/marketlake PR #713](https://github.com/l3a0/marketlake/pull/713) to the owner while its mutation lens was still running. That repository's `CLAUDE.md`, under "Pull requests", is where review sessions read the rule for writing the heading. A pull request whose final review was posted before a repository took the rule carries no marker, so it reads as unreviewed until a session posts one, and a round reports it rather than guessing whether its review finished. To check one pull request by hand, count its markers with this command, where a count above zero means reviewed. It counts only the owner's comments and reviews whose whole first line is the heading, posted after the head commit's `committedDate`, and only a review whose commit is the head.
+   - **Under `with: review-heading: Review complete`**, the generator reads only a comment or a submitted review whose whole first line is `## Review complete`, posted by the owner after the head commit's `committedDate`. A submitted review counts only when it names the head commit, and it reaches the board at the next run of any other kind, because submitting one starts no run. A heading that only starts with those words, like `## Review completeness check`, does not count, and neither does a marker from an earlier round, because the commits pushed since then are code that review never saw. A session can post some lenses' results while another lens still runs, so a partial review stays headed something else. Any review comment was once enough in l3a0/marketlake, and that sent [l3a0/marketlake PR #713](https://github.com/l3a0/marketlake/pull/713) to the owner while its mutation lens was still running. That repository's `CLAUDE.md`, under "Pull requests", is where review sessions read the rule for writing the heading. A pull request whose final review was posted before a repository took the rule carries no marker, so it reads as unreviewed until a session posts one, and a round reports it rather than guessing whether its review finished. To check one pull request, read the generator's own answer from a local build, made with the build command in `## Where the board lives`, rather than counting markers by hand. It prints `true` or `false` once for each open issue the pull request names.
 
      ```bash
-     gh pr view <n> --repo "$REPO" --json comments,reviews,commits --jq '.commits[-1] as $h | [.comments[] | select(.authorAssociation == "OWNER" and .createdAt > $h.committedDate)] + [.reviews[] | select(.authorAssociation == "OWNER" and .commit.oid == $h.oid and .submittedAt > $h.committedDate)] | map(select(.body | test("\\A## Review complete\\r?(\\n|\\z)"))) | length'
+     jq '(.prs | if type=="object" then .items else . end)[] | select(.pr == <n>) | .reviewed' <scratch>/board.json
      ```
+
+     A pull request that names no open issue is not on the board, so the read prints nothing. A round then reports its review as unknown rather than counting by hand, because a second copy of the rule drifts from the generator's.
 
    A final pull request comment whose first line is `## Review complete`, posted after the last push, satisfies both rules, so it is the form to use where a session cannot tell which one runs.
 6. **An issue is filed.** Add a label the board reads for the card's `kind` where one applies. The generator reads `deferred` and `decision`, and also the label a caller names in its `data-label` input, which reads as the kind `data`. Read the caller's `.github/workflows/board.yml` for that name. The build's job summary names the label and counts the open issues carrying it, so a count of zero there means the input matches no label. l3a0/quantitative-trading's caller names `blocked-on-data`. These are separate from the label a repository's `CLAUDE.md` asks every filed issue for, saying what kind of work it is, such as `bug` or `documentation`. The card prints that one among its labels and decides nothing by it. Under the band rule, add a `band:N` label if the card joins the priority order, because a card with no band is left out of the board's default view. Under `ranking: order` no `band:N` label is read, and a `Board order:` line alone ranks a card. Add a native "blocked by" link for each open issue the card cannot start before, and a `Board after:` line for an ordering nothing enforces. If it set any link, dispatch the board once everything is set, because a link starts no run.
@@ -251,7 +276,7 @@ The labels, as the owner or the template's setup script creates them:
 | `decision` | set by the setup script | Waits on an owner decision | the generator |
 | `blocked-on-data` | as created in the repository | Waits on data that has to be bought or captured | the generator, under a caller that names it in its `data-label` input, as l3a0/quantitative-trading's does |
 
-Each line follows this grammar under the generator at `bde82a9`. A pin before `4c546fc` lacks some of the fixes `## Generator compatibility` lists, and l3a0/ithildin-runtime and l3a0/quantitative-trading run such pins today.
+Each line follows this grammar under the generator at the pin `## Generator compatibility` names. A pin before `4c546fc` lacks some of the fixes `## Generator compatibility` lists, and l3a0/ithildin-runtime and l3a0/quantitative-trading run such pins today.
 
 - It starts its line, with nothing before it but spaces or tabs. A list marker such as `- ` or `1. `, or a quote marker `> `, stops it being read. An order or verdict line also has nothing after it but spaces or tabs.
 - The words are exactly as shown, in that case, with one ordinary space after the colon. `Board after:` takes any spacing after its colon.
@@ -278,7 +303,7 @@ Three rules decide what a line that is read counts for.
 
 ## The data, and where each field comes from
 
-The page loads each section of `board.json` into the variable of the same name in capitals, so `prs` becomes `PRS`, and the rest of this section uses those names. The generator writes each section other than `state` as `{"schema": 1, "items": [...]}`, so a reader takes a section's list from its `items`, as `jq '.working.items[]'` does. `prs` also keeps merged and closed entries, so a reader asking for open pull requests filters on `state == "open"`. Change what GitHub holds. Never hand-write a sentence in the page stating a number the data already carries, because that sentence outlives the number.
+The page loads each section of `board.json` into the variable of the same name in capitals, so `prs` becomes `PRS`, and the rest of this section uses those names. The generator writes each section other than `state` as `{"schema": 1, "items": [...]}`, so a reader takes a section's list from its `items`. l3a0/marketlake's own generator writes a bare list until it retires, so a filter that reads either, as `jq '(.working | if type=="object" then .items else . end)[]'` does, works on every board. `prs` also keeps merged and closed entries, so a reader asking for open pull requests filters on `state == "open"`. Change what GitHub holds. Never hand-write a sentence in the page stating a number the data already carries, because that sentence outlives the number.
 
 ### The sections and their fields
 
@@ -361,7 +386,7 @@ The dispatch there is this line.
 gh workflow run board.yml --repo l3a0/marketlake
 ```
 
-- **The page** is <https://l3a0.github.io/marketlake/>. Until [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942) moves its caller, its own generator, page, stub and icon sit in `.claude/skills/sync-prune-next/`, and its `.github/workflows/board.yml` runs them. After the move its caller pins the commit [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942) pins, at or after `bde82a9`, and passes the twelve inputs its row in `## Which board this repository runs` names.
+- **The page** is <https://l3a0.github.io/marketlake/>. Until [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942) moves its caller, its own generator, page, stub and icon sit in `.claude/skills/sync-prune-next/`, and its `.github/workflows/board.yml` runs them. After the move its caller pins the commit its row in `## Which board this repository runs` names, and passes the twelve inputs its row in `## Which board this repository runs` names.
 - **Until that move merges**, a session there reads the repository's own generator with `git show HEAD:.claude/skills/sync-prune-next/build_board.py` rather than with `template`, which needs a pin, and tests a page change with that repository's own `tests/component/test_board_page.py`. That generator writes each section as a bare list rather than under `items`, and its `state` carries no `staleAfterMinutes`, so the page there has no stale banner.
 - **Ranking** is the `Board order:` line alone, under `ranking: order`, since no `band:N` label exists there. The page opens on the open MVP milestone, under `milestone-default: MVP <n>`.
 - **The review heading** is `## Review complete`, under that repository's `CLAUDE.md` owner directive of 2026-10-06, which its `review-heading` input carries.

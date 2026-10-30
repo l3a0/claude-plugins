@@ -56,7 +56,7 @@ Two inputs change the label chips. `with: label-colors: "true"` fills each chip 
 
 `with: milestone-default: MVP <n>` draws the milestone selector, opening on the lowest-numbered milestone the open cards carry whose name up to its first comma reads `MVP` and a number. A name with no `<n>` names one milestone exactly. The reader's choice is kept under `board-ms:<owner/repo>`, as the section above says.
 
-Each of these six needs a pin at or after `14656aa`, from which every input is declared and typed, and never `4c546fc`. `bde82a9` is the pin to use, as `SKILL.md`'s `## Generator compatibility` says.
+Each of these six needs a pin at or after the commit that first declared it, which `SKILL.md`'s `## Generator compatibility` lists with the pin to use.
 
 A change to what the page reads is a change to the generator as well, in the same pull request, because the workflow builds `board.json` and copies the page in the same run. Add the field to the generator, and to `ITEM_OK` in the page if the renderer reads it without a guard, because the page refuses a whole section when one item lacks a field it reads. A change to what the generator reads from GitHub, or a new input, is a format change, so it needs the plugin release `SKILL.md` describes.
 

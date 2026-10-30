@@ -240,7 +240,16 @@ What a build prints is the only place a round sees these, because nobody reads t
 
 A row names the issue and the marker's kind and never the line's text, so read the issue for the line itself. The `update-build-board` skill's `## The markers and their grammar` states the grammar and which lines count as meant for a marker.
 
-Check by hand against what the round found since the last one that a decompose loop that exited since then left its issue a `Board verdict:` line, wherever the row cannot say so. That is every card on a board pinned before `c61d3cf`, and at any pin the cards the row leaves out: parents, deferred cards, cards a decompose loop holds, and cards with an open pull request. Under the band rule, at any pin, a filed issue that is ranked owes a `band:N` label. The board's kind labels are owed only where one applies, per moment 6 in the `update-build-board` skill, so a card without one is not missing anything.
+On a board pinned before `c61d3cf`, which prints no such row, check by hand against what the round found since the last one that a decompose loop that exited since then left its issue a `Board verdict:` line. The row leaves four kinds of card out on purpose, and none of them owes a verdict at any pin.
+
+1. A parent, because it builds nothing.
+2. A deferred card, because it is one nobody should take.
+3. A card a decompose loop holds, because its plan is still being written.
+4. A card with an open pull request, because its plan is being carried out.
+
+Under `ranking: order` the generator drops a verdict on a parent or a deferred card and lists it as a dropped marker, so a round must not ask for one there.
+
+Under the band rule, at any pin, a filed issue that is ranked owes a `band:N` label. The board's kind labels are owed only where one applies, per moment 6 in the `update-build-board` skill, so a card without one is not missing anything.
 
 ### Report a stale `working:` label
 
@@ -350,6 +359,6 @@ What follows holds for one repository only, as its own copy recorded it.
 - **Merged branches are deleted**, so the merged pull request's head ref is what proves a merged commit safe.
 - **The main checkout is the code the daemon runs**, so a fast-forward there leaves a restart owed, as step 1 says.
 - **The work follows the open MVP milestone**, and the page opens on it, as step 4 says.
-- **The board moves onto the shared reusable workflow** under [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942), which retires the repository's own generator and page. Its caller then pins l3a0/repo-template at the commit that issue pins, at or after `bde82a9`, and passes the twelve inputs that repository's row in the `update-build-board` skill's `## Which board this repository runs` names. Until that merges, step 3's setup block prints `board=none` there, and the round builds with that repository's own generator, as `uv run python .claude/skills/sync-prune-next/build_board.py build --repo l3a0/marketlake --out <scratch>`. That generator writes bare lists, which step 3's filter unwraps, and its `state` carries no `staleAfterMinutes`, so the stale-stamp check does not apply there.
+- **The board moves onto the shared reusable workflow** under [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942), which retires the repository's own generator and page. Its caller then pins l3a0/repo-template at the commit, and passes the twelve inputs, that repository's row in the `update-build-board` skill's `## Which board this repository runs` names. Until that merges, step 3's setup block prints `board=none` there, and the round builds with that repository's own generator, as `uv run python .claude/skills/sync-prune-next/build_board.py build --repo l3a0/marketlake --out <scratch>`. That generator writes bare lists, which step 3's filter unwraps, and its `state` carries no `staleAfterMinutes`, so the stale-stamp check does not apply there.
 
-  Two rules change for the round there once the move lands. Any session's `working:` label holds back a reviewed, green branch, where marketlake's own page held back only `working:build`. And under `review-heading` a submitted review counts only when it names the head commit.
+  Two rules change for the round there once the move lands. Any session's `working:` label holds back a reviewed, green branch, where marketlake's own page held back only `working:build`. And the review rule becomes the one moment 5 of the `update-build-board` skill gives under `review-heading`.
