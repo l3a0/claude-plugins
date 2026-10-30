@@ -162,7 +162,7 @@ Two callers are meant to use this mode.
 1. **A pull request review**, under the owner's rule that every pull request is reviewed by blind lenses before the owner reads it, and under a repository's `## Pull requests` section that carries that rule. The team's roles join the completeness and over-reach lenses there, and the caller runs those two itself rather than asking this skill to.
 2. **A review of a blog post before the owner reads it**, such as l3a0/quantitative-trading's `review-post` skill. The subject is the post, seated by the blog-post row of step 2's table.
 
-A caller's own skill should name this mode where it lists its lenses, so a reader of that skill finds it. On 2026-10-29 UTC no caller's skill named it yet.
+A caller's own skill should name this mode where it lists its lenses, so a reader of that skill finds it. l3a0/quantitative-trading's `review-post` and `sketch-notes` skills name it, since [l3a0/quantitative-trading PR #783](https://github.com/l3a0/quantitative-trading/pull/783).
 
 ## Building is not a review
 
