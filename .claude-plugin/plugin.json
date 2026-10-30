@@ -1,7 +1,7 @@
 {
   "name": "l3a0",
   "description": "l3a0's Claude Code skills. kindle-highlights extracts a book's Kindle highlights into one verbatim, location-cited Markdown file, recovering everything Amazon's export limit truncates or hides. ask-board convenes a board of ten advisor agents, each with its own objective, and a secretary who drafts the synthesis, on a sole operator's strategic decision. ask-team convenes eight engineering role agents that review a plan, a design, a pull request or a blog post blind to each other, with verifiers that refute by executing. update-build-board and sync-prune-next keep a repository's GitHub build board true and run the status round that prunes finished worktrees and says what to take next.",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "author": {
     "name": "l3a0",
     "url": "https://baowebdev.substack.com"

@@ -226,7 +226,7 @@ Nothing in a round waits on a suite run, because no board carries a test count. 
 
 ### Build the board into scratch
 
-Build it with the build command in the `update-build-board` skill's `## Where the board lives`, which removes any `board.json` an earlier build left in the scratch directory first. That build fetches the generator from l3a0/repo-template at the ref the repository pins, and passes it the caller's inputs. A failed build exits non-zero before it writes `board.json`. Report the failure, and step 4 then reads the last board the workflow published, and reads the open pull requests again from GitHub.
+Build it with the build command in the `update-build-board` skill's `## Where the board lives`, which removes any `board.json` an earlier build left in the scratch directory first. That build fetches the generator from l3a0/repo-template at the ref the repository pins, and passes it the caller's inputs. A failed build exits non-zero before it writes `board.json`. Report the failure, and step 4 then reads the last board the workflow published, as it says there.
 
 ### Report what the build found
 
@@ -256,10 +256,10 @@ Under the band rule, at any pin, a filed issue that is ranked owes a `band:N` la
 A `working:` label is owed its removal by the session that set it, so report a stale one rather than removing another session's label. A label that outlives its session keeps its card under Building or Being planned. A build session keeps `working:build` until it hands its pull request over, so a label on a card with an open pull request also keeps that card out of the owner's queue. GitHub cannot tell a live session from an ended one, and every label's actor is the owner, because sessions act as the owner. So the round reads two triggers, each on its own. The labels are the `working` entries of `<scratch>/board.json`.
 
 ```bash
-jq -c '(.working | if type=="object" then .items else . end)[]' <scratch>/board.json
+jq -c '.working.items[]' <scratch>/board.json
 ```
 
-The shared generator wraps each section as `{"schema": 1, "items": [...]}`, and l3a0/marketlake's own generator writes a bare list until it retires, so the filter unwraps either. Read `prs`, `planned`, `next` and `tracker` the same way in step 4.
+The generator wraps each section as `{"schema": 1, "items": [...]}`, so read `prs`, `planned`, `next` and `tracker` from their `items` the same way in step 4.
 
 1. **No session names the issue.** List the sessions with the session-listing tool, and keep the unarchived ones whose `cwd` is under this repository. Flag `working:*` on #N when none of them names #N in its title or carries a `prNumber` whose pull request links #N. Read a pull request's links with `gh pr view <pr> --repo "$REPO" --json closingIssuesReferences,body`.
 2. **Its pull request finished after the label went on.** Flag `working:build` on #N when no open pull request names #N, in `prs` of `<scratch>/board.json` filtered to `state == "open"`, since the generator keeps merged and closed entries there, and a pull request that closes #N or is `Part of` #N merged or closed after the label was added. Without that time gate, a new build of an issue's remainder would read as stale before its pull request exists. These print the time the label was added, the pull requests that close #N, and those whose body names it as `Part of`.
@@ -293,7 +293,13 @@ curl -fsS "https://${REPO%%/*}.github.io/${REPO#*/}/board.json?t=$(date +%s)" -o
 jq -r .state.updatedAt <scratch>/board.json
 ```
 
-The `t` parameter asks for a URL no cache has seen, because Pages tells caches to keep `board.json` for ten minutes. Report the `updatedAt` time, because the file is as old as the workflow's last good run. Read its tracker as it is. Then read the open pull requests, their checks and their review markers again straight from GitHub, rather than trust the file's `prs`. Pass `--limit 1000` to every `gh` list command that feeds a candidate, because `gh` stops at its limit without a warning and its default is 30. A cut list prints the same way a complete one does.
+The `t` parameter asks for a URL no cache has seen, because Pages tells caches to keep `board.json` for ten minutes. Report the `updatedAt` time, because the file is as old as the workflow's last good run. Read its tracker as it is. Read each open pull request's review from the file too, with the filter moment 5 of the `update-build-board` skill gives, and give the file's `updatedAt` beside each answer.
+
+```bash
+jq '.prs.items[] | select(.pr == <n>) | .reviewed' <scratch>/board.json
+```
+
+Moment 5 forbids counting review markers by hand, because a second copy of the generator's rule drifts from it. So a pull request the file does not hold, such as one opened after that run or one naming no open issue in this repository, reads as unknown. Read the open pull requests and their checks again from GitHub, rather than trust the file's `prs`, because the rollup is GitHub's own answer and the file's can be a run old. Pass `--limit 1000` to every `gh` list command that feeds a candidate, because `gh` stops at its limit without a warning and its default is 30. A cut list prints the same way a complete one does.
 
 Collect candidates from these places, and give the evidence for each one.
 
@@ -359,6 +365,6 @@ What follows holds for one repository only, as its own copy recorded it.
 - **Merged branches are deleted**, so the merged pull request's head ref is what proves a merged commit safe.
 - **The main checkout is the code the daemon runs**, so a fast-forward there leaves a restart owed, as step 1 says.
 - **The work follows the open MVP milestone**, and the page opens on it, as step 4 says.
-- **The board moves onto the shared reusable workflow** under [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942), which retires the repository's own generator and page. Its caller then pins l3a0/repo-template at the commit, and passes the twelve inputs, that repository's row in the `update-build-board` skill's `## Which board this repository runs` names. Until that merges, step 3's setup block prints `board=none` there, and the round builds with that repository's own generator, as `uv run python .claude/skills/sync-prune-next/build_board.py build --repo l3a0/marketlake --out <scratch>`. That generator writes bare lists, which step 3's filter unwraps, and its `state` carries no `staleAfterMinutes`, so the stale-stamp check does not apply there.
+- **The board runs on the shared reusable workflow**, since [l3a0/marketlake PR #945](https://github.com/l3a0/marketlake/pull/945) moved it there under [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942) and retired the repository's own generator and page. Its caller pins l3a0/repo-template at the commit, and passes the twelve inputs, that repository's row in the `update-build-board` skill's `## Which board this repository runs` names.
 
-  Two rules change for the round there once the move lands. Any session's `working:` label holds back a reviewed, green branch, where marketlake's own page held back only `working:build`. And the review rule becomes the one moment 5 of the `update-build-board` skill gives under `review-heading`.
+  Two rules hold for the round there that differ from the repository's old page. Any session's `working:` label holds back a reviewed, green branch, where the old page held back only `working:build`. And the review rule is the one moment 5 of the `update-build-board` skill gives under `review-heading`.
