@@ -299,7 +299,13 @@ The `t` parameter asks for a URL no cache has seen, because Pages tells caches t
 jq '.prs.items[] | select(.pr == <n>) | .reviewed' <scratch>/board.json
 ```
 
-A pull request the file does not hold reads as unknown, as moment 5 says. So does one whose head commit is later than the file, because the file's answer was about an earlier head. Compare the head commit's `committedDate`, from `gh pr view <n> --repo "$REPO" --json commits --jq '.commits[-1].committedDate'`, with the file's `state.updatedAt`. A commit made before the file and pushed after it still escapes this check, because its date is earlier than the file's. Read the open pull requests and their checks again from GitHub, rather than trust the file's `prs`, because the rollup is GitHub's own answer and the file's can be a run old. Pass `--limit 1000` to every `gh` list command that feeds a candidate, because `gh` stops at its limit without a warning and its default is 30. A cut list prints the same way a complete one does.
+A pull request the file does not hold reads as unknown, as moment 5 says. So does one whose head commit is newer than the file, because the file's answer was about an earlier head. This prints the head commit's `committedDate`.
+
+```bash
+gh api graphql -f owner="${REPO%%/*}" -f name="${REPO#*/}" -F n=<n> -f query='query($owner:String!,$name:String!,$n:Int!){repository(owner:$owner,name:$name){pullRequest(number:$n){headRefOid commits(last:1){nodes{commit{oid committedDate}}}}}}' --jq '.data.repository.pullRequest | .headRefOid as $h | .commits.nodes[] | select(.commit.oid == $h) | .commit.committedDate'
+```
+
+It asks for the last commit and keeps it only when it is the head. `gh pr view --json commits` lists only a pull request's first 100 commits, so on [l3a0/quantitative-trading PR #696](https://github.com/l3a0/quantitative-trading/pull/696), which has 158, its last entry is not the head. A head commit dated later than the file's `state.updatedAt` reads as unknown. A commit made before the file and pushed after it still escapes this check, because its date is earlier than the file's. Read the open pull requests and their checks again from GitHub, rather than trust the file's `prs`, because the rollup is GitHub's own answer and the file's can be a run old. Pass `--limit 1000` to every `gh` list command that feeds a candidate, because `gh` stops at its limit without a warning and its default is 30. A cut list prints the same way a complete one does.
 
 Collect candidates from these places, and give the evidence for each one.
 
