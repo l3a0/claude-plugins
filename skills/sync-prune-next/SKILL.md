@@ -299,7 +299,7 @@ The `t` parameter asks for a URL no cache has seen, because Pages tells caches t
 jq '.prs.items[] | select(.pr == <n>) | .reviewed' <scratch>/board.json
 ```
 
-Moment 5 forbids counting review markers by hand, because a second copy of the generator's rule drifts from it. So a pull request the file does not hold, such as one opened after that run or one naming no open issue in this repository, reads as unknown. Read the open pull requests and their checks again from GitHub, rather than trust the file's `prs`, because the rollup is GitHub's own answer and the file's can be a run old. Pass `--limit 1000` to every `gh` list command that feeds a candidate, because `gh` stops at its limit without a warning and its default is 30. A cut list prints the same way a complete one does.
+A pull request the file does not hold reads as unknown, as moment 5 says. So does one whose head commit is later than the file, because the file's answer was about an earlier head. Compare the head commit's `committedDate`, from `gh pr view <n> --repo "$REPO" --json commits --jq '.commits[-1].committedDate'`, with the file's `state.updatedAt`. A commit made before the file and pushed after it still escapes this check, because its date is earlier than the file's. Read the open pull requests and their checks again from GitHub, rather than trust the file's `prs`, because the rollup is GitHub's own answer and the file's can be a run old. Pass `--limit 1000` to every `gh` list command that feeds a candidate, because `gh` stops at its limit without a warning and its default is 30. A cut list prints the same way a complete one does.
 
 Collect candidates from these places, and give the evidence for each one.
 
@@ -365,6 +365,6 @@ What follows holds for one repository only, as its own copy recorded it.
 - **Merged branches are deleted**, so the merged pull request's head ref is what proves a merged commit safe.
 - **The main checkout is the code the daemon runs**, so a fast-forward there leaves a restart owed, as step 1 says.
 - **The work follows the open MVP milestone**, and the page opens on it, as step 4 says.
-- **The board runs on the shared reusable workflow**, since [l3a0/marketlake PR #945](https://github.com/l3a0/marketlake/pull/945) moved it there under [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942) and retired the repository's own generator and page. Its caller pins l3a0/repo-template at the commit, and passes the twelve inputs, that repository's row in the `update-build-board` skill's `## Which board this repository runs` names.
+- **The board runs on the shared reusable workflow**, since [l3a0/marketlake PR #945](https://github.com/l3a0/marketlake/pull/945) moved it there under [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942) and retired the repository's own generator and page. Its caller pins l3a0/repo-template at the commit, and passes the inputs, that repository's row in the `update-build-board` skill's `## Which board this repository runs` names.
 
   Two rules hold for the round there that differ from the repository's old page. Any session's `working:` label holds back a reviewed, green branch, where the old page held back only `working:build`. And the review rule is the one moment 5 of the `update-build-board` skill gives under `review-heading`.
