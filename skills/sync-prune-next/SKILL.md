@@ -230,7 +230,7 @@ Build it with the build command in the `update-build-board` skill's `## Where th
 
 ### Report what the build found
 
-What a build prints is the only place a round sees these, because nobody reads the Action's own job summary. Report every row that does not read `none`, with each issue linked. The generator writes the first row at every pin, and the other four from `bde82a9` on, so a board pinned earlier prints none of them.
+What a build prints is the only place a round sees these, because nobody reads the Action's own job summary. Report every row that does not read `none`, with each issue linked. The generator writes the first row at every pin, and the other four from `c61d3cf` on, so a board pinned earlier prints none of them.
 
 - **Labels or lines that disagree.** Two `band:N` labels, both `working:` labels, read as `build`, two kinds, such as a parent carrying `deferred`, or a ranked card's body carrying more than one `Board order:` line, read as the first even when the lines agree. Under `milestone-default` it also lists two milestone titles that cut to the same short name.
 - **Marker lines not read.** A line of the owner's that looks meant as a marker and is not read, including a verdict in a body and an order or after line in a comment.
@@ -240,17 +240,17 @@ What a build prints is the only place a round sees these, because nobody reads t
 
 A row names the issue and the marker's kind and never the line's text, so read the issue for the line itself. The `update-build-board` skill's `## The markers and their grammar` states the grammar and which lines count as meant for a marker.
 
-Where the board is pinned before `bde82a9`, check by hand against what the round found since the last one that a decompose loop that exited since then left its issue a `Board verdict:` line. Under the band rule, at any pin, a filed issue that is ranked owes a `band:N` label. The board's kind labels are owed only where one applies, per moment 6 in the `update-build-board` skill, so a card without one is not missing anything.
+Check by hand against what the round found since the last one that a decompose loop that exited since then left its issue a `Board verdict:` line, wherever the row cannot say so. That is every card on a board pinned before `c61d3cf`, and at any pin the cards the row leaves out: parents, deferred cards, cards a decompose loop holds, and cards with an open pull request. Under the band rule, at any pin, a filed issue that is ranked owes a `band:N` label. The board's kind labels are owed only where one applies, per moment 6 in the `update-build-board` skill, so a card without one is not missing anything.
 
 ### Report a stale `working:` label
 
 A `working:` label is owed its removal by the session that set it, so report a stale one rather than removing another session's label. A label that outlives its session keeps its card under Building or Being planned. A build session keeps `working:build` until it hands its pull request over, so a label on a card with an open pull request also keeps that card out of the owner's queue. GitHub cannot tell a live session from an ended one, and every label's actor is the owner, because sessions act as the owner. So the round reads two triggers, each on its own. The labels are the `working` entries of `<scratch>/board.json`.
 
 ```bash
-jq -c '.working.items[]' <scratch>/board.json
+jq -c '(.working | if type=="object" then .items else . end)[]' <scratch>/board.json
 ```
 
-The generator wraps each section as `{"schema": 1, "items": [...]}`, so read `prs`, `planned`, `next` and `tracker` from their `items` the same way in step 4.
+The shared generator wraps each section as `{"schema": 1, "items": [...]}`, and l3a0/marketlake's own generator writes a bare list until it retires, so the filter unwraps either. Read `prs`, `planned`, `next` and `tracker` the same way in step 4.
 
 1. **No session names the issue.** List the sessions with the session-listing tool, and keep the unarchived ones whose `cwd` is under this repository. Flag `working:*` on #N when none of them names #N in its title or carries a `prNumber` whose pull request links #N. Read a pull request's links with `gh pr view <pr> --repo "$REPO" --json closingIssuesReferences,body`.
 2. **Its pull request finished after the label went on.** Flag `working:build` on #N when no open pull request names #N, in `prs` of `<scratch>/board.json` filtered to `state == "open"`, since the generator keeps merged and closed entries there, and a pull request that closes #N or is `Part of` #N merged or closed after the label was added. Without that time gate, a new build of an issue's remainder would read as stale before its pull request exists. These print the time the label was added, the pull requests that close #N, and those whose body names it as `Part of`.
@@ -350,18 +350,6 @@ What follows holds for one repository only, as its own copy recorded it.
 - **Merged branches are deleted**, so the merged pull request's head ref is what proves a merged commit safe.
 - **The main checkout is the code the daemon runs**, so a fast-forward there leaves a restart owed, as step 1 says.
 - **The work follows the open MVP milestone**, and the page opens on it, as step 4 says.
-- **The board moves onto the shared reusable workflow** under [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942), which retires the repository's own generator and page. Its caller pins l3a0/repo-template at `bde82a9e674432f6db928701821d99a73129d623` and passes twelve inputs. Until that merges, step 3's setup block prints `board=none` there, and the round builds with that repository's own generator, as `uv run python .claude/skills/sync-prune-next/build_board.py build --repo l3a0/marketlake --out <scratch>`.
-  1. `title: Marketlake Build Board`.
-  2. `icon: .github/board/favicon.ico`, the repository's own tab icon.
-  3. `subtitle`, the line its own page carried under the heading.
-  4. `note`, its own page's paragraph linking the design doc and the build plan.
-  5. `default-branch-head: "true"`, so the footer names the commit the board was built against.
-  6. `milestone-default: MVP <n>`, so the page opens on the open MVP milestone.
-  7. `ranking: order`, since no `band:N` label exists there.
-  8. `owner-body-lines: "true"`, which `ranking: order` already implies.
-  9. `review-heading: Review complete`, under that repository's `CLAUDE.md` owner directive of 2026-10-06.
-  10. `settled-rollup: "true"`, so its `tofu apply (live)` job, skipped on every pull request, reads as settled.
-  11. `sort-labels: "true"`.
-  12. `label-colors: "true"`.
+- **The board moves onto the shared reusable workflow** under [l3a0/marketlake#942](https://github.com/l3a0/marketlake/issues/942), which retires the repository's own generator and page. Its caller then pins l3a0/repo-template at the commit that issue pins, at or after `bde82a9`, and passes the twelve inputs that repository's row in the `update-build-board` skill's `## Which board this repository runs` names. Until that merges, step 3's setup block prints `board=none` there, and the round builds with that repository's own generator, as `uv run python .claude/skills/sync-prune-next/build_board.py build --repo l3a0/marketlake --out <scratch>`. That generator writes bare lists, which step 3's filter unwraps, and its `state` carries no `staleAfterMinutes`, so the stale-stamp check does not apply there.
 
   Two rules change for the round there once the move lands. Any session's `working:` label holds back a reviewed, green branch, where marketlake's own page held back only `working:build`. And under `review-heading` a submitted review counts only when it names the head commit.

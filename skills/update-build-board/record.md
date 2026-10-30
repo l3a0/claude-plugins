@@ -1,6 +1,6 @@
 # What goes wrong on the board's page, from the record
 
-This file belongs to the `update-build-board` skill. Every defect below shipped on l3a0/quantitative-trading's page, or was caught there at the last moment, and the shared page in l3a0/repo-template descends from that page with each fix carried over. The function names are the page's own, so a defect found on either page is read against the same code. They are written down because the next one will be a variant rather than something new.
+This file belongs to the `update-build-board` skill. Every defect below shipped on l3a0/quantitative-trading's page, or was caught there at the last moment, and the shared page in l3a0/repo-template descends from that page with each fix carried over. The function names are the page's own, so a defect found is read against the same code. They are written down because the next one will be a variant rather than something new.
 
 ## The defects
 
