@@ -28,6 +28,11 @@ The fifth run turned the recovery into scripts. The path in one line: `align_ext
 below means that folder, given as an absolute path from the run directory. Set `SKILL` to the skill's directory
 once and the commands read as written.
 
+A sixth run, *The Art of Scalability* (382 highlights, 24 truncated, 0 hidden), recovered none of its
+truncated highlights. Its goal moved from the highlights to the book's full text, which it captured with the
+full-book path under Step 5. Its figures stay out of the recovery counts above, and its gotchas sit in the
+steps below.
+
 ## The one prerequisite that unblocks everything
 
 Driving the page needs **JavaScript execution in the tab** — any browser-control MCP that can
@@ -45,6 +50,17 @@ requires Chrome's **"Allow JavaScript from Apple Events"** to be ON:
   extension contends for the debugger. Its `read_page`/`find`/`navigate` still work, but
   `read_page` **caps each text node at ~100 chars** — useless for full highlight text. Use the
   Control_Chrome JS scrape instead.
+- The same error stopped the extension's `javascript_tool` and `screenshot` on the sixth run, right after a
+  1Password autofill. AppleScript from the shell still worked, because it is the route Control Chrome takes and
+  needs only the Apple Events setting above:
+  `osascript -e 'tell application "Google Chrome" to execute (tab id T of window id W) javascript (read POSIX file "<path to snippet.js>")'`.
+  A small runner script that takes the snippet's path keeps the quoting manageable. `execute` returns only a
+  synchronous value, so an async snippet stores its result on `window` and a second call polls for it.
+  This route has a cost. Any process that holds macOS's Automation grant to control Chrome, which Step 5's
+  `osascript` window steps need too, can then run JavaScript in any tab on any site, including pages 1Password
+  has just filled. Chrome has no per-site switch for it short of an enterprise DevTools policy. So have the
+  runner read `URL of tab id T of window id W` first and refuse unless it starts with
+  `https://read.amazon.com/`, and undo the setting and the grant after the run (Step 6).
 - Screen-control of the browser may be read-only tier and the **Kindle desktop app** screen may be
   blocked entirely — but neither matters much anymore: captures come from the page's own canvas
   (below), and the desktop app is used only via its **files on disk**, which needs no screen access.
@@ -82,6 +98,8 @@ Gotchas:
   (~50–100 rows/page). The token can also be **circular**: one run had all 235 rows already in
   the DOM yet a non-empty token, and the fetched pages re-served 139 exact duplicates — always
   dedupe fetched rows against what you have on `(loc, text)` before believing a bigger count.
+  The sixth run confirmed it on a second book. All 382 rows were in the DOM, and the token served 303 more over
+  5 pages, every one an exact copy.
 - The export limit doesn't just truncate: past its budget it **hides highlights entirely** —
   the row has a location but NO text (only the banner). The scraper keeps these
   (`hidden: true, text: null`); never filter rows by text presence, filter by `loc`.
@@ -161,6 +179,9 @@ items). Only the rendered pages have the text, as **rasterized images** (`<img s
 
 Reader mechanics (hard-won):
 
+- **The reader can sit behind `read.amazon.com/checkpoint/continue`**, a page that reads "Website
+  Temporarily Unavailable". On the sixth run it showed no challenge to solve, and loading the reader again once
+  a minute got past it within a few minutes. A page that does show a challenge is the user's to clear.
 - **The reader renders only while its tab is visible.** Boot stalls and page-flips freeze in a
   hidden tab. Give it its own Chrome **window** (`osascript`: `make new window`) so other tabs
   and sessions don't freeze it; the window may sit behind others but must not be minimized.
@@ -184,6 +205,8 @@ Reader mechanics (hard-won):
        at device pixel ratio 2 is ideal.
 
   `set index` and `activate` alone do nothing.
+  On the sixth run `set bounds` would not move a new window onto the laptop panel, and the run went ahead at
+  ratio 1 (see "Two columns, not one" below).
 - **Use [scripts/reader_capture.js](scripts/reader_capture.js)** for the in-page side: install
   it once per page load (`__kh`), then `__kh.applySettings(4, 2)` (it reloads, so re-install after),
   `__kh.jump(<startPos>)`, `__kh.sweep(from, n, prefix)` and `__kh.restoreSettings()`. Its
@@ -201,6 +224,10 @@ Reader mechanics (hard-won):
   (Reader menu → Go to Page): set the native `<input>` via the value-property setter + an
   `input` event, then click Go. Landing can be off by a page (screens ≠ print pages; one screen
   can span 2–3 print pages, and a print page can span multiple screens).
+- **The table of contents jumps to a chapter by name.** Its panel is a virtual list, which lays out only the
+  rows near its scroll position, so scroll `button.toc-item-button[aria-label="<chapter>"]` into view with
+  `scrollIntoView()` before dispatching `mousedown`, `mouseup` and `click` on it. Then close the panel with
+  `[aria-label=Close]` before sweeping, because an open panel swallows the page flips (next item).
 - Page-flip: dispatch keydown **and keyup** for ArrowRight on several targets — `window`,
   `document`, `document.body`, `.kg-client-root`, `ion-app` — one target alone is unreliable,
   and the chevron `.click()` does nothing. **A leftover modal/panel silently swallows the keys**
@@ -231,6 +258,15 @@ Reader mechanics (hard-won):
   characters, and Vision drops the LAST character of every full-width line (a padded canvas
   does not help). Two columns (`maxNumberColumns: 2`) give ~115-character lines and clean
   reads. The cutter orders words by column first, so columns cost nothing downstream.
+  The column setting is only a maximum. On the sixth run a viewport 1344 CSS pixels wide, at font size index 4
+  and device pixel ratio 1, rendered one column under `maxNumberColumns: 2`, in a page image 1076 pixels wide.
+  That run tried one width at one font size, so whether width alone decides the column count is untested. Its
+  lines ran to about 120 characters. Read back in one column, 347 of the notebook's 358 fully exported
+  highlights matched on letters and digits, and most of the 11 misses had figure or footer text inside the span.
+  So check what rendered rather than trusting the setting. A two-column page has many long lines starting past
+  the middle. A one-column page can still have short lines there, such as figure labels and right-aligned
+  epigraphs. `cutter.py` still splits columns by each line's centre, which can misorder a one-column page
+  ([#43](https://github.com/l3a0/claude-plugins/issues/43)), so the word-rect path below still needs two columns.
 - **Set the display settings through localStorage, then reload.** On one run the Aa-panel
   slider path reported the new index and then reverted when the panel closed. Writing
   `KWR_Display_Settings` directly and calling `location.reload()` is deterministic
@@ -361,6 +397,8 @@ Screenshot-per-highlight does not scale; do a **sweep + OCR + position-math** pi
    on these clean renders and costs zero tokens. Keep `usesLanguageCorrection = false` for fidelity.
 3. **Stitch** screens into one text stream (dedupe identical screens by md5 — missed flips
    produce duplicates; label jumps ≥4 pages signal a missed capture).
+   `scripts/stitch.py` from the full-book path below does the column order and the md5 dedupe, on
+   `ocr_words.swift` output rather than `ocr.swift`'s.
 4. **Cut by position math** from the Step-4 table: truncated highlights by fuzzy prefix-match +
    known length; hidden highlights by aligning **sentence boundaries** to the exact
    lengths/gaps (97% of highlights start at a capital letter, 99% end at sentence punctuation —
@@ -389,6 +427,54 @@ the DOM's, so **validate the cutter on the in-range FULL highlights against thei
 text first** — byte-exact + ≥99% rates tell you the true error classes before any blocked cut
 is trusted.
 
+### Full-book path (the whole text, for reading the book rather than its highlights)
+
+When the goal is the book's full text, such as to read it with an agent and draw notes from it, sweep the
+book end to end and skip the cutting, which leaves Step 4's extents unused. The sixth run captured *The Art of
+Scalability* this way.
+
+1. **Set up as for any sweep.** Start the receiver, install `reader_capture.js`, and snapshot and apply the
+   display settings as above.
+2. **Jump to the first page of the body through the table of contents** (the gotcha above). The sixth run
+   jumped to the Foreword.
+3. **Sweep in one call.** `__kh.sweep(from, n, 'b')` names its captures `b<from>` on, with the number padded
+   to three digits (`b003`). Never reuse a name. The receiver replaces an existing file without a word
+   ([#45](https://github.com/l3a0/claude-plugins/issues/45)), so set `from` to one more than the highest
+   number already in `pages/`, and capture any screen by hand under the same `b000` form. Set `n` above the
+   book's screen count. The sixth run captured its first three screens, then ran `__kh.sweep(3, 700, 'b')`.
+   The 493 captures, from location 487 to 13,121 of 13,134, took about 16 minutes, 12 of them on the book's
+   own screens and the rest flipping past its end.
+4. **Save the log, then stop the sweep.** The loop does not notice the end of the book. Past the last screen
+   each flip leaves the image unchanged, and only a reload stops the loop, since it lives in the page. The
+   reload also wipes `__kh.sweepLog`, the only record of each capture's `err` and `changed` fields, so save it
+   first: `fetch(__kh.RX + '/json?name=sweeplog.json', {method: 'POST', body: JSON.stringify(__kh.sweepLog)})`.
+   A log entry with an `err`, or with `changed: false` before the end, marks a capture to check.
+5. **Stitch.** From the run directory, with `swiftc` installed as for Step 5's other paths:
+
+   ```
+   python3 "$SKILL/scripts/stitch.py"
+   ```
+
+   It OCRs each capture once and writes one `text/<name>.txt` per screen and `book.txt`, the distinct screens
+   in capture order, each headed by its footer label. It reads a screen top to bottom, and left column first
+   only when at least three long lines start past the middle and make up a quarter of its long lines. On the
+   sixth run's one-column render, splitting every screen at the middle instead moved short figure labels and
+   epigraph lines below the body on 102 of 464 screens, and 21 fewer fully exported highlights matched. A
+   line-end hyphen joins a lowercase next line. The price is that a real compound hyphen at a line end is lost.
+6. **Read the stitch report for gaps.** `stitch.py` names every PNG it skipped, every missing capture number,
+   and every repeated screen. It drops repeats by md5 and counts the final unbroken run of them as the flips
+   past the end. The sixth run's 493 captures gave 464 distinct screens, and all 29 repeats were those flips.
+   A repeat in mid-book is flagged, because a flip that landed late repeats a screen and the next flip then
+   skips one. The location steps are a weaker check. On the sixth run the median step was 31 locations and the
+   largest 36, but 80 steps were under 20, so one skipped screen between two short ones would still sum to a
+   normal step. Capture a skipped screen under a new series letter (`c000`) rather than over an old name,
+   since `cutter.py` reuses the cached OCR of a name it has already read. `stitch.py` places the new series
+   after the first, so move its text into place by its footer label.
+7. **Keep the text private.** `book.txt` is the whole book's copyrighted text, so it stays in the run
+   directory with the captures, like extracted highlights. Keep the run directory outside any git repository,
+   where one `git add -A` would stage it. Step 6's cleanup applies: restore the display settings, stop the
+   receiver and close the tabs.
+
 ## Step 6 — QA before declaring done
 
 - `recovered == truncated + hidden`, `pending == 0` (build prints these).
@@ -402,6 +488,9 @@ is trusted.
   words (inflections accepted, tickers skipped), joined words, first-letter loss, hidden
   highlights that start lowercase. The book's own typos stay. "untill", "Annoucement" and
   "p.m.. ET" were all in the printed page, so a repeated non-word is not proof of an OCR slip.
+- If the run used the `osascript` fallback, turn off Chrome's View → Developer → Allow JavaScript from Apple
+  Events, and remove the terminal's Chrome entry under System Settings → Privacy & Security → Automation if it
+  was granted for this run.
 - Delete the run directory's `db/` copy. It holds every book's highlights for the account, not just
   this one.
 - Display settings restored from the snapshot; localhost receiver stopped; your reader and
