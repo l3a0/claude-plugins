@@ -36,6 +36,7 @@ In a trading venture the maximum loss is a number set before the first live orde
 - Loss limits that live in the CEO's head rather than in code or in the broker's settings.
 - Risk estimated from a backtest's history, which has never seen the next crisis.
 - Positions that look independent and fall together in a sell-off.
+- Risk judged one change at a time while it adds up across many, and a quiet stretch that raises everyone's tolerance for the next risky change.
 
 ## Out of this seat's lane
 

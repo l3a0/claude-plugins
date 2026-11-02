@@ -152,6 +152,7 @@ SEATS = [
             "Hours left off the ledger because the CEO does not pay for them in cash.",
             "A target return that beats the passive alternative only before costs.",
             "Capital committed before any number shows the plan can cover its own costs.",
+            "A decision to build rather than buy that leaves out the cost of supporting what is built. Teams underestimate that cost by about an order of magnitude, and for a sole operator it is paid in the CEO's hours.",
         ],
         lane=[
             "The size of the worst loss and the rules that stop it: board-risk.",
@@ -181,6 +182,7 @@ SEATS = [
             "Loss limits that live in the CEO's head rather than in code or in the broker's settings.",
             "Risk estimated from a backtest's history, which has never seen the next crisis.",
             "Positions that look independent and fall together in a sell-off.",
+            "Risk judged one change at a time while it adds up across many, and a quiet stretch that raises everyone's tolerance for the next risky change.",
         ],
         lane=[
             "Whether the strategy has an edge at all: board-scientist.",
@@ -210,6 +212,7 @@ SEATS = [
             "Look-ahead, where the test uses information that was not available at the time.",
             "Survivorship, where the data holds only the stocks, funds or firms that lasted.",
             "A result that rests on one regime, one asset or a handful of trades.",
+            "A result that improved sharply after a change and was accepted without asking what the change dropped, such as a filter, a cost or a code path.",
         ],
         lane=[
             "Whether live trading reproduces the backtest: board-cto.",
@@ -238,6 +241,7 @@ SEATS = [
             "Data that the vendor restates after the fact, so a backtest cannot be repeated.",
             "Fills, fees and delays modelled in the backtest differently from how the broker charges them.",
             "Building infrastructure for scale before one path works end to end.",
+            "A plan to grow that exists only as an intention, or whose answer to more load is a bigger machine. A design ready to grow names its next split and the written limit of what is built now.",
         ],
         lane=[
             "Whether the edge is statistically real: board-scientist.",
@@ -266,6 +270,8 @@ SEATS = [
             "Alerts that fire into an inbox nobody reads.",
             "A system with no safe default when an outside service fails.",
             "A venture that only its founder could shut down safely.",
+            "A recovery or failover path that has never run, so nobody knows whether it works until the day it is needed.",
+            "An incident fixed at the broken part while the gap in the process that let it happen stays open.",
         ],
         lane=[
             "What the loss limits are: board-risk. This seat checks that they run unattended.",
@@ -398,6 +404,7 @@ SEATS = [
             "A market too small or too illiquid for the capital in the brief.",
             "An edge that existed in the backtest's years and has since been published or crowded.",
             "No answer to who is on the other side, which usually means the venture is the one paying.",
+            "Hours spent building what does not set the venture apart, such as tooling a vendor sells, while the part that is the edge waits.",
         ],
         lane=[
             "Whether the evidence for the edge is sound: board-scientist.",
@@ -425,6 +432,7 @@ SEATS = [
             "A board that agrees because every seat started from the same unstated assumption.",
             "A decision that repeats one the minutes already show failed.",
             "A plan chosen because it is exciting rather than because it is first in line.",
+            "A cause ruled out with \"that cannot be the problem\". In incidents that phrase usually points at the cause, so this seat tests it first.",
         ],
         lane=[
             "No domain is out of this seat's reach for a challenge. Detailed answers in a domain belong to the seat that owns it, so point to that seat by name rather than answer in its place.",

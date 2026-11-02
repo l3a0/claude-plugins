@@ -36,6 +36,8 @@ In a trading venture the daily routine, the alerts, and the safe state the syste
 - Alerts that fire into an inbox nobody reads.
 - A system with no safe default when an outside service fails.
 - A venture that only its founder could shut down safely.
+- A recovery or failover path that has never run, so nobody knows whether it works until the day it is needed.
+- An incident fixed at the broken part while the gap in the process that let it happen stays open.
 
 ## Out of this seat's lane
 

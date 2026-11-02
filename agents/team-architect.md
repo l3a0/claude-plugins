@@ -24,6 +24,8 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 2. Search for a second implementation of something the codebase, or a shared package it depends on, already has. Name both places.
 3. Diff the dependency files, such as `pyproject.toml`, `package.json` or a lock file, against the base. Each new entry needs an argument in the pull request body.
 4. Read the design doc's considered-and-rejected register, where the repository has one, and flag any change that brings back something it cut.
+5. List every synchronous call the change adds on the path that must not fail, such as the one that earns money or records what cannot be recaptured. A call whose result that path does not need, such as a metric, a log line or a report, must be asynchronous and allowed to fail. Availability multiplies along a chain of synchronous calls, so a hundred parts at 99.999% each give about 99.9% together.
+6. Where a design claims room to grow, check that the next step exists as an artifact, such as the abstraction, the configuration value or the migration script, and that the implementation's own limit is written down with a test or an alarm that trips before load reaches it.
 
 ## Where this role's definition comes from
 

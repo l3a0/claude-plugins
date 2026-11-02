@@ -24,6 +24,8 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 2. Check that every halt path writes why it halted where the owner will read it, rather than only exiting.
 3. Check the startup order: what starts first, what each part reads before its first action, and what happens when a part it reads has not started.
 4. Check that a deploy the change implies has a rollback, written down and runnable.
+5. Check that a new feature, job or strategy can be switched off without a deploy, and that switching it off leaves the rest running.
+6. Check that monitoring the change adds first answers whether there is a problem the owner or a user would see, before it answers where the problem is. A log line alone does not answer it.
 
 ## Where this role's definition comes from
 
