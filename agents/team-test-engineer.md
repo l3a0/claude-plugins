@@ -24,6 +24,7 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 2. For each new behaviour, name the test that covers it. Break the behaviour in a copy taken as the limits below say, run that test against the copy, and report whether it failed. A mutant that survives is a finding.
 3. Check that a test asserts the behaviour rather than restating the implementation, and that a skipped or expected-failure test says why.
 4. Check that each number a test pins names where it came from, so a re-pin can say what moved.
+5. Where the repository keeps a benchmark or a replay, compare the change's counters and timings with the base's. Counters on a deterministic run must match. A timing that moves past the tolerance the repository records, or past the spread of repeated runs at the base where it records none, is a finding in either direction, because a sudden improvement can mean a code path or a filter was dropped.
 
 ## Where this role's definition comes from
 

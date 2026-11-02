@@ -36,6 +36,7 @@ In a trading venture the comparison is concrete. Take the expected annual return
 - Hours left off the ledger because the CEO does not pay for them in cash.
 - A target return that beats the passive alternative only before costs.
 - Capital committed before any number shows the plan can cover its own costs.
+- A decision to build rather than buy that leaves out the cost of supporting what is built. Underestimating it by as much as an order of magnitude is common for anything that must run around the clock, and for a sole operator it is paid in the CEO's hours.
 
 ## Out of this seat's lane
 

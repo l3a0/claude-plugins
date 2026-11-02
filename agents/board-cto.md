@@ -36,6 +36,7 @@ In a trading venture this means one code path for signals and orders, fed by the
 - Data that the vendor restates after the fact, so a backtest cannot be repeated.
 - Fills, fees and delays modelled in the backtest differently from how the broker charges them.
 - Building infrastructure for scale before one path works end to end.
+- A plan to grow that exists only as an intention. A design ready to grow names its next split and the written limit of what is built now.
 
 ## Out of this seat's lane
 

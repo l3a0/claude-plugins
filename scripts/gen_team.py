@@ -14,6 +14,12 @@ charter's definition as its trading case, with the charter's citations of book
 locations dropped. A repository's own docs/team-charter.md overrides the
 defaults, which is how ithildin-runtime keeps its trading definitions.
 
+The checks on synchronous calls, written scale limits, additive format
+changes and retention, sizing that counts pending writes, failure scoring,
+release comparison, off switches, headroom and monitoring come from The Art
+of Scalability (Abbott and Fisher, 1st ed., 2009), as ithildin-runtime's
+docs/design.md ## Design principles adopts it with Kindle locations.
+
 Run from anywhere:
 
     python3 scripts/gen_team.py           # write the eight files
@@ -80,6 +86,8 @@ ROLES = [
             "Search for a second implementation of something the codebase, or a shared package it depends on, already has. Name both places.",
             "Diff the dependency files, such as `pyproject.toml`, `package.json` or a lock file, against the base. Each new entry needs an argument in the pull request body.",
             "Read the design doc's considered-and-rejected register, where the repository has one, and flag any change that brings back something it cut.",
+            "List every synchronous call the change adds on the path that must not fail, such as the one that earns money or records what cannot be recaptured. A call whose result that path does not need, such as a metric, a log line or a report, must be asynchronous and allowed to fail. Availability multiplies along a chain of synchronous calls, so a hundred parts at 99.999% each give about 99.9% together.",
+            "Where a design claims room to grow, check that the next step exists as a written design, that the only code built ahead of need is a configuration value whose other settings a test runs, and that the implementation's own limit is written beside the code that enforces it with a test or an alarm that trips before load reaches it.",
         ],
     },
     {
@@ -114,6 +122,7 @@ ROLES = [
             "Search for a place that turns a missing value into zero, or a zero into a missing value, such as `fillna(0)` or a truthiness test on a number.",
             "Check that each stored value carries both the time it arrived and the time it became knowable, where the data has both.",
             "Check that a filter flags what it rejects rather than dropping it, and that an exception path cannot discard a batch it has already read.",
+            "Where the change alters the format of stored data that cannot be regenerated, check that it only adds, and ships the code before the data, so a rollback still finds the fields it reads. Check too that no retention, cleanup or lifecycle rule, new or existing, can match a path the change reads or writes that holds data which cannot be recaptured.",
         ],
     },
     {
@@ -130,6 +139,7 @@ ROLES = [
             "Check that a resubmitted action carries the same idempotency key, or is otherwise recognised, so an outside system that saw the first one does not act twice.",
             "Check that every result the outside system reports has a record the reconciliation matches, and that an unmatched result halts rather than passing.",
             "Write and run a small call through the code that sends, against a fake or a sandbox, inside the scratch folder, where one can show the claim.",
+            "Check that the size of each outside write counts the writes already sent, including those still pending or with no answer, and that a write with no answer blocks further writes on its key until the reconciliation settles it, rather than blocking only a retry.",
         ],
     },
     {
@@ -146,6 +156,7 @@ ROLES = [
             "Check that an absent, stale or empty input halts and alerts the owner, and never reads as an instruction to act. One trading firm's execution server rebooted before its alpha server, read no signals as hold nothing, and liquidated most of its book.",
             "Check that each limit the change touches is still enforced on every action, by writing and running a call that should be refused, inside the scratch folder.",
             "Check that the kill switch and any loss stop still run without anyone's judgement in the moment.",
+            "Score each new way the change can fail by how likely it is, how severe it is and how hard it is to notice, each as 1, 3 or 9, and multiply. A failure nobody would notice scores worst, so it needs a detector before it ships. A change whose score passes the threshold the repository sets is split rather than shipped whole, because risk adds up across the changes in a release.",
         ],
     },
     {
@@ -162,6 +173,7 @@ ROLES = [
             "For each new behaviour, name the test that covers it. Break the behaviour in a copy taken as the limits below say, run that test against the copy, and report whether it failed. A mutant that survives is a finding.",
             "Check that a test asserts the behaviour rather than restating the implementation, and that a skipped or expected-failure test says why.",
             "Check that each number a test pins names where it came from, so a re-pin can say what moved.",
+            "Where the repository keeps a benchmark or a replay, compare the change's counters and timings with the base's. Counters on a deterministic run must match. A timing that moves past the tolerance the repository records, or past the spread of repeated runs at the base where it records none, is a finding in either direction, because a sudden improvement can mean a code path or a filter was dropped.",
         ],
     },
     {
@@ -178,6 +190,9 @@ ROLES = [
             "Check that every halt path writes why it halted where the owner will read it, rather than only exiting.",
             "Check the startup order: what starts first, what each part reads before its first action, and what happens when a part it reads has not started.",
             "Check that a deploy the change implies has a rollback, written down and runnable.",
+            "Check that a new job or feature that acts unattended on an outside system, or on data that cannot be recaptured, can be switched off without a deploy, that switching it off leaves the rest running, and that the switch has been flipped in a drill.",
+            "Where the change adds or grows a store, a queue or a call with a rate limit, check that its headroom is planned for that component and alarmed before it fills, above all where filling loses data that cannot be recaptured.",
+            "Check that monitoring the change adds first answers whether there is a problem the owner or a user would see, before it answers where the problem is. A log line alone does not answer it.",
         ],
     },
     {

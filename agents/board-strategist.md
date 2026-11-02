@@ -36,6 +36,7 @@ In a trading venture every profit is someone else's loss or fee. Name the counte
 - A market too small or too illiquid for the capital in the brief.
 - An edge that existed in the backtest's years and has since been published or crowded.
 - No answer to who is on the other side, which usually means the venture is the one paying.
+- Hours spent building what does not set the venture apart, such as tooling a vendor sells, while the part that is the edge waits.
 
 ## Out of this seat's lane
 
