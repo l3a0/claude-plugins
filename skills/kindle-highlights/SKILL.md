@@ -56,6 +56,11 @@ requires Chrome's **"Allow JavaScript from Apple Events"** to be ON:
   `osascript -e 'tell application "Google Chrome" to execute (tab id T of window id W) javascript (read POSIX file "<path to snippet.js>")'`.
   A small runner script that takes the snippet's path keeps the quoting manageable. `execute` returns only a
   synchronous value, so an async snippet stores its result on `window` and a second call polls for it.
+  This route has a cost. Any process that holds macOS's Automation grant to control Chrome, which Step 5's
+  `osascript` window steps need too, can then run JavaScript in any tab on any site, including pages 1Password
+  has just filled. Chrome has no per-site switch for it short of an enterprise DevTools policy. So have the
+  runner read `URL of tab id T of window id W` first and refuse unless it starts with
+  `https://read.amazon.com/`, and undo the setting and the grant after the run (Step 6).
 - Screen-control of the browser may be read-only tier and the **Kindle desktop app** screen may be
   blocked entirely — but neither matters much anymore: captures come from the page's own canvas
   (below), and the desktop app is used only via its **files on disk**, which needs no screen access.
@@ -175,8 +180,8 @@ items). Only the rendered pages have the text, as **rasterized images** (`<img s
 Reader mechanics (hard-won):
 
 - **The reader can sit behind `read.amazon.com/checkpoint/continue`**, a page that reads "Website
-  Temporarily Unavailable". It is a service page, not a CAPTCHA, so there is nothing on it to solve. On the
-  sixth run, loading the reader again once a minute got past it within a few minutes.
+  Temporarily Unavailable". On the sixth run it showed no challenge to solve, and loading the reader again once
+  a minute got past it within a few minutes. A page that does show a challenge is the user's to clear.
 - **The reader renders only while its tab is visible.** Boot stalls and page-flips freeze in a
   hidden tab. Give it its own Chrome **window** (`osascript`: `make new window`) so other tabs
   and sessions don't freeze it; the window may sit behind others but must not be minimized.
@@ -200,6 +205,8 @@ Reader mechanics (hard-won):
        at device pixel ratio 2 is ideal.
 
   `set index` and `activate` alone do nothing.
+  On the sixth run `set bounds` would not move a new window onto the laptop panel, and the run went ahead at
+  ratio 1 (see "Two columns, not one" below).
 - **Use [scripts/reader_capture.js](scripts/reader_capture.js)** for the in-page side: install
   it once per page load (`__kh`), then `__kh.applySettings(4, 2)` (it reloads, so re-install after),
   `__kh.jump(<startPos>)`, `__kh.sweep(from, n, prefix)` and `__kh.restoreSettings()`. Its
@@ -251,12 +258,14 @@ Reader mechanics (hard-won):
   characters, and Vision drops the LAST character of every full-width line (a padded canvas
   does not help). Two columns (`maxNumberColumns: 2`) give ~115-character lines and clean
   reads. The cutter orders words by column first, so columns cost nothing downstream.
-  The column setting is a maximum, and the window's width decides what renders. On the sixth run a window
-  1344 CSS pixels wide at device pixel ratio 1 rendered one column under `maxNumberColumns: 2`, in a page image
-  1076 pixels wide. Its lines ran to about 120 characters, and Vision read them cleanly. So check line length
-  rather than the column count. When no OCR line starts past the page middle, the render has one column. That
-  run stayed at ratio 1 because `set bounds` would not move a new window onto the laptop panel. `cutter.py`
-  still splits columns by each line's centre, which can misorder a one-column page
+  The column setting is only a maximum. On the sixth run a viewport 1344 CSS pixels wide, at font size index 4
+  and device pixel ratio 1, rendered one column under `maxNumberColumns: 2`, in a page image 1076 pixels wide.
+  That run tried one width at one font size, so whether width alone decides the column count is untested. Its
+  lines ran to about 120 characters. Read back in one column, 347 of the notebook's 358 fully exported
+  highlights matched on letters and digits, and most of the 11 misses had figure or footer text inside the span.
+  So check what rendered rather than trusting the setting. A two-column page has many long lines starting past
+  the middle. A one-column page can still have short lines there, such as figure labels and right-aligned
+  epigraphs. `cutter.py` still splits columns by each line's centre, which can misorder a one-column page
   ([#43](https://github.com/l3a0/claude-plugins/issues/43)), so the word-rect path below still needs two columns.
 - **Set the display settings through localStorage, then reload.** On one run the Aa-panel
   slider path reported the new index and then reverted when the panel closed. Writing
@@ -388,6 +397,8 @@ Screenshot-per-highlight does not scale; do a **sweep + OCR + position-math** pi
    on these clean renders and costs zero tokens. Keep `usesLanguageCorrection = false` for fidelity.
 3. **Stitch** screens into one text stream (dedupe identical screens by md5 — missed flips
    produce duplicates; label jumps ≥4 pages signal a missed capture).
+   `scripts/stitch.py` from the full-book path below does the column order and the md5 dedupe, on
+   `ocr_words.swift` output rather than `ocr.swift`'s.
 4. **Cut by position math** from the Step-4 table: truncated highlights by fuzzy prefix-match +
    known length; hidden highlights by aligning **sentence boundaries** to the exact
    lengths/gaps (97% of highlights start at a capital letter, 99% end at sentence punctuation —
@@ -426,31 +437,43 @@ Scalability* this way.
    display settings as above.
 2. **Jump to the first page of the body through the table of contents** (the gotcha above). The sixth run
    jumped to the Foreword.
-3. **Sweep in one call.** `__kh.sweep(from, n, 'b')` names its captures from `b<from>` on, so pick `from` to
-   continue the series and set `n` above the book's screen count. The sixth run captured its first three
-   screens, then ran `__kh.sweep(3, 700, 'b')`. It took about 15 minutes for 493 captures, from location 487
-   to 13,121 of 13,134.
-4. **Stop it at the end, then check for gaps.** The loop does not notice the end of the book. Past the last
-   screen each flip leaves the image unchanged, and reloading the tab stops the loop, since it lives in the
-   page. Then read each capture's footer label in `pages/<name>.json` and check the steps between them. On the
-   sixth run the median step was 31 locations and the largest 36, with none backwards. That run counted a
-   step over 60, about twice the median, as a skipped screen, and found none. Recapture any it finds.
-5. **Stitch.** From the run directory:
+3. **Sweep in one call.** `__kh.sweep(from, n, 'b')` names its captures `b<from>` on, with the number padded
+   to three digits (`b003`). Never reuse a name. The receiver replaces an existing file without a word
+   ([#45](https://github.com/l3a0/claude-plugins/issues/45)), so set `from` to one more than the highest
+   number already in `pages/`, and capture any screen by hand under the same `b000` form. Set `n` above the
+   book's screen count. The sixth run captured its first three screens, then ran `__kh.sweep(3, 700, 'b')`.
+   The 493 captures, from location 487 to 13,121 of 13,134, took about 16 minutes, 12 of them on the book's
+   own screens and the rest flipping past its end.
+4. **Save the log, then stop the sweep.** The loop does not notice the end of the book. Past the last screen
+   each flip leaves the image unchanged, and only a reload stops the loop, since it lives in the page. The
+   reload also wipes `__kh.sweepLog`, the only record of each capture's `err` and `changed` fields, so save it
+   first: `fetch(__kh.RX + '/json?name=sweeplog.json', {method: 'POST', body: JSON.stringify(__kh.sweepLog)})`.
+   A log entry with an `err`, or with `changed: false` before the end, marks a capture to check.
+5. **Stitch.** From the run directory, with `swiftc` installed as for Step 5's other paths:
 
    ```
    python3 "$SKILL/scripts/stitch.py"
    ```
 
-   It OCRs each capture once, orders each screen's lines left column first, joins a line-end hyphen to a
-   lowercase next line, and drops any screen whose PNG repeats an earlier one by md5. It writes one
-   `text/<name>.txt` per screen and `book.txt`, the distinct screens in order, each headed by its footer label.
-   The sixth run's 493 captures gave 464 distinct screens. All 29 repeats were flips past the end.
-   A line counts as right column only when it starts past the page middle (`x0 ≥ 0.48`). Splitting by line
-   centre instead changed the text of 394 of those 493 screens, because that run rendered one column. The
-   joined hyphen has a price: a real compound hyphen that falls at a line end is lost.
-6. **Keep the text private.** `book.txt` is the whole book's copyrighted text, so it stays in the run
-   directory with the captures, like extracted highlights. Step 6's cleanup applies: restore the display
-   settings, stop the receiver and close the tabs.
+   It OCRs each capture once and writes one `text/<name>.txt` per screen and `book.txt`, the distinct screens
+   in capture order, each headed by its footer label. It reads a screen top to bottom, and left column first
+   only when at least three long lines start past the middle and make up a quarter of its long lines. On the
+   sixth run's one-column render, splitting every screen at the middle instead moved short figure labels and
+   epigraph lines below the body on 102 of 464 screens, and 21 fewer fully exported highlights matched. A
+   line-end hyphen joins a lowercase next line. The price is that a real compound hyphen at a line end is lost.
+6. **Read the stitch report for gaps.** `stitch.py` names every PNG it skipped, every missing capture number,
+   and every repeated screen. It drops repeats by md5 and counts the final unbroken run of them as the flips
+   past the end. The sixth run's 493 captures gave 464 distinct screens, and all 29 repeats were those flips.
+   A repeat in mid-book is flagged, because a flip that landed late repeats a screen and the next flip then
+   skips one. The location steps are a weaker check. On the sixth run the median step was 31 locations and the
+   largest 36, but 80 steps were under 20, so one skipped screen between two short ones would still sum to a
+   normal step. Capture a skipped screen under a new series letter (`c000`) rather than over an old name,
+   since `cutter.py` reuses the cached OCR of a name it has already read. `stitch.py` places the new series
+   after the first, so move its text into place by its footer label.
+7. **Keep the text private.** `book.txt` is the whole book's copyrighted text, so it stays in the run
+   directory with the captures, like extracted highlights. Keep the run directory outside any git repository,
+   where one `git add -A` would stage it. Step 6's cleanup applies: restore the display settings, stop the
+   receiver and close the tabs.
 
 ## Step 6 — QA before declaring done
 
@@ -465,6 +488,9 @@ Scalability* this way.
   words (inflections accepted, tickers skipped), joined words, first-letter loss, hidden
   highlights that start lowercase. The book's own typos stay. "untill", "Annoucement" and
   "p.m.. ET" were all in the printed page, so a repeated non-word is not proof of an OCR slip.
+- If the run used the `osascript` fallback, turn off Chrome's View → Developer → Allow JavaScript from Apple
+  Events, and remove the terminal's Chrome entry under System Settings → Privacy & Security → Automation if it
+  was granted for this run.
 - Delete the run directory's `db/` copy. It holds every book's highlights for the account, not just
   this one.
 - Display settings restored from the snapshot; localhost receiver stopped; your reader and
