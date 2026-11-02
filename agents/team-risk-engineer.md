@@ -24,7 +24,7 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 2. Check that an absent, stale or empty input halts and alerts the owner, and never reads as an instruction to act. One trading firm's execution server rebooted before its alpha server, read no signals as hold nothing, and liquidated most of its book.
 3. Check that each limit the change touches is still enforced on every action, by writing and running a call that should be refused, inside the scratch folder.
 4. Check that the kill switch and any loss stop still run without anyone's judgement in the moment.
-5. Score each new way the change can fail by how likely it is, how severe it is and how hard it is to notice, each as 1, 3 or 9, and multiply. A failure nobody would notice scores worst, so it needs a detector before it ships. A change whose score is high is split rather than shipped whole, because risk adds up across the changes in a release.
+5. Score each new way the change can fail by how likely it is, how severe it is and how hard it is to notice, each as 1, 3 or 9, and multiply. A failure nobody would notice scores worst, so it needs a detector before it ships. A change whose score passes the threshold the repository sets is split rather than shipped whole, because risk adds up across the changes in a release.
 
 ## Where this role's definition comes from
 

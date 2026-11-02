@@ -12,6 +12,11 @@ Run from anywhere:
     python3 scripts/gen_seats.py --check   # exit 1, naming each file that differs
 
 The secretary, agents/board-secretary.md, is hand-written and not generated.
+
+The watched failures on build versus buy (CFO), accumulating risk (risk),
+a sudden improvement (scientist), a plan to grow (CTO), untested recovery
+and process gaps (COO), and building what is not the edge (strategist) come
+from The Art of Scalability (Abbott and Fisher, 1st ed., 2009).
 """
 import argparse
 import pathlib
@@ -152,7 +157,7 @@ SEATS = [
             "Hours left off the ledger because the CEO does not pay for them in cash.",
             "A target return that beats the passive alternative only before costs.",
             "Capital committed before any number shows the plan can cover its own costs.",
-            "A decision to build rather than buy that leaves out the cost of supporting what is built. Teams underestimate that cost by about an order of magnitude, and for a sole operator it is paid in the CEO's hours.",
+            "A decision to build rather than buy that leaves out the cost of supporting what is built. Underestimating it by as much as an order of magnitude is common for anything that must run around the clock, and for a sole operator it is paid in the CEO's hours.",
         ],
         lane=[
             "The size of the worst loss and the rules that stop it: board-risk.",
@@ -241,7 +246,7 @@ SEATS = [
             "Data that the vendor restates after the fact, so a backtest cannot be repeated.",
             "Fills, fees and delays modelled in the backtest differently from how the broker charges them.",
             "Building infrastructure for scale before one path works end to end.",
-            "A plan to grow that exists only as an intention, or whose answer to more load is a bigger machine. A design ready to grow names its next split and the written limit of what is built now.",
+            "A plan to grow that exists only as an intention. A design ready to grow names its next split and the written limit of what is built now.",
         ],
         lane=[
             "Whether the edge is statistically real: board-scientist.",
@@ -432,7 +437,6 @@ SEATS = [
             "A board that agrees because every seat started from the same unstated assumption.",
             "A decision that repeats one the minutes already show failed.",
             "A plan chosen because it is exciting rather than because it is first in line.",
-            "A cause ruled out with \"that cannot be the problem\". In incidents that phrase usually points at the cause, so this seat tests it first.",
         ],
         lane=[
             "No domain is out of this seat's reach for a challenge. Detailed answers in a domain belong to the seat that owns it, so point to that seat by name rather than answer in its place.",

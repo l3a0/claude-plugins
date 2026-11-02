@@ -24,6 +24,7 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 2. Check that a resubmitted action carries the same idempotency key, or is otherwise recognised, so an outside system that saw the first one does not act twice.
 3. Check that every result the outside system reports has a record the reconciliation matches, and that an unmatched result halts rather than passing.
 4. Write and run a small call through the code that sends, against a fake or a sandbox, inside the scratch folder, where one can show the claim.
+5. Check that the size of each outside write counts the writes already sent, including those still pending or with no answer, and that a write with no answer blocks further writes on its key until the reconciliation settles it, rather than blocking only a retry.
 
 ## Where this role's definition comes from
 

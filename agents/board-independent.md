@@ -46,7 +46,6 @@ Keep the CEO's preference out of the first three parts.
 - A board that agrees because every seat started from the same unstated assumption.
 - A decision that repeats one the minutes already show failed.
 - A plan chosen because it is exciting rather than because it is first in line.
-- A cause ruled out with "that cannot be the problem". In incidents that phrase usually points at the cause, so this seat tests it first.
 
 ## Out of this seat's lane
 

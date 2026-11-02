@@ -24,7 +24,7 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 2. Search for a place that turns a missing value into zero, or a zero into a missing value, such as `fillna(0)` or a truthiness test on a number.
 3. Check that each stored value carries both the time it arrived and the time it became knowable, where the data has both.
 4. Check that a filter flags what it rejects rather than dropping it, and that an exception path cannot discard a batch it has already read.
-5. Check that a change to a stored format only adds, and ships the code before the data, so a rollback still finds the fields it reads. Check too that no retention, cleanup or lifecycle rule the change adds can match a path that holds data which cannot be recaptured.
+5. Where the change alters the format of stored data that cannot be regenerated, check that it only adds, and ships the code before the data, so a rollback still finds the fields it reads. Check too that no retention, cleanup or lifecycle rule, new or existing, can match a path the change reads or writes that holds data which cannot be recaptured.
 
 ## Where this role's definition comes from
 
