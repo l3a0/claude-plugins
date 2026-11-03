@@ -1,6 +1,8 @@
 /* Kindle notebook scraper — run via Control_Chrome.execute_javascript on the
  * read.amazon.com/notebook tab (with the target book loaded).
  *
+ * Or run it through scripts/cjs.sh (SKILL.md, The one prerequisite).
+ *
  * Scrapes every highlight + book metadata and triggers a Blob download of
  * <asin>_highlights.json to ~/Downloads. Returns a small summary object.
  *
@@ -37,10 +39,16 @@
   // Best-effort book metadata (fill edition/publisher/year by hand in the build step).
   const titleEl = document.querySelector('h3.kp-notebook-metadata, #kp-notebook-annotations h3, h3.a-spacing-top-small');
   const authorEl = document.querySelector('#kp-notebook-annotations p.a-color-secondary, p.kp-notebook-metadata.a-color-secondary');
-  const asin = window.__khAsin  // set by hand when the page shows no /dp/ link, as notebook_pages.js asks
-    || new URLSearchParams(location.search).get('asin')
-    || (document.querySelector('a[href*="/dp/"]')?.href.match(/\/dp\/([A-Z0-9]{10})/) || [])[1]
-    || null;
+  // The book's /dp/ link names the book on screen. The notebook ignores ?asin= in its own URL, so the URL is
+  // not used. window.__khAsin, set by hand, fills in only when the page has no /dp/ link.
+  const link = document.querySelector('#kp-notebook-annotations-pane a[href*="/dp/"]')
+    || document.querySelector('a[href*="/dp/"]');
+  const pageAsin = (link?.href.match(/\/dp\/([A-Z0-9]{10})/) || [])[1] || null;
+  const handAsin = window.__khAsin;
+  if (handAsin && !/^[A-Z0-9]{10}$/.test(handAsin)) throw new Error('window.__khAsin is not an ASIN: ' + handAsin);
+  if (handAsin && pageAsin && handAsin !== pageAsin)
+    throw new Error(`window.__khAsin ${handAsin} disagrees with the page's ${pageAsin}: clear it or select that book`);
+  const asin = pageAsin || handAsin || null;
 
   const payload = {
     book: { title: norm(titleEl?.textContent) || document.title, author: norm(authorEl?.textContent) || null, asin },
