@@ -144,7 +144,7 @@ Post one comment on the pull request or issue whose first line is the review hea
 3. What was refuted or left alone, with the reason.
 4. `### For the owner`, listing any question that goes to the board, or saying there is none.
 
-Price the review with the owner's `loop-cost` skill where it is installed, counting every role, lens and verifier transcript. Put the figure at the end of the comment, and post it as a separate comment starting with the line `## Cost` on the issue the subject tracks, in the form the `loop-cost` skill shows, because the status round's cost-total sweep reads only `## Cost` comments on issues.
+Price the review with the plugin's `l3a0:loop-cost` skill, counting every role, lens and verifier transcript. Put the figure at the end of the comment, and post it as a separate comment starting with the line `## Cost` on the issue the subject tracks, in the form the `l3a0:loop-cost` skill shows, because the status round's cost-total sweep reads only `## Cost` comments on issues.
 
 ## Lens mode, inside another review
 
@@ -155,7 +155,7 @@ Another review can call this skill for the team's lenses beside its own, on the 
 3. **The skill verifies by executing**, as step 4 says, and drops what is refuted.
 4. **It returns the surviving findings to the caller**, in the finding format of step 3, followed by one line per refuted finding with the reason, and any question for the owner under `### For the owner`.
 5. **It posts no comment and applies no fix.** The caller applies what it accepts on its own branch and folds the findings into its own review comment, under its own heading, so a board reads one review per round.
-6. **Its runs count toward the caller's cost.** The return lists each role and verifier run's `output_file` path or spawn description, so the caller's `loop-cost` run finds their transcripts and its `## Cost` figure covers them. The ten-run bound of step 4 applies to the team's runs alone.
+6. **Its runs count toward the caller's cost.** The return lists each role and verifier run's `output_file` path or spawn description, so the caller's `l3a0:loop-cost` run finds their transcripts and its `## Cost` figure covers them. The ten-run bound of step 4 applies to the team's runs alone.
 
 Two callers are meant to use this mode.
 
