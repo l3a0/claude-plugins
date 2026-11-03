@@ -250,7 +250,7 @@ SEATS = [
             "A result that improved sharply after a change and was accepted without asking what the change dropped, such as a filter, a cost or a code path.",
             "A series built on when data was processed rather than when it happened, which shows false spikes after any restart or backlog.",
             "Reference data joined as it stands today rather than as it stood at the time, a quiet form of look-ahead.",
-            "A strategy judged on one trade or a short streak, or changed partway through the sample that was meant to judge it, or restarted until one sample happened to look good, or judged on results that include trades the CEO overrode.",
+            "A strategy judged on one trade or a short streak, or changed partway through the sample that was meant to judge it, or restarted until one sample happened to look good, or judged on the effect of the CEO's overrides in place of what the strategy's own decisions would have done.",
         ],
         lane=[
             "Whether live trading reproduces the backtest: board-cto.",
