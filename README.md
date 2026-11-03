@@ -43,6 +43,9 @@ gotcha in the skill was earned by real debugging across those runs. The fifth ru
 into scripts. They read each highlight's known character length from the Kindle app, sweep the reader,
 match recognized words to the reader's own highlight overlays, and check every recovered span against
 that length.
+*Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*, 880 highlights in all,
+exported in full with nothing blocked. For the last two the skill also gave each highlight its printed page,
+from the owner's own copy of the book.
 The build story — why the export limit exists, the three unlocks that beat it, and what a
 library of exports becomes — is written up in
 [How to Take Back Your Kindle Highlights](blog/how-to-take-back-your-kindle-highlights.md),
@@ -169,6 +172,10 @@ A build board is a GitHub Pages page that answers what is in flight and what to 
 A status round for a repository where many sessions work at once. It fetches, removes only the worktrees and branches whose work GitHub provably holds, checks the build board, recommends what to take next, and posts the cost totals a merge left owed. Most of it is about telling finished work from unpushed work by evidence, since removing the wrong worktree loses work nobody can recover.
 
 Both board skills began as copies in four repositories that drifted apart. [Issue 28](https://github.com/l3a0/claude-plugins/issues/28) maps every capability of each copy to the section of the merged skill that holds it.
+
+### book-text
+
+Some books will not open in the Kindle Cloud Reader, so `kindle-highlights` cannot read their text. This skill reads a PDF of the book instead and writes its text one block per page, each headed with the PDF page and the printed page number, so a quote can be checked against the page it cites. A PDF with a text layer goes through `pdftotext`. A scanned PDF of page images goes through Apple Vision OCR twice, the second time on page images with their gray shading whitened and their margin column cut away from the body, which recovers words a single whole-page pass drops. `ctx.py` then checks each citation and says whether its quote is on the cited page, one page off, or missing. Both routes were run on real books: *Code Complete* by its text layer, and *Rapid Development* from 672 scanned pages. The scripts refuse to write inside a git repository, because the text is a copyrighted book's full text. `tests/test_book_text.py` checks the scripts on a PDF and page images it makes itself, and CI runs it.
 
 ### loop-cost
 

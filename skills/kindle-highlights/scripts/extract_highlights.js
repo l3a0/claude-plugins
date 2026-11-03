@@ -1,6 +1,8 @@
 /* Kindle notebook scraper — run via Control_Chrome.execute_javascript on the
  * read.amazon.com/notebook tab (with the target book loaded).
  *
+ * Or run it through scripts/cjs.sh (SKILL.md, The one prerequisite).
+ *
  * Scrapes every highlight + book metadata and triggers a Blob download of
  * <asin>_highlights.json to ~/Downloads. Returns a small summary object.
  *
@@ -13,6 +15,10 @@
  * the SECOND automatic download from an origin: fallback is to stash the payload on
  * window.__khl (this script does) and POST it to scripts/receiver.py:
  *   fetch('http://127.0.0.1:8931/json?name=<asin>_highlights', {method:'POST', body: window.__khl})
+ *
+ * Set window.__khNoDownload = true first to skip the download and only stash the payload. Do that when the
+ * download is sure to fail, such as from the cjs.sh runner or with Chrome's "ask where to save each file" on,
+ * where it would raise a native Save dialog that page JavaScript cannot dismiss.
  */
 (() => {
   const norm = s => s ? s.replace(/ /g, ' ').replace(/\s+/g, ' ').trim() : s;
@@ -33,9 +39,16 @@
   // Best-effort book metadata (fill edition/publisher/year by hand in the build step).
   const titleEl = document.querySelector('h3.kp-notebook-metadata, #kp-notebook-annotations h3, h3.a-spacing-top-small');
   const authorEl = document.querySelector('#kp-notebook-annotations p.a-color-secondary, p.kp-notebook-metadata.a-color-secondary');
-  const asin = new URLSearchParams(location.search).get('asin')
-    || (document.querySelector('a[href*="/dp/"]')?.href.match(/\/dp\/([A-Z0-9]{10})/) || [])[1]
-    || null;
+  // The book's /dp/ link names the book on screen. The notebook ignores ?asin= in its own URL, so the URL is
+  // not used. window.__khAsin, set by hand, fills in only when the page has no /dp/ link.
+  const link = document.querySelector('#kp-notebook-annotations-pane a[href*="/dp/"]')
+    || document.querySelector('a[href*="/dp/"]');
+  const pageAsin = (link?.href.match(/\/dp\/([A-Z0-9]{10})/) || [])[1] || null;
+  const handAsin = window.__khAsin;
+  if (handAsin && !/^[A-Z0-9]{10}$/.test(handAsin)) throw new Error('window.__khAsin is not an ASIN: ' + handAsin);
+  if (handAsin && pageAsin && handAsin !== pageAsin)
+    throw new Error(`window.__khAsin ${handAsin} disagrees with the page's ${pageAsin}: clear it or select that book`);
+  const asin = pageAsin || handAsin || null;
 
   const payload = {
     book: { title: norm(titleEl?.textContent) || document.title, author: norm(authorEl?.textContent) || null, asin },
@@ -52,8 +65,8 @@
   a.href = URL.createObjectURL(blob);
   a.download = (asin || 'kindle') + '_highlights.json';
   document.body.appendChild(a);
-  a.click();
+  if (!window.__khNoDownload) a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
 
-  return JSON.stringify({ downloaded: a.download, count: payload.count, truncated: payload.truncated, book: payload.book });
+  return JSON.stringify({ downloaded: window.__khNoDownload ? null : a.download, count: payload.count, truncated: payload.truncated, book: payload.book });
 })()
