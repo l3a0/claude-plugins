@@ -177,6 +177,10 @@ Both board skills began as copies in four repositories that drifted apart. [Issu
 
 Some books will not open in the Kindle Cloud Reader, so `kindle-highlights` cannot read their text. This skill reads a PDF of the book instead and writes its text one block per page, each headed with the PDF page and the printed page number, so a quote can be checked against the page it cites. A PDF with a text layer goes through `pdftotext`. A scanned PDF of page images goes through Apple Vision OCR twice, the second time on page images with their gray shading whitened and their margin column cut away from the body, which recovers words a single whole-page pass drops. `ctx.py` then checks each citation and says whether its quote is on the cited page, one page off, or missing. Both routes were run on real books: *Code Complete* by its text layer, and *Rapid Development* from 672 scanned pages. The scripts refuse to write inside a git repository, because the text is a copyrighted book's full text. `tests/test_book_text.py` checks the scripts on a PDF and page images it makes itself, and CI runs it.
 
+### loop-cost
+
+Prices a finished plan, build or review loop in tokens and dollars, measured from the transcripts of every agent the loop ran. A figure read off an agent's completion notice is the size of its last context, not what it spent. One decompose loop reported that way as about 242k tokens had processed 18.3M tokens, for at least 5.29 US dollars. The script `skills/loop-cost/scripts/agent-cost.py` takes agent ids, a file of ids, or a pattern matched against each agent's spawn description, and prices groups such as a review's lenses and its verifiers apart and together. Output tokens are a lower bound, and the dollars are list prices.
+
 ## License
 
 [MIT](LICENSE)
