@@ -17,6 +17,14 @@ The watched failures on build versus buy (CFO), accumulating risk (risk),
 a sudden improvement (scientist), a plan to grow (CTO), untested recovery
 and process gaps (COO), and building what is not the edge (strategist) come
 from The Art of Scalability (Abbott and Fisher, 1st ed., 2009).
+
+The watched failures on coordination paid for everywhere (CFO), integrity
+left to a later fix and safeguards that fail together (risk), processing time
+and today's reference data (scientist), runs that cannot be repeated and load
+that was never measured (CTO), backups taken during writes and software
+trusted over its operation (COO), and native serialization and personal data
+kept (CISO) come from Designing Data-Intensive Applications (Kleppmann, 1st
+ed., O'Reilly Media, 2017).
 """
 import argparse
 import pathlib
@@ -158,6 +166,7 @@ SEATS = [
             "A target return that beats the passive alternative only before costs.",
             "Capital committed before any number shows the plan can cover its own costs.",
             "A decision to build rather than buy that leaves out the cost of supporting what is built. Underestimating it by as much as an order of magnitude is common for anything that must run around the clock, and for a sole operator it is paid in the CEO's hours.",
+            "Strict coordination paid for across the whole system when only a small part needs it. Elsewhere an occasional breach, fixed later and with an apology if it comes to that, costs less than slower and less available software.",
         ],
         lane=[
             "The size of the worst loss and the rules that stop it: board-risk.",
@@ -188,6 +197,8 @@ SEATS = [
             "Risk estimated from a backtest's history, which has never seen the next crisis.",
             "Positions that look independent and fall together in a sell-off.",
             "Risk judged one change at a time while it adds up across many, and a quiet stretch that raises everyone's tolerance for the next risky change.",
+            "A rule left to a later fix where the breach cannot be undone. Data that arrives late corrects itself, while data that is wrong stays wrong.",
+            "Safeguards that look independent but share one assumption or one piece of software, so one bug defeats them all at once. Faults that strike many parts together cause far more failures than faults that strike at random.",
         ],
         lane=[
             "Whether the strategy has an edge at all: board-scientist.",
@@ -218,6 +229,8 @@ SEATS = [
             "Survivorship, where the data holds only the stocks, funds or firms that lasted.",
             "A result that rests on one regime, one asset or a handful of trades.",
             "A result that improved sharply after a change and was accepted without asking what the change dropped, such as a filter, a cost or a code path.",
+            "A series built on when data was processed rather than when it happened, which shows false spikes after any restart or backlog.",
+            "Reference data joined as it stands today rather than as it stood at the time, a quiet form of look-ahead.",
         ],
         lane=[
             "Whether live trading reproduces the backtest: board-cto.",
@@ -247,6 +260,8 @@ SEATS = [
             "Fills, fees and delays modelled in the backtest differently from how the broker charges them.",
             "Building infrastructure for scale before one path works end to end.",
             "A plan to grow that exists only as an intention. A design ready to grow names its next split and the written limit of what is built now.",
+            "A past run that cannot be repeated because the code reads the clock or a random source directly rather than a recorded value.",
+            "A plan to scale built on a guess about which operations will be common rather than on measured load, so the effort goes to a part that never carried the load.",
         ],
         lane=[
             "Whether the edge is statistically real: board-scientist.",
@@ -277,6 +292,8 @@ SEATS = [
             "A venture that only its founder could shut down safely.",
             "A recovery or failover path that has never run, so nobody knows whether it works until the day it is needed.",
             "An incident fixed at the broken part while the gap in the process that let it happen stays open.",
+            "A backup copied while the system kept writing. The copy is inconsistent, and restoring it makes the damage permanent.",
+            "Effort spent on the software while the routine that runs it stays unwritten. Good operations can work around weak software, and good software cannot make up for poor operations.",
         ],
         lane=[
             "What the loss limits are: board-risk. This seat checks that they run unattended.",
@@ -309,6 +326,8 @@ SEATS = [
             "API keys with withdrawal rights that the strategy never needs.",
             "Account recovery through SMS, which a SIM swap defeats.",
             "Third-party tools granted broad access to the brokerage account.",
+            "Loading a file in a language's native object format, such as Python's pickle, from anywhere but the venture's own code, since loading it can run any code an attacker wrote.",
+            "Personal data collected or kept beyond what the venture uses. Data held attracts breaches, and demands from others to hand it over.",
         ],
         lane=[
             "How much can be lost through trading itself: board-risk.",

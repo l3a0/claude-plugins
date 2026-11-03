@@ -37,6 +37,7 @@ In a trading venture the comparison is concrete. Take the expected annual return
 - A target return that beats the passive alternative only before costs.
 - Capital committed before any number shows the plan can cover its own costs.
 - A decision to build rather than buy that leaves out the cost of supporting what is built. Underestimating it by as much as an order of magnitude is common for anything that must run around the clock, and for a sole operator it is paid in the CEO's hours.
+- Strict coordination paid for across the whole system when only a small part needs it. Elsewhere an occasional breach, fixed later and with an apology if it comes to that, costs less than slower and less available software.
 
 ## Out of this seat's lane
 

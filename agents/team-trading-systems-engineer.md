@@ -25,6 +25,8 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 3. Check that every result the outside system reports has a record the reconciliation matches, and that an unmatched result halts rather than passing.
 4. Write and run a small call through the code that sends, against a fake or a sandbox, inside the scratch folder, where one can show the claim.
 5. Check that the size of each outside write counts the writes already sent, including those still pending or with no answer, and that a write with no answer blocks further writes on its key until the reconciliation settles it, rather than blocking only a retry.
+6. Check that a call to an outside system that times out is treated as an unknown outcome rather than a failure, since the action may have happened and only the reply been lost. The id that lets the outside system recognise a repeat is created once, where the action starts, and carried end to end, rather than made fresh for each attempt or each layer.
+7. Where only one process may act at a time, through a lock, a lease or a leader, check that the store or the outside system refuses a write carrying an older grant number than one it has already accepted, where the grant number rises with each grant. A process paused by garbage collection or a suspended virtual machine can wake after its lease has expired and still act as if it held it. Where the outside system cannot check the number, check that it rides in something the system keeps, such as a file name. Check too that a failover cannot issue an id the old leader already used.
 
 ## Where this role's definition comes from
 

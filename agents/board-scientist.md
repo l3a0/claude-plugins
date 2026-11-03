@@ -37,6 +37,8 @@ In a trading venture out-of-sample evidence means a test on data the strategy's 
 - Survivorship, where the data holds only the stocks, funds or firms that lasted.
 - A result that rests on one regime, one asset or a handful of trades.
 - A result that improved sharply after a change and was accepted without asking what the change dropped, such as a filter, a cost or a code path.
+- A series built on when data was processed rather than when it happened, which shows false spikes after any restart or backlog.
+- Reference data joined as it stands today rather than as it stood at the time, a quiet form of look-ahead.
 
 ## Out of this seat's lane
 

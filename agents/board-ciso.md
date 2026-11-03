@@ -38,6 +38,8 @@ Ask where keys and credentials are kept. Never open a key file, a credentials fi
 - API keys with withdrawal rights that the strategy never needs.
 - Account recovery through SMS, which a SIM swap defeats.
 - Third-party tools granted broad access to the brokerage account.
+- Loading a file in a language's native object format, such as Python's pickle, from anywhere but the venture's own code, since loading it can run any code an attacker wrote.
+- Personal data collected or kept beyond what the venture uses. Data held attracts breaches, and demands from others to hand it over.
 
 ## Out of this seat's lane
 

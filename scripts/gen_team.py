@@ -20,6 +20,14 @@ release comparison, off switches, headroom and monitoring come from The Art
 of Scalability (Abbott and Fisher, 1st ed., 2009), as ithildin-runtime's
 docs/design.md ## Design principles adopts it with Kindle locations.
 
+The checks on clocks and randomness, coordination, partitioning, latency
+percentiles, checksums, records and derived data, raw capture, backups,
+timeouts, leases, limits checked in one serial step, impossible states,
+injected faults, running invariants, consumer lag, clock offset, atomic output
+switches and native serialization come from Designing Data-Intensive
+Applications (Kleppmann, 1st ed., O'Reilly Media, 2017), as the same section
+of ithildin-runtime's docs/design.md adopts it with Kindle locations.
+
 Run from anywhere:
 
     python3 scripts/gen_team.py           # write the eight files
@@ -88,6 +96,9 @@ ROLES = [
             "Read the design doc's considered-and-rejected register, where the repository has one, and flag any change that brings back something it cut.",
             "List every synchronous call the change adds on the path that must not fail, such as the one that earns money or records what cannot be recaptured. A call whose result that path does not need, such as a metric, a log line or a report, must be asynchronous and allowed to fail. Availability multiplies along a chain of synchronous calls, so a hundred parts at 99.999% each give about 99.9% together.",
             "Where a design claims room to grow, check that the next step exists as a written design, that the only code built ahead of need is a configuration value whose other settings a test runs, and that the implementation's own limit is written beside the code that enforces it with a test or an alarm that trips before load reaches it.",
+            "Search the change for a direct read of the time of day or of a random source, such as `datetime.now()`, `time.time()` or an unseeded `random`, inside code whose result must be repeatable. Each one gives a different answer on a rerun, so it goes through a clock or a seeded generator passed in at the edge. Check too that elapsed time comes from a monotonic clock, and that the order of events comes from a sequence number rather than the time of day, which jumps backwards when it is corrected.",
+            "Where the change needs one process to act at a time, or several stores to agree, check that it uses an existing coordination service or one store's own transaction rather than a leader election, a lock protocol or a distributed commit written in house. Check too that it coordinates only the part whose rule needs it. A commit that spans several systems fails whenever any one of them fails, can hold its locks until someone steps in, and makes its coordinator one more database to run.",
+            "Where the change splits data or work by key, check that the hash is stable across processes and runs, since a language's built-in hash can differ from one process to the next. Check too that keys map to a fixed number of partitions, many more than the machines, rather than to the hash modulo the machine count, which moves most keys when one machine is added.",
         ],
     },
     {
@@ -106,6 +117,7 @@ ROLES = [
             "Where the repository keeps a holdout, check that no code path in the change can load it, by searching for where its dates or file are read.",
             "Check that a chosen parameter sits on a plateau, by reading or running the neighbouring values, rather than on a lone peak.",
             "Check that every pinned number names its data vintage and its specification, and that a null result has its code, its pinned test and its log entry.",
+            "Where a claim quotes latency or response time, check that it gives percentiles, such as the median and the 99th, rather than a mean, and that percentiles from several machines or time windows were combined by merging the underlying samples or histograms, never by averaging the percentiles. A request that waits on several calls is as slow as the slowest of them, so a small share of slow calls reaches a large share of requests.",
         ],
     },
     {
@@ -123,6 +135,10 @@ ROLES = [
             "Check that each stored value carries both the time it arrived and the time it became knowable, where the data has both.",
             "Check that a filter flags what it rejects rather than dropping it, and that an exception path cannot discard a batch it has already read.",
             "Where the change alters the format of stored data that cannot be regenerated, check that it only adds, and ships the code before the data, so a rollback still finds the fields it reads. Check too that no retention, cleanup or lifecycle rule, new or existing, can match a path the change reads or writes that holds data which cannot be recaptured.",
+            "Check that each record of data that cannot be recaptured carries a checksum computed where the record is written and verified where it is read. The network's own checksums miss corruption from a software bug or a failing disk. Check too that a reader meeting a final record cut short by a crash detects it and sets it aside, rather than reading it as data.",
+            "Name each store the change touches as either the system of record, which holds the authoritative copy, or data derived from one. A correction to the record is a new record that supersedes the old one, never an edit in place, and a record states what happened rather than only its effects. A derived store is rebuilt from the record by a command that exists and has run, and a new way to read the data is built beside the old one rather than by migrating the old one in place.",
+            "Check that data from outside is stored as it arrived, before any parsing or cleaning, so a bug in the parser is fixed by reading the data again. Check too that a record keeps the sender's timestamp beside the receiver's, because the sender's clock can be wrong, and that a rate or a window is computed on the time an event happened rather than the time it was processed, which spikes after any restart or backlog.",
+            "Where the change backs up a store, check that the copy comes from a consistent snapshot or from closed files that no longer change, rather than from a copy taken while writes continue. Restoring such a copy makes its inconsistency permanent.",
         ],
     },
     {
@@ -140,6 +156,8 @@ ROLES = [
             "Check that every result the outside system reports has a record the reconciliation matches, and that an unmatched result halts rather than passing.",
             "Write and run a small call through the code that sends, against a fake or a sandbox, inside the scratch folder, where one can show the claim.",
             "Check that the size of each outside write counts the writes already sent, including those still pending or with no answer, and that a write with no answer blocks further writes on its key until the reconciliation settles it, rather than blocking only a retry.",
+            "Check that a call to an outside system that times out is treated as an unknown outcome rather than a failure, since the action may have happened and only the reply been lost. The id that lets the outside system recognise a repeat is created once, where the action starts, and carried end to end, rather than made fresh for each attempt or each layer.",
+            "Where only one process may act at a time, through a lock, a lease or a leader, check that the store or the outside system refuses a write carrying an older grant number than one it has already accepted, where the grant number rises with each grant. A process paused by garbage collection or a suspended virtual machine can wake after its lease has expired and still act as if it held it. Where the outside system cannot check the number, check that it rides in something the system keeps, such as a file name. Check too that a failover cannot issue an id the old leader already used.",
         ],
     },
     {
@@ -157,6 +175,8 @@ ROLES = [
             "Check that each limit the change touches is still enforced on every action, by writing and running a call that should be refused, inside the scratch folder.",
             "Check that the kill switch and any loss stop still run without anyone's judgement in the moment.",
             "Score each new way the change can fail by how likely it is, how severe it is and how hard it is to notice, each as 1, 3 or 9, and multiply. A failure nobody would notice scores worst, so it needs a detector before it ships. A change whose score passes the threshold the repository sets is split rather than shipped whole, because risk adds up across the changes in a release.",
+            "Check that testing a limit and recording the action happen in one serial step. When the read, the check and the write are separate steps, two actions taken at once can each pass a limit that together they break. Route actions that share a limit through one queue processed in order, or through one transaction at serializable isolation, which the store runs as if no other ran beside it. Pay that price only for limits whose breach cannot be undone. A rule whose breach a later correction fixes cheaply may be checked after the fact.",
+            "Check that a state the code assumes cannot happen, such as a negative balance, a repeated id or a gap in a sequence, halts and alerts the owner rather than being ignored, clamped or only logged. What must never happen holds in every case, faults included. Only what must eventually happen, such as a reply, may wait for a fault to clear.",
         ],
     },
     {
@@ -174,6 +194,7 @@ ROLES = [
             "Check that a test asserts the behaviour rather than restating the implementation, and that a skipped or expected-failure test says why.",
             "Check that each number a test pins names where it came from, so a re-pin can say what moved.",
             "Where the repository keeps a benchmark or a replay, compare the change's counters and timings with the base's. Counters on a deterministic run must match. A timing that moves past the tolerance the repository records, or past the spread of repeated runs at the base where it records none, is a finding in either direction, because a sudden improvement can mean a code path or a filter was dropped.",
+            "For each fault the change claims to handle, such as a crash halfway through a write, a timeout, a lost reply or a slow dependency, name the test that injects that fault and check that the handling runs. Error handling that never runs is where serious bugs hide.",
         ],
     },
     {
@@ -193,6 +214,10 @@ ROLES = [
             "Check that a new job or feature that acts unattended on an outside system, or on data that cannot be recaptured, can be switched off without a deploy, that switching it off leaves the rest running, and that the switch has been flipped in a drill.",
             "Where the change adds or grows a store, a queue or a call with a rate limit, check that its headroom is planned for that component and alarmed before it fills, above all where filling loses data that cannot be recaptured.",
             "Check that monitoring the change adds first answers whether there is a problem the owner or a user would see, before it answers where the problem is. A log line alone does not answer it.",
+            "For each guarantee the change relies on, such as every message received being processed once, check that the running system counts both sides and alerts on a mismatch, rather than trusting the guarantee.",
+            "Where the change adds a consumer of a log or a queue, check that how far it lags behind the newest entry is measured and alarmed. A bounded buffer that drops its oldest entries when full needs that alarm before a slow consumer loses entries, and so does a background job, such as compaction, that can fall behind what it processes.",
+            "Where correctness depends on clocks agreeing across machines, check that each machine's offset is monitored and that a machine past the bound is taken out of service. A machine cut off from its time servers drifts with no error to show it.",
+            "Check that a job which rebuilds a derived output writes the new output whole beside the old one and switches over in one step, keeping the old one to switch back to, and that the job never changes its own input.",
         ],
     },
     {
@@ -209,6 +234,7 @@ ROLES = [
             "Read every GitHub workflow the change adds or touches. Check its `permissions`, whether a `pull_request_target` job checks out the pull request's code, whether `persist-credentials` is off, and whether each action is pinned to a full commit SHA.",
             "For each new dependency, name who publishes it, how widely it is used, and whether its version is pinned.",
             "For each credential the change uses, name where it is read from and what it is allowed to do. A credential that can withdraw, transfer, publish or delete more than its use needs is a veto.",
+            "Search for decoding in a language's native object format, such as Python's `pickle`, Java serialization or `yaml.load` without a safe loader, on data that is stored or that comes from outside. Decoding it can run any code an attacker wrote, and these formats neglect versioning. Check too that input from outside is bounded before use, with each value checked against a sane range and each size capped.",
         ],
     },
 ]
