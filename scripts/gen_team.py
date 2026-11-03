@@ -44,6 +44,13 @@ above recoverable ones (risk engineer) come from
 Rapid Development (McConnell, Microsoft Press, 1996), as ithildin-runtime's
 docs/design.md ## How work is cut and ordered adopts it with printed pages.
 
+The checks on a release checked where it runs, restarts that are capped and
+never clear a halt, machines built from committed code, and logs gathered off
+the machine (operator), readiness waits and one suite before and after a
+switch (test engineer), and pull request runs that hold no deploy credential
+(security reviewer) come from The DevOps 2.0 Toolkit (Farcic, 2016), as
+ithildin-runtime's docs/design.md adopts it with printed pages.
+
 Run from anywhere:
 
     python3 scripts/gen_team.py           # write the eight files
@@ -227,6 +234,7 @@ ROLES = [
             "For a fix of a defect a test can reproduce, run its new test against a copy of the pull request's merge base, taken as the limits below say, and check that it fails there on an assertion about the defect, not at import or collection. For a fix no test can reproduce, such as a documentation or CI fix, check that the pull request says how it was checked. Check too that it names the cause and the similar code it searched. One study found more than half of first fixes were wrong.",
             "Where a pull request says it finishes work, check that it names the issue it closes and the checks on its head that ran the changed code. Where a handover or a report says work is done, check that it links the merged pull request, its review and the mutation result the role's second check produces. A check that never ran the changed code shows nothing, and a percentage complete, or done apart from a few loose ends, is not done.",
             "Collect the test ids at the merge base and at the head, for example with `pytest --collect-only -q`, and compare them. Each test removed, newly skipped or newly marked as an expected failure is a finding, unless the pull request names the behaviour it dropped and the issue that behaviour moved to.",
+            "Check that a test or release check that starts something waits on a readiness check with a timeout rather than a fixed sleep, and that the suite run against a deployed release after the switch is the same suite run before it, with only its target changed.",
         ],
     },
     {
@@ -250,6 +258,10 @@ ROLES = [
             "Where the change adds a consumer of a log or a queue, check that how far it lags behind the newest entry is measured and alarmed. A bounded buffer that drops its oldest entries when full needs that alarm before a slow consumer loses entries, and so does a background job, such as compaction, that can fall behind what it processes.",
             "Where correctness depends on clocks agreeing across machines, check that each machine's offset is monitored and that a machine past the bound is taken out of service. A machine cut off from its time servers drifts with no error to show it.",
             "Check that a job which rebuilds a derived output that a running system reads while the job runs writes the new output whole beside the old one and switches over in one step, keeping the old one to switch back to, and that the job never changes its own input.",
+            "Where the change adds or changes how a release reaches a running system, check that one read-only suite checks the new release where it runs before it takes work and again after, from one command whose only input is the target, and that no such check acts on a real irreversible target, such as a live account. A failure before the switch keeps the old release serving, and a failure after it switches back or halts and pages a person. Check too that a deployment tool that cannot read which release is live stops, rather than reading the silence as a first release and starting a second one beside the running one.",
+            "Where the change adds an automatic restart, reschedule or scaling step, check that it starts the artifact already deployed rather than building or choosing a newer one, that each component restarts at most a written number of times in a written window before a person is paged, and that each restart is recorded with the component, its exit and its count. Check that a component stopped or halted on purpose is never read as failed and restarted to clear that state, that a missing, null or stale metric leads to no step and an alert, and that an instance removed by scaling stops taking work and settles what it holds before it exits. Recovery that only restarts hides the cause.",
+            "Where the change adds or changes a machine, a queue, a bucket or a grant, check that it is declared in committed code, that a second run of that code against what it built reports no change, and that a change made by hand is logged and then committed or undone. Data that cannot be recaptured is restored from its copies and never rebuilt this way.",
+            "Where the change adds a component that writes logs, check that its logs leave the machine as structured lines into one place that can be searched, and that no record the project cannot recapture, such as an order journal, travels through the log pipeline or falls under its retention.",
         ],
     },
     {
@@ -268,6 +280,7 @@ ROLES = [
             "For each credential the change uses, name where it is read from and what it is allowed to do. A credential that can withdraw, transfer, publish or delete more than its use needs is a veto.",
             "Search for decoding in a language's native object format, such as Python's `pickle`, Java serialization or `yaml.load` without a safe loader, on data that is stored or that comes from outside. Decoding it can run any code an attacker wrote, and these formats neglect versioning. Check too that input from outside is bounded before use, with each value checked against a sane range and each size capped.",
             "Check that error messages, exceptions and logs from code that holds a credential carry no secret, token or account number. Show it in a scratch copy, against a stand-in or recorded responses with the network off, every credential variable set to a fake value or unset and any keychain lookup replaced, by causing a failure and searching what was printed and logged for the fake value. A finding quotes only the fake value.",
+            "Check that a workflow run started by a pull request holds no credential that can deploy or act on a production system, since such a run executes whatever the branch changed, and that every interface able to control a host or a container takes only authenticated calls from the deployer rather than requests from any address.",
         ],
     },
 ]

@@ -26,6 +26,7 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 4. For each credential the change uses, name where it is read from and what it is allowed to do. A credential that can withdraw, transfer, publish or delete more than its use needs is a veto.
 5. Search for decoding in a language's native object format, such as Python's `pickle`, Java serialization or `yaml.load` without a safe loader, on data that is stored or that comes from outside. Decoding it can run any code an attacker wrote, and these formats neglect versioning. Check too that input from outside is bounded before use, with each value checked against a sane range and each size capped.
 6. Check that error messages, exceptions and logs from code that holds a credential carry no secret, token or account number. Show it in a scratch copy, against a stand-in or recorded responses with the network off, every credential variable set to a fake value or unset and any keychain lookup replaced, by causing a failure and searching what was printed and logged for the fake value. A finding quotes only the fake value.
+7. Check that a workflow run started by a pull request holds no credential that can deploy or act on a production system, since such a run executes whatever the branch changed, and that every interface able to control a host or a container takes only authenticated calls from the deployer rather than requests from any address.
 
 ## Where this role's definition comes from
 
