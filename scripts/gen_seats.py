@@ -25,6 +25,12 @@ that was never measured and vendor words taken as guarantees (CTO), backups take
 trusted over its operation (COO), and native serialization and personal data
 kept (CISO) come from Designing Data-Intensive Applications (Kleppmann, 1st
 ed., O'Reilly Media, 2017).
+
+The watched failure on safety checks switched off in production (CTO) comes
+from Code Complete (McConnell, 2nd ed., Microsoft Press, 2004), whose default
+compiles assertions out of production builds while keeping checks for
+important errors. ithildin-runtime rejects that default because its tested
+system must be the one that runs.
 """
 import argparse
 import pathlib
@@ -263,6 +269,7 @@ SEATS = [
             "A past run that cannot be repeated because the code reads the clock or a random source directly rather than a recorded value.",
             "A plan to scale built on a guess about which operations will be common rather than on measured load, so the effort goes to a part that never carried the load.",
             "A broker, data vendor or store chosen on a word such as \"ACID\", \"real-time\" or \"exactly once\" rather than on a guarantee the venture has written down and tested. Those words mean different things to different vendors.",
+            "Safety checks that run in testing and are switched off, compiled out or skipped in production, such as Python's `assert` under `-O` or a debug flag, so the live system runs without the guards the tests exercised.",
         ],
         lane=[
             "Whether the edge is statistically real: board-scientist.",
