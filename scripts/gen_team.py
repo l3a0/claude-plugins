@@ -37,9 +37,10 @@ text come from Code Complete (McConnell, 2nd ed., Microsoft Press, 2004), as
 ithildin-runtime's docs/design.md and docs/team-charter.md adopt it with
 printed pages.
 
-The checks on spikes kept out of the product and shared code extracted at
-its second use (architect), done claimed only with a check behind it (test
-engineer), and unrecoverable losses ranked by size (risk engineer) come from
+The checks on spikes kept out of the product and reuse that waits for two
+real uses (architect), done claimed only with checks that ran the change and
+tests a slip did not drop (test engineer), and unrecoverable losses ranked
+above recoverable ones (risk engineer) come from
 Rapid Development (McConnell, Microsoft Press, 1996), as ithildin-runtime's
 docs/design.md ## How work is cut and ordered adopts it with printed pages.
 
