@@ -25,6 +25,8 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 3. Check that each limit the change touches is still enforced on every action, by writing and running a call that should be refused, inside the scratch folder.
 4. Check that the kill switch and any loss stop still run without anyone's judgement in the moment.
 5. Score each new way the change can fail by how likely it is, how severe it is and how hard it is to notice, each as 1, 3 or 9, and multiply. A failure nobody would notice scores worst, so it needs a detector before it ships. A change whose score passes the threshold the repository sets is split rather than shipped whole, because risk adds up across the changes in a release.
+6. Check that testing a limit and recording the action happen in one serial step. When the read, the check and the write are separate steps, two actions taken at once can each pass a limit that together they break. Route actions that share a limit through one queue processed in order, or through one transaction at serializable isolation, which the store runs as if no other ran beside it. Pay that price only for limits whose breach cannot be undone. A rule whose breach a later correction fixes cheaply may be checked after the fact.
+7. Check that a state the code assumes cannot happen, such as a negative balance, a repeated id or a gap in a sequence, halts and alerts the owner rather than being ignored, clamped or only logged. What must never happen holds in every case, faults included. Only what must eventually happen, such as a reply, may wait for a fault to clear.
 
 ## Where this role's definition comes from
 

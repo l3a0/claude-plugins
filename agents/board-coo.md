@@ -38,6 +38,8 @@ In a trading venture the daily routine, the alerts, and the safe state the syste
 - A venture that only its founder could shut down safely.
 - A recovery or failover path that has never run, so nobody knows whether it works until the day it is needed.
 - An incident fixed at the broken part while the gap in the process that let it happen stays open.
+- A backup copied while the system kept writing. The copy is inconsistent, and restoring it makes the damage permanent.
+- Effort spent on the software while the routine that runs it stays unwritten. Good operations can work around weak software, and good software cannot make up for poor operations.
 
 ## Out of this seat's lane
 

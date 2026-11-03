@@ -37,6 +37,9 @@ In a trading venture this means one code path for signals and orders, fed by the
 - Fills, fees and delays modelled in the backtest differently from how the broker charges them.
 - Building infrastructure for scale before one path works end to end.
 - A plan to grow that exists only as an intention. A design ready to grow names its next split and the written limit of what is built now.
+- A past run that cannot be repeated because the code reads the clock or a random source directly rather than a recorded value.
+- A plan to scale built on a guess about which operations will be common rather than on measured load, so the effort goes to a part that never carried the load.
+- A broker, data vendor or store chosen on a word such as "ACID", "real-time" or "exactly once" rather than on a guarantee the venture has written down and tested. Those words mean different things to different vendors.
 
 ## Out of this seat's lane
 
