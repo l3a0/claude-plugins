@@ -60,6 +60,11 @@ exact access). Reports of particular interest:
   deleting local worktrees and branches. In scope is any path where text in
   an issue, a comment or a page steers one of those actions, or where the
   pruning loop calls unpushed work safe.
+- `book-text` reads a book PDF the user supplies with poppler's command-line
+  tools and Apple Vision, and its scripts make no network call. Its output
+  is a copyrighted book's full text, and each script refuses an output
+  folder inside a git repository. In scope is any way its scripts send that
+  text off the machine, or write it outside the folders they are given.
 - `book-to-rules` reads a copyrighted book's full text, which is untrusted
   input, and opens pull requests and posts comments on public repositories
   as the user's `gh` login. The book's text, its OCR output and the reader

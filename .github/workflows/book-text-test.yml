@@ -1,0 +1,15 @@
+name: book-text checks
+on: [pull_request, push]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pdftotext and Pillow
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils python3-pil
+      - name: book-text script tests
+        run: /usr/bin/python3 tests/test_book_text.py

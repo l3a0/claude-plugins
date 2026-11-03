@@ -173,9 +173,13 @@ A status round for a repository where many sessions work at once. It fetches, re
 
 Both board skills began as copies in four repositories that drifted apart. [Issue 28](https://github.com/l3a0/claude-plugins/issues/28) maps every capability of each copy to the section of the merged skill that holds it.
 
+### book-text
+
+Some books will not open in the Kindle Cloud Reader, so `kindle-highlights` cannot read their text. This skill reads a PDF of the book instead and writes its text one block per page, each headed with the PDF page and the printed page number, so a quote can be checked against the page it cites. A PDF with a text layer goes through `pdftotext`. A scanned PDF of page images goes through Apple Vision OCR twice, the second time on page images with their gray shading whitened and their margin column cut away from the body, which recovers words a single whole-page pass drops. `ctx.py` then checks each citation and says whether its quote is on the cited page, one page off, or missing. Both routes were run on real books: *Code Complete* by its text layer, and *Rapid Development* from 672 scanned pages. The scripts refuse to write inside a git repository, because the text is a copyrighted book's full text. `tests/test_book_text.py` checks the scripts on a PDF and page images it makes itself, and CI runs it.
+
 ### book-to-rules
 
-Four books became rules for an engineering team in two days, and each run worked out the same pipeline again at about 16 to 32 US dollars a book. This skill holds that pipeline in seven steps.
+Four books became rules for an engineering team in two days, and each run worked out the same pipeline again at about 15 to 32 US dollars a book. This skill holds that pipeline in seven steps.
 
 1. Get the full text, through `kindle-highlights` for a Kindle book or `book-text` for a PDF.
 2. Split it into reading parts at chapter starts, and find the page of each of the owner's highlights.
