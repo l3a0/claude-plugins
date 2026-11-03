@@ -1,9 +1,12 @@
-## Review
+## Review complete
 
 <!-- Template from the l3a0 book-to-rules skill: the comment format for the project pull request, which carries
-     the full review and the cost. Each companion pull request gets the short form at the end. Leave out any
-     section with nothing in it, except Refuted, which says "Nothing" when nothing was refuted. Delete these
-     comments before posting. -->
+     the full review and the cost. Each companion pull request gets the short form at the end. Post it after the
+     last push. Its heading is the one the repository's build board reads, which the update-build-board skill
+     names, and "## Review complete" satisfies every board that skill knows. Leave out any section with nothing
+     in it, except Refuted, which says "Nothing" when nothing was refuted. The comment quotes no book text
+     beyond a short phrase, so never paste ctx.py output into it, and run overlap.py on it before posting.
+     Delete these comments before posting. -->
 
 Round {{ROUND}}, of `{{REVIEWED_SHA}}`. {{LENS_COUNT}} lenses ran blind to each other: completeness, over-reach, and through `/l3a0:ask-team` in lens mode the {{ROLES}}. {{VERIFIER_COUNT}} verifiers then tried to refute every veto and must-fix by executing, with scripts written outside the repository. `{{FIX_SHA}}` applies what survived.
 
@@ -21,7 +24,7 @@ Round {{ROUND}}, of `{{REVIEWED_SHA}}`. {{LENS_COUNT}} lenses ran blind to each 
 
 ### Citations corrected
 
-Every citation was rechecked with `pg.py` against the book's text. {{MISS_COUNT}} missed: list each old and new page, and each rule whose wording claimed more than its page and what it says now.
+Every citation was rechecked with `pg.py` against the book's text, and every draft with `overlap.py`. {{MISS_COUNT}} missed: list each old and new page, and each rule whose wording claimed more than its page and what it says now.
 
 ### Refuted
 
@@ -47,7 +50,7 @@ The figures cover all three companion pull requests, {{COMPANION_PRS}} included.
 
 <!-- Companion pull request, short form:
 
-## Review
+## Review complete
 
 Round {{ROUND}}, of `{{REVIEWED_SHA}}`, shared with {{PROJECT_REPO}}#{{PROJECT_PR}}, where the full review and its cost are posted.
 

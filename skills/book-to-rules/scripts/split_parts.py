@@ -12,7 +12,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from booktext import find, load  # noqa: E402
+from booktext import find, header, load  # noqa: E402
 
 
 def main(argv):
@@ -22,10 +22,10 @@ def main(argv):
     starts = []
     for spec in specs:
         name, sep, key = spec.rpartition('=')
-        i = find(blocks, key) if sep else None
-        if i is None:
+        span = find(blocks, key) if sep else None
+        if span is None:
             sys.exit(f'{spec}: no block for key {key!r}')
-        starts.append((i, name))
+        starts.append((span[0], name))
     if [i for i, _ in starts] != sorted(i for i, _ in starts) or len({i for i, _ in starts}) < len(starts):
         sys.exit('part starts must be in book order with no repeats')
     os.makedirs(out, exist_ok=True)
@@ -36,7 +36,7 @@ def main(argv):
         part = blocks[i:end]
         with open(os.path.join(out, f'{name}.txt'), 'w', encoding='utf-8') as f:
             for b in part:
-                f.write(f'===== {b.source} | {b.label} =====\n{b.text}')
+                f.write(header(b.source, b.label) + b.text)
         words = sum(len(b.text.split()) for b in part)
         print(f'{name}: {part[0].cite()} to {part[-1].cite()}, {len(part)} blocks, {words} words')
 

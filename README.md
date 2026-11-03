@@ -182,7 +182,7 @@ Four books became rules for an engineering team in two days, and each run worked
 6. Review all three pull requests in one round, with verifiers that refute by executing.
 7. Price the loop with `loop-cost`.
 
-Its `pg.py` says whether each cited phrase is on its page, names the right page when it is not, and exits non-zero, so a wrong page stops a run before a reviewer finds it. The skill also lists twenty checks that the four review rounds taught, such as a rule claiming more than its page supports, or a never-skip list that points to a group instead of naming each alarm and guard. The book's text, the OCR output and the reader notes stay in a run directory outside every repository, because the repositories are public and the book is copyrighted.
+Its `pg.py` says whether each cited phrase is on its page, names the right page when it is not, and exits non-zero, so a wrong page stops a run before a reviewer finds it. The readers run as the plugin's `book-reader` agent, which has no shell, because the book's text is untrusted input. The skill also lists twenty-five checks to run before the pull requests open, twenty-three of them findings the four review rounds made, such as a rule claiming more than its page supports, or a never-skip list that points to a group instead of naming each protection. The book's text, the OCR output and the reader notes stay in a run directory outside every repository, because the repositories are public and the book is copyrighted. `overlap.py` checks a diff, a pull request body or a comment for six or more words in a row shared with the book.
 
 ## License
 
