@@ -190,7 +190,7 @@ Four books became rules for an engineering team in two days, and each run worked
 3. Brief one reader agent per part from a template.
 4. Merge the notes into rules, checking every cited page against the text.
 5. Write the rules into a project's design doc and charter, this plugin's role checks and board seats, and l3a0/repo-template, as one pull request each.
-6. Review all three pull requests in one round, with verifiers that refute by executing.
+6. Review all three pull requests in one round, by ask-team's review round, with the book's text and citation checkers added to its brief.
 7. Price the loop with `loop-cost`.
 
 Its `pg.py` says whether each cited phrase is on its page, names the right page when it is not, and exits non-zero, so a wrong page stops a run before a reviewer finds it. The readers run as the plugin's `book-reader` agent, which has no shell, because the book's text is untrusted input. The skill also lists twenty-five checks to run before the pull requests open, twenty-three of them findings the four review rounds made, such as a rule claiming more than its page supports, or a never-skip list that points to a group instead of naming each protection. The book's text, the OCR output and the reader notes stay in a run directory outside every repository, because the repositories are public and the book is copyrighted. `overlap.py` checks a diff, a pull request body or a comment for six or more words in a row shared with the book.

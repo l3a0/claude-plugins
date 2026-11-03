@@ -5,7 +5,7 @@ description: Turn a book into rules for an engineering team and design principle
 
 # Book to rules
 
-Four books went through this pipeline in two days, ending on 2026-11-03: *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*. Each run worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the brief templates, and the checks the four review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them.
+Four books went through this pipeline in two days, ending on 2026-11-03: *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*. Each run worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the four review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them.
 
 The worked examples are the four rounds of pull requests.
 
@@ -16,7 +16,7 @@ The worked examples are the four rounds of pull requests.
 | *Code Complete* | [PR #26](https://github.com/l3a0/ithildin-runtime/pull/26) | [PR #47](https://github.com/l3a0/claude-plugins/pull/47) | [PR #75](https://github.com/l3a0/repo-template/pull/75) |
 | *Rapid Development* | [PR #27](https://github.com/l3a0/ithildin-runtime/pull/27) | [PR #48](https://github.com/l3a0/claude-plugins/pull/48) | [PR #76](https://github.com/l3a0/repo-template/pull/76) |
 
-Read the review comment on the *Code Complete* project pull request first. Its round is the one this skill's comment template copies.
+Read the review comment on the *Code Complete* project pull request first. Its round is the one the `ask-team` skill's review round and comment template were drawn from.
 
 ## The book never enters a repository
 
@@ -28,7 +28,6 @@ The run directory is `~/Documents/Claude/kindle/<book>/`, the same folder the `k
 - `<ASIN>_highlights.json`, the owner's highlights, and `highlights_pages.json`, the same highlights with the page each was found on.
 - `parts/`, one text file per reader.
 - `notes/BRIEF.md`, the filled reader brief, and `notes/part<N>.md`, one reader's notes each.
-- `review-brief.md`, the filled review brief.
 
 A rule in a repository paraphrases the book and cites it. It quotes at most the book's own short phrase. Before anything goes public, run `overlap.py` on it. It reports every run of six or more words shared with any page of the book, not only the highlighted ones, and exits 1 on any. [PR #46](https://github.com/l3a0/claude-plugins/pull/46) ran the same test against the highlights alone, which misses a sentence copied from a page the owner did not highlight.
 
@@ -138,19 +137,17 @@ A plugin check must hold in any repository, so word it for the property it prote
 
 ### 6. Run the review round
 
-Review all three pull requests in one round, under the owner's rules for reviewing a pull request. The `/l3a0:ask-team` skill describes the round, and this step adds what is particular to a book.
+Review all three pull requests in one round, by the procedure in the `/l3a0:ask-team` skill's `review-round.md`. It covers one brief for every lens, the completeness and over-reach lenses beside the roles, verifiers that refute by executing, fixes on every companion, pricing, the review comment on each pull request, the body's `## Revision` section and the owner's rulings. Its templates are the brief and the comment. Follow it as written, and add three things a book needs.
 
-1. **The brief.** Fill `templates/review-brief.md` once, with all three pull requests' heads, bases and checkouts, and save it as `$RUN/review-brief.md`. Every lens and verifier gets it, so each one can check a citation with `pg.py` and `ctx.py`.
-2. **The lenses.** Completeness and over-reach run as two blind agents. The roles the rules touch are seated through `/l3a0:ask-team` in lens mode, which runs them blind, verifies their findings by executing, and returns only what survived. Seven lenses ran on the *Code Complete* and *Rapid Development* rounds.
-3. **The verifiers.** One per veto or group of must-fixes from the completeness and over-reach lenses, since lens mode has already verified the roles' findings. Each tries to refute its finding by executing, with scripts written outside the repository. That can mean a model of the rules as written, an attack on a claimed type guard, or a copy of the repository with a limit inverted. A verifier may downgrade a finding and says why. The *Rapid Development* round ran no verifiers, and the main thread checked each must-fix by running the commands itself.
-4. **The fixes.** Apply what survived to every pull request it touches. A companion pull request that misses a fix carries the stale rule into a second repository, as [PR #74](https://github.com/l3a0/repo-template/pull/74) did with a fencing claim the other two had already withdrawn.
-5. **The comment.** Post one review comment per pull request, after the last push, in the form `templates/review-comment.md` gives. Head it with the review heading the repository's build board reads, which the `update-build-board` skill names. `## Review complete` satisfies every board that skill knows. The project pull request carries the full review and the cost. Each companion carries the short form, which points to it.
+1. **The brief's sources section.** The round's brief template leaves "Sources for checking a claim" for the source to supply. Fill `templates/review-sources.md` from this skill and paste it there. It names the book's text file and gives the `pg.py`, `ctx.py` and `overlap.py` commands, so every lens and verifier can check a citation without reading the book. The brief lives in the session's scratchpad, as the round says, and never in a repository.
+2. **The facts not to re-derive.** List the books the design doc and charter already carry, and the owner's dated rulings on the project's issues. A rule that contradicts or restates one of them is a finding, and checks 6 to 8 below say why.
+3. **Every citation, rechecked.** The round's fix step rechecks citations with the brief's helper. For a book that is `pg.py` over every citation in all three diffs, whether or not a lens flagged it, and `overlap.py` over each diff, each body and each comment before it is posted. The comment's "Citations corrected" section lists each miss.
 
-A question that turns on the owner's judgement goes under `### For the owner`. Record the owner's answer as a dated line, first on the issue or pull request it settles, then in the document it changes. [PR #24](https://github.com/l3a0/ithildin-runtime/pull/24) recorded "2026-11-02: only the owner releases a loss stop or the kill switch once it has fired" and named the three places it went.
+On the book rounds, verifiers ran a model of the rules as written, an attack on a claimed type guard, and a copy of the repository with a limit inverted. A companion that misses a fix carries the stale rule into a second repository, as [PR #74](https://github.com/l3a0/repo-template/pull/74) did with a fencing claim the other two had already withdrawn. Seven lenses ran on the *Code Complete* and *Rapid Development* rounds. The *Rapid Development* round ran no verifiers, and the main thread checked each must-fix by running the commands itself.
 
 ### 7. Price the loop
 
-Run the `loop-cost` skill on the transcripts of every agent the run launched: the readers, the lenses and the verifiers. Report one line per loop under `### Cost` in the project pull request's review. The companions say the cost is posted there. Where the work tracks an issue, post the same lines as a `## Cost` comment on it. The *Code Complete* round cost at least 24.34 US dollars: 9.32 for seven readers, 10.30 for seven lenses and 4.72 for three verifiers. The *Rapid Development* round cost at least 16.13: 7.33 for seven readers and 8.79 for seven lenses.
+The round's pricing step prices its lenses and verifiers, and asks for any other loop that served the round on its own line. For a book that line is the readers, so run the `l3a0:loop-cost` skill on the reader agents' transcripts too, and add their line under `### Cost` in the project pull request's comment, after the round's sum, where the template places other loops. The *Code Complete* round cost at least 24.34 US dollars: 9.32 for seven readers, 10.30 for seven lenses and 4.72 for three verifiers. The *Rapid Development* round cost at least 16.13: 7.33 for seven readers and 8.79 for seven lenses.
 
 ## Checks to run before opening the pull requests
 
