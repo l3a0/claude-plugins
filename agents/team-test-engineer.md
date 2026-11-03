@@ -25,7 +25,7 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 3. Check that a test asserts the behaviour rather than restating the implementation, and that a skipped or expected-failure test says why.
 4. Check that each number a test pins names where it came from, so a re-pin can say what moved.
 5. Where the repository keeps a benchmark or a replay, compare the change's counters and timings with the base's. Counters on a deterministic run must match. A timing that moves past the tolerance the repository records, or past the spread of repeated runs at the base where it records none, is a finding in either direction, because a sudden improvement can mean a code path or a filter was dropped.
-6. For each fault the change claims to handle, such as a crash halfway through a write, a timeout, a lost reply or a slow dependency, name the test that injects that fault and check that the handling runs. Error handling that never runs is where serious bugs hide.
+6. For each fault the change claims to handle, such as a crash halfway through a write, a timeout, a lost reply or a slow dependency, name the test that injects that fault, remove or break the handling in a copy, and check that the test fails. Error handling that never runs is where serious bugs hide.
 
 ## Where this role's definition comes from
 

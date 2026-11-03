@@ -30,7 +30,7 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 8. For each guarantee the change relies on, such as every message received being processed once, check that the running system counts both sides and alerts on a mismatch, rather than trusting the guarantee.
 9. Where the change adds a consumer of a log or a queue, check that how far it lags behind the newest entry is measured and alarmed. A bounded buffer that drops its oldest entries when full needs that alarm before a slow consumer loses entries, and so does a background job, such as compaction, that can fall behind what it processes.
 10. Where correctness depends on clocks agreeing across machines, check that each machine's offset is monitored and that a machine past the bound is taken out of service. A machine cut off from its time servers drifts with no error to show it.
-11. Check that a job which rebuilds a derived output writes the new output whole beside the old one and switches over in one step, keeping the old one to switch back to, and that the job never changes its own input.
+11. Check that a job which rebuilds a derived output that a running system reads while the job runs writes the new output whole beside the old one and switches over in one step, keeping the old one to switch back to, and that the job never changes its own input.
 
 ## Where this role's definition comes from
 
