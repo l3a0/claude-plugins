@@ -19,3 +19,5 @@ jobs:
         run: python3 scripts/gen_team.py --check
       - name: kindle-highlights stitch tests
         run: python3 tests/test_stitch.py
+      - name: book-to-rules script tests
+        run: python3 tests/test_book_to_rules.py

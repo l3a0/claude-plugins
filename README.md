@@ -170,6 +170,20 @@ A status round for a repository where many sessions work at once. It fetches, re
 
 Both board skills began as copies in four repositories that drifted apart. [Issue 28](https://github.com/l3a0/claude-plugins/issues/28) maps every capability of each copy to the section of the merged skill that holds it.
 
+### book-to-rules
+
+Four books became rules for an engineering team in two days, and each run worked out the same pipeline again at about 16 to 32 US dollars a book. This skill holds that pipeline in seven steps.
+
+1. Get the full text, through `kindle-highlights` for a Kindle book or `book-text` for a PDF.
+2. Split it into reading parts at chapter starts, and find the page of each of the owner's highlights.
+3. Brief one reader agent per part from a template.
+4. Merge the notes into rules, checking every cited page against the text.
+5. Write the rules into a project's design doc and charter, this plugin's role checks and board seats, and l3a0/repo-template, as one pull request each.
+6. Review all three pull requests in one round, with verifiers that refute by executing.
+7. Price the loop with `loop-cost`.
+
+Its `pg.py` says whether each cited phrase is on its page, names the right page when it is not, and exits non-zero, so a wrong page stops a run before a reviewer finds it. The skill also lists twenty checks that the four review rounds taught, such as a rule claiming more than its page supports, or a never-skip list that points to a group instead of naming each alarm and guard. The book's text, the OCR output and the reader notes stay in a run directory outside every repository, because the repositories are public and the book is copyrighted.
+
 ## License
 
 [MIT](LICENSE)
