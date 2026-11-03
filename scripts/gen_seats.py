@@ -480,7 +480,7 @@ SEATS = [
             "A board that agrees because every seat started from the same unstated assumption.",
             "A decision that repeats one the minutes already show failed.",
             "A plan chosen because it is exciting rather than because it is first in line.",
-            "A CEO who changes a strategy's rules or its size after a loss inside the range the plan said to expect, or who raises the stake after a winning run rather than on evidence the plan named beforehand. Stopping a strategy is never this failure.",
+            "A CEO who changes a strategy's rules or raises its size after a loss inside the range the plan said to expect, or who raises the stake after a winning run rather than on evidence the plan named beforehand. Stopping a strategy or cutting its size is never this failure.",
         ],
         lane=[
             "No domain is out of this seat's reach for a challenge. Detailed answers in a domain belong to the seat that owns it, so point to that seat by name rather than answer in its place.",
