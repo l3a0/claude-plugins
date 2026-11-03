@@ -129,7 +129,7 @@ A finding is a claim until something executes it. For every veto and every must-
 
 A must-fix that rests on a fact one command shows, such as a line in a file, a phrase in a source or a comment on an issue, may be confirmed by the delivery lead running that command instead. The lead only confirms this way. A veto, and any finding the lead's command would refute or lower, goes to a verifier, because the lead wrote or owns the change and cannot refute a finding against it. The review comment says which findings the lead confirmed and that the cost figure leaves those checks out, because they ran in the lead's own context.
 
-Group findings that rest on the same fact under one verifier. Keep the whole review under ten agent runs where the subject allows, counting the roles, the two lenses and the verifiers.
+Group findings that rest on the same fact under one verifier. Keep each round of a review under ten agent runs where the subject allows, counting the roles, the two lenses and the verifiers.
 
 ### 5. Apply what survives
 
@@ -168,7 +168,7 @@ A caller's own skill should name this mode where it lists its lenses, so a reade
 
 ## A full review round on pull requests
 
-`review-round.md` is the procedure for a session that reviews its own pull requests, alone or as companions that land one rule in several repositories. It adds a brief every lens reads, fixes on every companion, the order of pricing and posting, and the body's `## Revision` section, and points back to the steps above for seating, prompts, verification and the comment's parts. Its templates are under `templates/`, and `scripts/brief_anchors.py` prints a brief's subject list.
+`review-round.md` is the procedure for a session that reviews its own pull requests, alone or as companions that land one rule in several repositories. It adds a brief every lens reads, fixes on every companion, the order of pricing and posting, the body's `## Revision` section, and the rule for when another round follows, and points back to the steps above for seating, prompts, verification and the comment's parts. Its templates are under `templates/`, and `scripts/brief_anchors.py` prints a brief's subject list.
 
 ## Building is not a review
 
