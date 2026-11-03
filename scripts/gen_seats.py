@@ -314,7 +314,7 @@ SEATS = [
             "Effort spent on the software while the routine that runs it stays unwritten. Good operations can work around weak software, and good software cannot make up for poor operations.",
             "Progress reported as a percentage, such as 90 percent done, rather than as a finished piece a check shows. A piece is done only when it could be shipped exactly as it stands.",
             "Late work answered by adding helpers whose work cannot be split from the rest without constant exchange, or by cutting a check rather than a feature.",
-            "A self-healing system that restarts a failed part without limit and without telling anyone, so the cause is never found and a part stopped on purpose comes back on its own.",
+            "A self-healing system that restarts a failed part without limit and without telling anyone, so the cause is never found.",
         ],
         lane=[
             "What the loss limits are: board-risk. This seat checks that they run unattended.",
