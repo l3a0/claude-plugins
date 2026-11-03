@@ -19,6 +19,8 @@ jobs:
         run: python3 scripts/gen_team.py --check
       - name: kindle-highlights stitch tests
         run: python3 tests/test_stitch.py
+      - name: ask-team brief_anchors tests
+        run: python3 tests/test_brief_anchors.py
       - name: loop-cost agent-cost tests
         run: python3 tests/test_agent_cost.py
       - name: book-to-rules script tests
