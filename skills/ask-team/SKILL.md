@@ -139,7 +139,7 @@ For a plan audit, a surviving finding goes on the issue, because the build sessi
 
 ### 6. Post and price
 
-Post one comment on the pull request or issue whose first line is the review heading the repository's build board reads, which the `update-build-board` skill's moment 5 names. A final pull request comment headed `## Review complete`, posted after the last push, satisfies every board that skill knows. It holds four parts.
+Post one comment on the pull request or issue whose first line is the review heading the repository's build board reads, which the `update-build-board` skill's moment 5 names. A final pull request comment headed `## Review complete`, posted after the last push, satisfies every board that skill knows. It holds four parts, except the closing comment `review-round.md` describes, which links the round's comment instead.
 
 1. The roles and lenses seated, the anchor commit, and the charter's commit or its absence.
 2. What was found and fixed, one numbered line each.
@@ -150,7 +150,7 @@ Price the review with the plugin's `l3a0:loop-cost` skill, counting every role, 
 
 ## Lens mode, inside another review
 
-Another review can call this skill for the team's lenses beside its own, on the owner's ruling of 2026-10-29 UTC that the pull request and blog review skills consult the team for their feedback. The caller owns the branch and the review comment, so in this mode the skill runs steps 1 to 4 and returns, and skips steps 5 and 6. It also skips step 2's two pull request lenses, which the caller runs. A caller in the same session may run steps 2 to 4 itself rather than through a nested call, launching the roles beside its own two lenses in one blind round and verifying every lens's findings in one step 4. These are the same steps, and `review-round.md` runs them this way. The run limit is still item 6's: the roles and the verifiers stay under ten runs, and the caller's two lenses fall outside it.
+Another review can call this skill for the team's lenses beside its own, on the owner's ruling of 2026-10-29 UTC that the pull request and blog review skills consult the team for their feedback. The caller owns the branch and the review comment, so in this mode the skill runs steps 1 to 4 and returns, and skips steps 5 and 6. It also skips step 2's two pull request lenses, which the caller runs. A caller in the same session may run steps 2 to 4 itself rather than through a nested call, launching the roles beside its own two lenses in one blind round and verifying every lens's findings in one step 4. These are the same steps, and `review-round.md` runs them this way. The run limit is still item 6's: the roles and the verifiers stay under ten runs in each round, and the caller's two lenses fall outside it.
 
 1. **The caller names the subject and its anchor**, as step 1 lists them, and what is out of scope. The skill adds nothing to that scope.
 2. **The skill seats the roles the subject touches**, by the table in step 2, and runs them blind, as step 3 says. The caller's own lenses are not shown to the roles, and the roles' findings are not shown to the caller's lenses until both have reported, so neither side anchors on the other.
