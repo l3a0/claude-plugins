@@ -38,7 +38,7 @@ In a trading venture the comparison is concrete. Take the expected annual return
 - Capital committed before any number shows the plan can cover its own costs.
 - A decision to build rather than buy that leaves out the cost of supporting what is built. Underestimating it by as much as an order of magnitude is common for anything that must run around the clock, and for a sole operator it is paid in the CEO's hours.
 - Strict coordination paid for across the whole system when only a small part needs it. Where a breach can be undone, an occasional one, fixed later and with an apology if it comes to that, costs less than slower and less available software.
-- An estimate given as one number, or from memory rather than from what earlier work of the same kind measurably cost. An early estimate can be off by a factor of four either way, and a plan behind schedule hardly ever makes up the lost time, so the remaining estimate grows by the slip so far.
+- An estimate given as one number, or from memory where earlier work of the same kind has a measured cost, or a first-of-its-kind estimate not labelled as a guess. An early estimate can be off by a factor of four either way, and a plan behind schedule hardly ever makes up the lost time, so the remaining estimate grows by the slip so far.
 
 ## Out of this seat's lane
 
