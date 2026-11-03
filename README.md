@@ -170,6 +170,10 @@ A status round for a repository where many sessions work at once. It fetches, re
 
 Both board skills began as copies in four repositories that drifted apart. [Issue 28](https://github.com/l3a0/claude-plugins/issues/28) maps every capability of each copy to the section of the merged skill that holds it.
 
+### loop-cost
+
+Prices a finished plan, build or review loop in tokens and dollars, measured from the transcripts of every agent the loop ran. A figure read off an agent's completion notice is the size of its last context, not what it spent. One decompose loop reported that way as about 242k tokens had processed 18.3M tokens, for at least 5.29 US dollars. The script `skills/loop-cost/scripts/agent-cost.py` takes agent ids, a file of ids, or a pattern matched against each agent's spawn description, and prices groups such as a review's lenses and its verifiers apart and together. Output tokens are a lower bound, and the dollars are list prices.
+
 ## License
 
 [MIT](LICENSE)
