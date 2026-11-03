@@ -1,6 +1,6 @@
 ---
 name: ask-team
-description: Convene a repository's engineering team on a plan, a design, a pull request or a blog post. Separate role agents, one per role, each review the same subject blind to the others, holding only what their role protects and may veto. Verifiers then try to refute each finding by executing code, and only what survives is acted on. Use when asked to "ask the team", "convene the team", "have the team review" an issue, a design doc, a pull request or a blog post, to audit an issue's plan before a build starts, or for the per-role lenses a repository's team charter names for its review step. A pull request review or a post review such as review-post can call it in lens mode, where it returns verified findings to the caller and posts and fixes nothing. Not for owner decisions about money, live trading, contracts or law, which go to the board through /l3a0:ask-board.
+description: Convene a repository's engineering team on a plan, a design, a pull request or a blog post. Separate role agents, one per role, each review the same subject blind to the others, holding only what their role protects and may veto. Verifiers then try to refute each finding by executing code, and only what survives is acted on. Use when asked to "ask the team", "convene the team", "have the team review" an issue, a design doc, a pull request or a blog post, to audit an issue's plan before a build starts, or for the per-role lenses a repository's team charter names for its review step. A pull request review or a post review such as review-post can call it in lens mode, where it returns verified findings to the caller and posts and fixes nothing. To run a whole review round on a pull request, or on companion pull requests that land one rule in several repositories, with its brief, its lenses, its verifiers, its fixes and its `## Review` comment, read review-round.md. Not for owner decisions about money, live trading, contracts or law, which go to the board through /l3a0:ask-board.
 ---
 
 # Ask the team
@@ -159,10 +159,18 @@ Another review can call this skill for the team's lenses beside its own, on the 
 
 Two callers are meant to use this mode.
 
-1. **A pull request review**, under the owner's rule that every pull request is reviewed by blind lenses before the owner reads it, and under a repository's `## Pull requests` section that carries that rule. The team's roles join the completeness and over-reach lenses there, and the caller runs those two itself rather than asking this skill to.
+1. **A pull request review**, under the owner's rule that every pull request is reviewed by blind lenses before the owner reads it, and under a repository's `## Pull requests` section that carries that rule. The team's roles join the completeness and over-reach lenses there, and the caller runs those two itself rather than asking this skill to. `review-round.md` beside this file is that caller's procedure.
 2. **A review of a blog post before the owner reads it**, such as l3a0/quantitative-trading's `review-post` skill. The subject is the post, seated by the blog-post row of step 2's table.
 
 A caller's own skill should name this mode where it lists its lenses, so a reader of that skill finds it. l3a0/quantitative-trading's `review-post` and `sketch-notes` skills name it, since [l3a0/quantitative-trading PR #783](https://github.com/l3a0/quantitative-trading/pull/783).
+
+## A full review round on pull requests
+
+A session that reviews its own pull requests runs the same round every time: a brief, the lenses, the verifiers, the fixes on every companion pull request, one comment per pull request, its cost, and the body's `## Revision` section. `review-round.md` holds that procedure in eight steps, so a round starts from it rather than working it out again. It ships three files.
+
+1. `templates/review-brief.md`, the brief every lens reads, which keeps each lens prompt a few lines long.
+2. `templates/review-comment.md`, the `## Review` comment, with its sections in order.
+3. `scripts/brief_anchors.py`, which prints each pull request's head commit, merge base, checkout and diff command for the brief, and flags a checkout that is not at the head.
 
 ## Building is not a review
 
