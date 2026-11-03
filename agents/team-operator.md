@@ -31,6 +31,9 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 9. Where the change adds a consumer of a log or a queue, check that how far it lags behind the newest entry is measured and alarmed. A bounded buffer that drops its oldest entries when full needs that alarm before a slow consumer loses entries, and so does a background job, such as compaction, that can fall behind what it processes.
 10. Where correctness depends on clocks agreeing across machines, check that each machine's offset is monitored and that a machine past the bound is taken out of service. A machine cut off from its time servers drifts with no error to show it.
 11. Check that a job which rebuilds a derived output that a running system reads while the job runs writes the new output whole beside the old one and switches over in one step, keeping the old one to switch back to, and that the job never changes its own input.
+12. Where only one instance may act at a time, check that a new release starts without that right and takes it only after the old release has stopped acting, and that a rollback takes it back the same way. Two versions running side by side would be two writers.
+13. Check that one id is fixed where a request or a decision starts and is carried by every log line, record and outside call it leads to. Adding a correlation id after the first incident that needed it is very hard.
+14. Where the change adds monitoring, check whether a synthetic transaction runs through the system on a schedule and alerts when its result does not appear, which shows a problem better than lower-level metrics, and that no synthetic transaction can reach a real irreversible target, such as a live account or a customer.
 
 ## Where this role's definition comes from
 

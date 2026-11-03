@@ -44,6 +44,15 @@ above recoverable ones (risk engineer) come from
 Rapid Development (McConnell, Microsoft Press, 1996), as ithildin-runtime's
 docs/design.md ## How work is cut and ordered adopts it with printed pages.
 
+The checks on module boundaries and process splits, one artifact for every
+environment (architect), a dependency's own timeout, pool and breaker
+(trading systems engineer), a caller trusted to skip a limit (risk engineer),
+flaky tests and full-system tests (test engineer), the release handover, the
+correlation id and synthetic monitoring (operator), and the confused deputy
+and one credential per use (security reviewer) come from Building
+Microservices (Newman, O'Reilly Media, 2015), as ithildin-runtime's
+docs/design.md adopts it with Kindle locations.
+
 Run from anywhere:
 
     python3 scripts/gen_team.py           # write the eight files
@@ -119,6 +128,10 @@ ROLES = [
             "Search code outside the tests for `assert` used as a guard, and for a check compiled out, skipped or switched off in production by a debug flag or a build setting. Python drops every `assert`, and every `if __debug__:` block, when it runs with `-O`, so a guard written that way is tested and then absent where it matters. A guard on an irreversible action or on recorded data raises explicitly and runs in every environment, and where the repository runs Python, its CI runs the suite once under `python -O` to show it.",
             "Where the change adds a spike or a prototype meant to be thrown away, check that it states the one question it answers with a threshold that settles it, that it lives outside the product's package where nothing in the product imports it, that it reads data which cannot be recaptured only through copies, and that it takes no irreversible action, such as sending an order, paper included. Check too that its result is labelled exploratory whatever it stated in advance, that it never reads a holdout, and that a spike which kills an idea is kept as a pinned result where the repository keeps null results. A throwaway prototype kept as production code carries the shortcuts it was built with.",
             "Where the change makes code reusable, check for two real uses, in the diff, in the code at the base, or in another repository that depends on the shared package, since a reusable component costs two to three times a one-off and breaks even only after two or three uses. An interface the design requires from the first commit, such as the one at an edge where one environment's adapter replaces another's, is a design named ahead of use rather than reuse, and this check does not apply to it.",
+            "Where the change adds or moves a module, check that it is cut along a capability of the domain rather than a technical layer, such as a module that only wraps storage, and that no other module reads its store except through its interface. A store two modules read directly couples them as tightly as shared code.",
+            "Where the change splits a module into a process or service of its own, check that it names the reason, such as a measured load, an isolation need or a credential to keep apart, and shows how often the module's interface changed. Splitting before the boundaries are known is costly, and one team had to merge its early services back before splitting again along boundaries that held.",
+            "Check that one artifact is built once and is what every environment runs, with the hash of the artifact its checks passed on recorded, and that configuration that differs by environment only selects adapters and holds credentials. A behaviour setting that differs between environments means production runs code paths no test ran.",
+            "Where a design states how far it scales, check that it holds about ten times its first load with configuration and more infrastructure alone, and that for growth beyond that it names the load at which planning a rewrite starts, what the rewrite would replace, and what must carry over unchanged, such as recorded data and its formats.",
         ],
     },
     {
@@ -183,6 +196,7 @@ ROLES = [
             "Where the change removes duplicates by an id, check that every message is recorded as it arrived, and that a uniqueness constraint in the store enforces applying it once, in the same step as the write. A check that no row with that id exists has nothing to lock, so two writers can each pass it. A repeated id whose content differs from the first is recorded beside it and halts rather than being dropped.",
             "Where data from an outside system feeds an irreversible action or a record, check that the adapter records what it received unchanged before converting it, that conversion turns it into the codebase's own types so no other vendor type, raw dictionary or vendor exception reaches past the adapter, and that a message which fails conversion stays recorded and stops what would consume it. Check that every result an outside call returns, such as a status code, an exit code or a partial fill, is checked, and that the adapter keeps rejected, provably not sent and outcome unknown apart, counting any exception it cannot classify as unknown, as the timeout check above requires. Where values of one type are easy to swap, such as a price and a quantity, check that they are distinct types or passed by keyword.",
             "Where a stand-in replaces an outside system in tests, such as a fake, a simulator or a stub, check that one suite of contract tests runs against both the stand-in and the real system or its recorded responses, so the stand-in keeps every promise the real one makes. Check that the suite covers the cases the code's correctness depends on, such as a repeated id, a lookup of an unknown id, a timeout and a reject, rather than only the shapes of responses, and that a case the real system cannot be made to show is named as a gap. A recording strips credentials, authorization headers, keys in query strings and account identifiers before it is written, and a test fails on any committed recording that matches a credential pattern. Where missing input must stop the system, a stand-in returns an empty answer only where the real system would answer none, and raises when a read fails or no data exists.",
+            "Check that every call to an outside dependency has its own timeout and draws on its own pool, so one stalled dependency cannot exhaust the threads or connections another needs, and that a circuit breaker which opens stops the action that depends on it rather than serving a stale value. Check too that the call testing whether the dependency recovered has no side effect, and that every retried job has a maximum, past which it is set aside and alerts, since one request that crashes its worker can otherwise crash every worker in turn.",
         ],
     },
     {
@@ -204,6 +218,7 @@ ROLES = [
             "Check that a state the code assumes cannot happen, such as a negative balance, a repeated id or a gap in a sequence, halts and alerts the owner rather than being ignored, clamped or only logged. What must never happen holds in every case, faults included. Only what must eventually happen, such as a reply, may wait for a fault to clear.",
             "Search the path to the gate and the code that reads outside input for handling that turns a bad value into a usable one: a neutral value, the closest legal value, a logged warning followed by carrying on, a default that reads as a valid choice, a function whose result starts as success, a value such as -1 or zero standing for missing, or a branch over a closed set whose last case is the default rather than a failure. Where a wrong result costs more than no result, each one must halt instead. Check too that bad input stops only the action it feeds and never an action that reduces risk, such as a cancel or a kill switch, which keeps acting on everything else it covers and treats an item in an unknown state as one to act on rather than skip.",
             "Where the change adds or reviews a ranked list of risks, check that every risk of a loss which cannot be undone, such as data that cannot be recaptured, an irreversible action or capital, ranks above every risk of a loss that can, whatever its probability, since ranking by probability times size lets a rare ruin sit below a likely nuisance. A score by likelihood, severity and detection may still decide which changes to split and which failures need a detector first.",
+            "Check that no caller carries a flag, a role or a credential that lets its actions skip the gate's limits, including an operator command, a test helper and a replay. A deputy that trusts its caller can be tricked into acting with authority the caller lacks.",
         ],
     },
     {
@@ -227,6 +242,7 @@ ROLES = [
             "For a fix of a defect a test can reproduce, run its new test against a copy of the pull request's merge base, taken as the limits below say, and check that it fails there on an assertion about the defect, not at import or collection. For a fix no test can reproduce, such as a documentation or CI fix, check that the pull request says how it was checked. Check too that it names the cause and the similar code it searched. One study found more than half of first fixes were wrong.",
             "Where a pull request says it finishes work, check that it names the issue it closes and the checks on its head that ran the changed code. Where a handover or a report says work is done, check that it links the merged pull request, its review and the mutation result the role's second check produces. A check that never ran the changed code shows nothing, and a percentage complete, or done apart from a few loose ends, is not done.",
             "Collect the test ids at the merge base and at the head, for example with `pytest --collect-only -q`, and compare them. Each test removed, newly skipped or newly marked as an expected failure is a finding, unless the pull request names the behaviour it dropped and the issue that behaviour moved to.",
+            "Check that a test which fails intermittently leaves the gate within a day and is fixed or replaced by a smaller one, and that no job reruns a build until it passes. A team that reruns until green learns to accept failures. Check too that tests which run the whole system stay a short, named list of journeys, with many more tests at each level below them.",
         ],
     },
     {
@@ -250,6 +266,9 @@ ROLES = [
             "Where the change adds a consumer of a log or a queue, check that how far it lags behind the newest entry is measured and alarmed. A bounded buffer that drops its oldest entries when full needs that alarm before a slow consumer loses entries, and so does a background job, such as compaction, that can fall behind what it processes.",
             "Where correctness depends on clocks agreeing across machines, check that each machine's offset is monitored and that a machine past the bound is taken out of service. A machine cut off from its time servers drifts with no error to show it.",
             "Check that a job which rebuilds a derived output that a running system reads while the job runs writes the new output whole beside the old one and switches over in one step, keeping the old one to switch back to, and that the job never changes its own input.",
+            "Where only one instance may act at a time, check that a new release starts without that right and takes it only after the old release has stopped acting, and that a rollback takes it back the same way. Two versions running side by side would be two writers.",
+            "Check that one id is fixed where a request or a decision starts and is carried by every log line, record and outside call it leads to. Adding a correlation id after the first incident that needed it is very hard.",
+            "Where the change adds monitoring, check whether a synthetic transaction runs through the system on a schedule and alerts when its result does not appear, which shows a problem better than lower-level metrics, and that no synthetic transaction can reach a real irreversible target, such as a live account or a customer.",
         ],
     },
     {
@@ -268,6 +287,7 @@ ROLES = [
             "For each credential the change uses, name where it is read from and what it is allowed to do. A credential that can withdraw, transfer, publish or delete more than its use needs is a veto.",
             "Search for decoding in a language's native object format, such as Python's `pickle`, Java serialization or `yaml.load` without a safe loader, on data that is stored or that comes from outside. Decoding it can run any code an attacker wrote, and these formats neglect versioning. Check too that input from outside is bounded before use, with each value checked against a sane range and each size capped.",
             "Check that error messages, exceptions and logs from code that holds a credential carry no secret, token or account number. Show it in a scratch copy, against a stand-in or recorded responses with the network off, every credential variable set to a fake value or unset and any keychain lookup replaced, by causing a failure and searching what was printed and logged for the fake value. A finding quotes only the fake value.",
+            "Check that a service acting on behalf of a caller authorizes each request on its own terms, rather than trusting that the caller was entitled to ask, and that each use holds its own credential, so any one can be revoked alone.",
         ],
     },
 ]
