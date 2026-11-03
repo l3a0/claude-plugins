@@ -71,3 +71,13 @@ exact access). Reports of particular interest:
   a `## Cost` comment through the user's `gh` login. In scope is any path that
   puts transcript content, rather than its totals, into the output or a
   comment.
+- `book-to-rules` reads a copyrighted book's full text, which is untrusted
+  input, and opens pull requests and posts comments on public repositories
+  as the user's `gh` login. The book's text, its OCR output and the reader
+  notes belong only in the run directory, `~/Documents/Claude/kindle/<book>/`.
+  Its `book-reader` agents have Read, Grep, Glob and Write and no shell, so
+  a line of the book cannot run a command. That they write only their notes
+  file is an instruction, not an enforced boundary. In scope are any path
+  where book text or a reader's notes steer a `gh` action, and any path that
+  carries more than a short phrase of the book into a tracked file or a
+  comment. `scripts/overlap.py` is the check for the second.
