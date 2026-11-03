@@ -1,10 +1,14 @@
-## Review
+## <The review heading the repository's board reads, per the update-build-board skill's moment 5>
 
-Round <N>, of `<anchor sha>`<, run together with the review of <companion links>, which carry the same rules>. <Count> lenses ran blind to each other: completeness, over-reach, and through `/l3a0:ask-team` in lens mode the <roles>. <Count> verifiers then tried to refute every veto and must-fix by executing<, and the main thread checked <what> by running <command>>. `<fix sha>` applies what survived<here>.
+Round <N>, of `<anchor sha>`<, run together with the review of <companion links>, which carry the same rules>. The roles followed <`docs/team-charter.md` at `<sha>`, or their agent files' defaults, since the repository has no charter>. <Count> lenses ran blind to each other: completeness, over-reach, and through `/l3a0:ask-team`'s lens mode the <roles>. <Count> verifiers then tried to refute every veto and must-fix by executing<, and the main thread checked <which findings> by running <command>>. <Quote commands with paths relative to the repository, never an absolute local path.> `<fix sha>` applies what survived<here>.
 
 ### Veto, confirmed and fixed
 
 - **<One-line claim> (<lens that raised it>).** <What breaks, in one or two sentences.> Verified: <what the verifier ran and what it showed>. Fixed: <what the change now says or does>.
+
+### Veto, confirmed and still blocking
+
+- **<One-line claim> (<lens>).** <Why it is not fixed in this round, and what lifts it: the fix, or the owner's written override linked here.>
 
 ### Must fix, confirmed and fixed
 
@@ -16,7 +20,7 @@ Round <N>, of `<anchor sha>`<, run together with the review of <companion links>
 
 ### Citations corrected
 
-<Every cited page was rechecked against the source with <helper>. List each miss as "<claim> is on p. <right>, not p. <wrong>". Delete this section when the subject cites nothing.>
+<Every citation was rechecked against the source with <helper>. List each miss as "<claim> is at <right location>, not <wrong location>". Delete this section when the subject cites nothing.>
 
 ### Refuted
 
@@ -32,20 +36,23 @@ Round <N>, of `<anchor sha>`<, run together with the review of <companion links>
 
 ### Yield per lens
 
-Surviving vetoes and must-fixes, by the lens that raised them: <lens> <count>, <lens> <count>, with the overlaps counted for each lens that found them.
+Surviving vetoes and must-fixes, by the lens that raised them: <lens> <count>, <lens> <count>, with the overlaps counted for each lens that found them. <Optional. It records what each lens found, and seating still follows the ask-team skill's step 2.>
 
 ### For the owner
 
-1. **<A question only the owner can rule on, such as money, live trading, contracts, law, a role's veto line, or a change outside this pull request's scope.>** <What the revision does meanwhile.> A dated line on <link> settles it.
+1. **<A question only the owner can rule on, such as one the ask-team skill sends to the board, or a change to a role's vetoes. Work outside this pull request's scope is filed as an issue under `### Left alone` instead.>** <What the revision does meanwhile.> A dated line on <link> settles it.
 
 <Or: "Nothing here." On a companion pull request, point to where the questions sit.>
 
 ### Cost
 
-To date, at list prices, with output a lower bound:
+This round, at list prices, with output a lower bound:
 
-1. <Loop>: at least <dollars> US dollars, <tokens> tokens over <turns> turns.
+1. <Count> review lenses: at least <dollars> US dollars, <tokens> tokens over <turns> turns.
+2. <Count> verifiers: at least <dollars> US dollars, <tokens> tokens over <turns> turns.
+3. Sum: at least <dollars> US dollars, <tokens> tokens.
+<4. Any other loop that served this round, such as reading a source.>
 
-The figures cover <every companion pull request, linked>. Cache reads made up almost all of the tokens.
+The figures cover <every companion pull request, linked>. <What dominated, if one kind of token did.> <The main thread's checks in step 4 ran in its own context and are not counted.> Earlier rounds' figures are in their own comments and are not repeated here.
 
 <On a companion pull request, the whole section is one line: "Posted once, on <link to the main pull request>: at least <dollars> US dollars for <what it covers> across all <count> pull requests.">

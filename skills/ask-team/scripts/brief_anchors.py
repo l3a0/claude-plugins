@@ -24,7 +24,10 @@ SPEC = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)#(?P<num>\d+)(?:=(?P<checkout>.+))
 
 
 def run(*args):
-    return subprocess.run(args, check=True, capture_output=True, text=True).stdout.strip()
+    done = subprocess.run(args, capture_output=True, text=True)
+    if done.returncode:
+        sys.exit(f"{' '.join(args)} failed: {done.stderr.strip()}")
+    return done.stdout.strip()
 
 
 def anchor(spec):

@@ -1,6 +1,6 @@
 ---
 name: ask-team
-description: Convene a repository's engineering team on a plan, a design, a pull request or a blog post. Separate role agents, one per role, each review the same subject blind to the others, holding only what their role protects and may veto. Verifiers then try to refute each finding by executing code, and only what survives is acted on. Use when asked to "ask the team", "convene the team", "have the team review" an issue, a design doc, a pull request or a blog post, to audit an issue's plan before a build starts, or for the per-role lenses a repository's team charter names for its review step. A pull request review or a post review such as review-post can call it in lens mode, where it returns verified findings to the caller and posts and fixes nothing. To run a whole review round on a pull request, or on companion pull requests that land one rule in several repositories, with its brief, its lenses, its verifiers, its fixes and its `## Review` comment, read review-round.md. Not for owner decisions about money, live trading, contracts or law, which go to the board through /l3a0:ask-board.
+description: Convene a repository's engineering team on a plan, a design, a pull request or a blog post. Separate role agents, one per role, each review the same subject blind to the others, holding only what their role protects and may veto. Verifiers then try to refute each finding by executing code, and only what survives is acted on. Use when asked to "ask the team", "convene the team", "have the team review" an issue, a design doc, a pull request or a blog post, to audit an issue's plan before a build starts, or for the per-role lenses a repository's team charter names for its review step. A pull request review or a post review such as review-post can call it in lens mode, where it returns verified findings to the caller and posts and fixes nothing. To run a whole review round on a pull request, or on companion pull requests that land one rule in several repositories, with its brief, its lenses, its verifiers, its fixes and its review comment, read review-round.md. Not for owner decisions about money, live trading, contracts or law, which go to the board through /l3a0:ask-board.
 ---
 
 # Ask the team
@@ -86,7 +86,7 @@ Three seats are required whatever the count.
 2. The risk engineer on anything touching the path to an irreversible action, such as the order path.
 3. The security reviewer on anything that adds a credential, a dependency or a GitHub workflow.
 
-A repository whose charter names a required reviewer for some path, as l3a0/ithildin-runtime's names the risk engineer for the order path, adds that seat under its own rule.
+A change to prose that the path to an irreversible action will be built to, such as a design rule for sending orders, touches that path, so it seats the risk engineer too. A repository whose charter names a required reviewer for some path, as l3a0/ithildin-runtime's names the risk engineer for the order path, adds that seat under its own rule.
 
 A pull request also gets the two lenses the owner's rules give every pull request: completeness, which asks whether the class was fixed rather than one instance, and over-reach, which asks whether the change stayed inside its class. They are not roles, so run them as two more blind agents with those two prompts, using a general-purpose agent.
 
@@ -127,6 +127,8 @@ A finding is a claim until something executes it. For every veto and every must-
 2. A claim that a path exists, such as an order reaching a broker around the gate: write the call and run it.
 3. A claim about another repository or a vendor: read the file at its commit, or the vendor's own page.
 
+A finding that rests on a fact one command shows, such as a line in a file, a phrase in a source or a comment on an issue, may be checked by the delivery lead running that command instead. The review comment then says which findings the lead checked and that the cost figure leaves those checks out, because they ran in the lead's own context.
+
 Group findings that rest on the same fact under one verifier. Keep the whole review under ten agent runs where the subject allows, counting the roles, the two lenses and the verifiers.
 
 ### 5. Apply what survives
@@ -148,7 +150,7 @@ Price the review with the owner's `loop-cost` skill where it is installed, count
 
 ## Lens mode, inside another review
 
-Another review can call this skill for the team's lenses beside its own, on the owner's ruling of 2026-10-29 UTC that the pull request and blog review skills consult the team for their feedback. The caller owns the branch and the review comment, so in this mode the skill runs steps 1 to 4 and returns, and skips steps 5 and 6. It also skips step 2's two pull request lenses, which the caller runs.
+Another review can call this skill for the team's lenses beside its own, on the owner's ruling of 2026-10-29 UTC that the pull request and blog review skills consult the team for their feedback. The caller owns the branch and the review comment, so in this mode the skill runs steps 1 to 4 and returns, and skips steps 5 and 6. It also skips step 2's two pull request lenses, which the caller runs. A caller in the same session may run steps 2 to 4 itself rather than through a nested call, launching the roles beside its own two lenses in one blind round and verifying every lens's findings in one step 4. These are the same steps, and `review-round.md` runs them this way.
 
 1. **The caller names the subject and its anchor**, as step 1 lists them, and what is out of scope. The skill adds nothing to that scope.
 2. **The skill seats the roles the subject touches**, by the table in step 2, and runs them blind, as step 3 says. The caller's own lenses are not shown to the roles, and the roles' findings are not shown to the caller's lenses until both have reported, so neither side anchors on the other.
@@ -166,11 +168,7 @@ A caller's own skill should name this mode where it lists its lenses, so a reade
 
 ## A full review round on pull requests
 
-A session that reviews its own pull requests runs the same round every time: a brief, the lenses, the verifiers, the fixes on every companion pull request, one comment per pull request, its cost, and the body's `## Revision` section. `review-round.md` holds that procedure in eight steps, so a round starts from it rather than working it out again. It ships three files.
-
-1. `templates/review-brief.md`, the brief every lens reads, which keeps each lens prompt a few lines long.
-2. `templates/review-comment.md`, the `## Review` comment, with its sections in order.
-3. `scripts/brief_anchors.py`, which prints each pull request's head commit, merge base, checkout and diff command for the brief, and flags a checkout that is not at the head.
+`review-round.md` is the procedure for a session that reviews its own pull requests, alone or as companions that land one rule in several repositories. It adds a brief every lens reads, fixes on every companion, the order of pricing and posting, and the body's `## Revision` section, and points back to the steps above for seating, prompts, verification and the comment's parts. Its templates are under `templates/`, and `scripts/brief_anchors.py` prints a brief's subject list.
 
 ## Building is not a review
 
