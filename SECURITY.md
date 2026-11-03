@@ -65,3 +65,9 @@ exact access). Reports of particular interest:
   is a copyrighted book's full text, and each script refuses an output
   folder inside a git repository. In scope is any way its scripts send that
   text off the machine, or write it outside the folders they are given.
+- `loop-cost` reads Claude Code session transcripts under
+  `~/.claude/projects`, which hold anything a session read or wrote, and
+  prints only token counts and dollars. Its skill then posts those figures as
+  a `## Cost` comment through the user's `gh` login. In scope is any path that
+  puts transcript content, rather than its totals, into the output or a
+  comment.
