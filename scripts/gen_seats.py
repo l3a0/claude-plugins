@@ -27,9 +27,10 @@ kept (CISO) come from Designing Data-Intensive Applications (Kleppmann, 1st
 ed., O'Reilly Media, 2017).
 
 The watched failure on safety checks switched off in production (CTO) comes
-from Code Complete (McConnell, 2nd ed., Microsoft Press, 2004), which rejects
-its own default of compiling assertions out of production builds where the
-tested system must be the one that runs.
+from Code Complete (McConnell, 2nd ed., Microsoft Press, 2004), whose default
+compiles assertions out of production builds while keeping checks for
+important errors. ithildin-runtime rejects that default because its tested
+system must be the one that runs.
 """
 import argparse
 import pathlib
