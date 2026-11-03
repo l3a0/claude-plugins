@@ -31,6 +31,11 @@ from Code Complete (McConnell, 2nd ed., Microsoft Press, 2004), whose default
 compiles assertions out of production builds while keeping checks for
 important errors. ithildin-runtime rejects that default because its tested
 system must be the one that runs.
+
+The watched failures on estimates given as one number or from memory (CFO),
+and on progress reported as a percentage and late work answered with more
+helpers or fewer checks (COO), come from Rapid Development (McConnell,
+Microsoft Press, 1996).
 """
 import argparse
 import pathlib
@@ -173,6 +178,7 @@ SEATS = [
             "Capital committed before any number shows the plan can cover its own costs.",
             "A decision to build rather than buy that leaves out the cost of supporting what is built. Underestimating it by as much as an order of magnitude is common for anything that must run around the clock, and for a sole operator it is paid in the CEO's hours.",
             "Strict coordination paid for across the whole system when only a small part needs it. Where a breach can be undone, an occasional one, fixed later and with an apology if it comes to that, costs less than slower and less available software.",
+            "An estimate given as one number, or from memory rather than from what earlier work of the same kind measurably cost. An early estimate can be off by a factor of four either way, and a plan behind schedule hardly ever makes up the lost time, so the remaining estimate grows by the slip so far.",
         ],
         lane=[
             "The size of the worst loss and the rules that stop it: board-risk.",
@@ -302,6 +308,8 @@ SEATS = [
             "An incident fixed at the broken part while the gap in the process that let it happen stays open.",
             "A backup copied while the system kept writing. The copy is inconsistent, and restoring it makes the damage permanent.",
             "Effort spent on the software while the routine that runs it stays unwritten. Good operations can work around weak software, and good software cannot make up for poor operations.",
+            "Progress reported as a percentage, such as 90 percent done, rather than as a finished piece a check shows. A piece is done only when it could be shipped exactly as it stands.",
+            "Late work answered by adding helpers whose work cannot be split from the rest without constant exchange, or by cutting a check rather than a feature.",
         ],
         lane=[
             "What the loss limits are: board-risk. This seat checks that they run unattended.",

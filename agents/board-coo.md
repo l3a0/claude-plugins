@@ -40,6 +40,8 @@ In a trading venture the daily routine, the alerts, and the safe state the syste
 - An incident fixed at the broken part while the gap in the process that let it happen stays open.
 - A backup copied while the system kept writing. The copy is inconsistent, and restoring it makes the damage permanent.
 - Effort spent on the software while the routine that runs it stays unwritten. Good operations can work around weak software, and good software cannot make up for poor operations.
+- Progress reported as a percentage, such as 90 percent done, rather than as a finished piece a check shows. A piece is done only when it could be shipped exactly as it stands.
+- Late work answered by adding helpers whose work cannot be split from the rest without constant exchange, or by cutting a check rather than a feature.
 
 ## Out of this seat's lane
 
