@@ -21,6 +21,15 @@ import subprocess
 import sys
 
 SPEC = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)#(?P<num>\d+)(?:=(?P<checkout>.+))?$")
+PLAIN_REF = re.compile(r"^[\w./-]+$")
+
+
+def ref(name):
+    # A fork's author picks its branch name, and git allows backticks in one,
+    # so a name outside the plain set is printed flagged rather than in a code span.
+    if PLAIN_REF.match(name):
+        return f"`{name}`"
+    return f"**unusual branch name {name!r}**"
 
 
 def run(*args):
@@ -41,14 +50,14 @@ def anchor(spec):
     base = run("gh", "api", f"repos/{repo}/compare/{pr['baseRefName']}...{head}",
                "--jq", ".merge_base_commit.sha")
     line = (f"**{repo} PR #{num}**, head `{head[:7]}`, base `{base[:7]}` "
-            f"on `{pr['baseRefName']}`.")
+            f"on {ref(pr['baseRefName'])}.")
     if checkout:
-        line += f" Checkout: `{checkout}` (branch `{pr['headRefName']}`)."
+        line += f" Checkout: `{checkout}` (branch {ref(pr['headRefName'])})."
         local = run("git", "-C", checkout, "rev-parse", "HEAD")
         if local != head:
             line += f" **Checkout HEAD is `{local[:7]}`, not the head. Update it first.**"
     else:
-        line += f" Branch `{pr['headRefName']}`, no checkout given."
+        line += f" Branch {ref(pr['headRefName'])}, no checkout given."
     if pr["state"] != "OPEN":
         line += f" **State: {pr['state']}.**"
     line += f" <What it changes.> Diff: `git diff {base[:7]} {head[:7]}`."

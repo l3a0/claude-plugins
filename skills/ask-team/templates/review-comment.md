@@ -1,14 +1,14 @@
-## <The review heading the repository's board reads, per the update-build-board skill's moment 5>
+## <`## Review, round <N>` on a round that is not the last, and on the last round the final heading the ask-team skill's step 6 gives>
 
-Round <N>, of `<anchor sha>`<, run together with the review of <companion links>, which carry the same rules>. The roles followed <`docs/team-charter.md` at `<sha>`, or their agent files' defaults, since the repository has no charter>. <Count> lenses ran blind to each other: completeness, over-reach, and through `/l3a0:ask-team`'s lens mode the <roles>. <Count> verifiers then tried to refute every veto and must-fix by executing<, and the main thread checked <which findings> by running <command>>. <Quote commands with paths relative to the repository, never an absolute local path.> `<fix sha>` applies what survived<here>.
+Round <N>, of `<anchor sha>`<, run together with the review of <companion links>, which carry the same rules>. The roles followed <`docs/team-charter.md` at `<sha>`, or their agent files' defaults, since the repository has no charter>. <Count> lenses ran blind to each other: completeness, over-reach, and through `/l3a0:ask-team`'s lens mode the <roles>. <Count> verifiers then tried to refute every veto and must-fix by executing<, and the main thread confirmed <which must-fixes> by running <command>>. <Quote commands with paths relative to the repository, never an absolute local path.> `<fix sha>` applies what survived<here>. <Or, where nothing survived: "Nothing survived verification, so this round changes nothing.">
 
 ### Veto, confirmed and fixed
 
-- **<One-line claim> (<lens that raised it>).** <What breaks, in one or two sentences.> Verified: <what the verifier ran and what it showed>. Fixed: <what the change now says or does>.
+1. **<One-line claim> (<lens that raised it>).** <What breaks, in one or two sentences.> Verified: <what the verifier ran and what it showed>. Fixed: <what the change now says or does>.
 
 ### Veto, confirmed and still blocking
 
-- **<One-line claim> (<lens>).** <Why it is not fixed in this round, and what lifts it: the fix, or the owner's written override linked here.>
+1. **<One-line claim> (<lens>).** <Why it is not fixed in this round, and what lifts it: the fix, or the owner's written override linked here.>
 
 ### Must fix, confirmed and fixed
 
@@ -46,7 +46,7 @@ Surviving vetoes and must-fixes, by the lens that raised them: <lens> <count>, <
 
 ### Cost
 
-This round, at list prices, with output a lower bound:
+Round <N>, of `<anchor sha>`, at list prices, with output a lower bound:
 
 1. <Count> review lenses: at least <dollars> US dollars, <tokens> tokens over <turns> turns.
 2. <Count> verifiers: at least <dollars> US dollars, <tokens> tokens over <turns> turns.
@@ -54,5 +54,7 @@ This round, at list prices, with output a lower bound:
 <4. Any other loop that served this round, such as reading a source.>
 
 The figures cover <every companion pull request, linked>. <What dominated, if one kind of token did.> <The main thread's checks in step 4 ran in its own context and are not counted.> Earlier rounds' figures are in their own comments and are not repeated here.
+
+<Where the pull requests track issues, the `## Cost` comment on the main pull request's issue repeats these lines under the line `Review round <N>, of <anchor sha>, on <pull request link>`.>
 
 <On a companion pull request, the whole section is one line: "Posted once, on <link to the main pull request>: at least <dollars> US dollars for <what it covers> across all <count> pull requests.">

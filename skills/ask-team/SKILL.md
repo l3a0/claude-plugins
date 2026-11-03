@@ -86,7 +86,7 @@ Three seats are required whatever the count.
 2. The risk engineer on anything touching the path to an irreversible action, such as the order path.
 3. The security reviewer on anything that adds a credential, a dependency or a GitHub workflow.
 
-A change to prose that the path to an irreversible action will be built to, such as a design rule for sending orders, touches that path, so it seats the risk engineer too. A repository whose charter names a required reviewer for some path, as l3a0/ithildin-runtime's names the risk engineer for the order path, adds that seat under its own rule.
+A repository whose charter names a required reviewer for some path, as l3a0/ithildin-runtime's names the risk engineer for the order path, adds that seat under its own rule.
 
 A pull request also gets the two lenses the owner's rules give every pull request: completeness, which asks whether the class was fixed rather than one instance, and over-reach, which asks whether the change stayed inside its class. They are not roles, so run them as two more blind agents with those two prompts, using a general-purpose agent.
 
@@ -127,7 +127,7 @@ A finding is a claim until something executes it. For every veto and every must-
 2. A claim that a path exists, such as an order reaching a broker around the gate: write the call and run it.
 3. A claim about another repository or a vendor: read the file at its commit, or the vendor's own page.
 
-A finding that rests on a fact one command shows, such as a line in a file, a phrase in a source or a comment on an issue, may be checked by the delivery lead running that command instead. The review comment then says which findings the lead checked and that the cost figure leaves those checks out, because they ran in the lead's own context.
+A must-fix that rests on a fact one command shows, such as a line in a file, a phrase in a source or a comment on an issue, may be confirmed by the delivery lead running that command instead. The lead only confirms this way. A veto, and any finding the lead's command would refute or lower, goes to a verifier, because the lead wrote or owns the change and cannot refute a finding against it. The review comment says which findings the lead confirmed and that the cost figure leaves those checks out, because they ran in the lead's own context.
 
 Group findings that rest on the same fact under one verifier. Keep the whole review under ten agent runs where the subject allows, counting the roles, the two lenses and the verifiers.
 
@@ -150,7 +150,7 @@ Price the review with the owner's `loop-cost` skill where it is installed, count
 
 ## Lens mode, inside another review
 
-Another review can call this skill for the team's lenses beside its own, on the owner's ruling of 2026-10-29 UTC that the pull request and blog review skills consult the team for their feedback. The caller owns the branch and the review comment, so in this mode the skill runs steps 1 to 4 and returns, and skips steps 5 and 6. It also skips step 2's two pull request lenses, which the caller runs. A caller in the same session may run steps 2 to 4 itself rather than through a nested call, launching the roles beside its own two lenses in one blind round and verifying every lens's findings in one step 4. These are the same steps, and `review-round.md` runs them this way.
+Another review can call this skill for the team's lenses beside its own, on the owner's ruling of 2026-10-29 UTC that the pull request and blog review skills consult the team for their feedback. The caller owns the branch and the review comment, so in this mode the skill runs steps 1 to 4 and returns, and skips steps 5 and 6. It also skips step 2's two pull request lenses, which the caller runs. A caller in the same session may run steps 2 to 4 itself rather than through a nested call, launching the roles beside its own two lenses in one blind round and verifying every lens's findings in one step 4. These are the same steps, and `review-round.md` runs them this way. The run limit is still item 6's: the roles and the verifiers stay under ten runs, and the caller's two lenses fall outside it.
 
 1. **The caller names the subject and its anchor**, as step 1 lists them, and what is out of scope. The skill adds nothing to that scope.
 2. **The skill seats the roles the subject touches**, by the table in step 2, and runs them blind, as step 3 says. The caller's own lenses are not shown to the roles, and the roles' findings are not shown to the caller's lenses until both have reported, so neither side anchors on the other.
