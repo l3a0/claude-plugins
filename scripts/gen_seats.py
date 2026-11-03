@@ -20,8 +20,8 @@ from The Art of Scalability (Abbott and Fisher, 1st ed., 2009).
 
 The watched failures on coordination paid for everywhere (CFO), integrity
 left to a later fix and safeguards that fail together (risk), processing time
-and today's reference data (scientist), runs that cannot be repeated and load
-that was never measured (CTO), backups taken during writes and software
+and today's reference data (scientist), runs that cannot be repeated, load
+that was never measured and vendor words taken as guarantees (CTO), backups taken during writes and software
 trusted over its operation (COO), and native serialization and personal data
 kept (CISO) come from Designing Data-Intensive Applications (Kleppmann, 1st
 ed., O'Reilly Media, 2017).
@@ -262,6 +262,7 @@ SEATS = [
             "A plan to grow that exists only as an intention. A design ready to grow names its next split and the written limit of what is built now.",
             "A past run that cannot be repeated because the code reads the clock or a random source directly rather than a recorded value.",
             "A plan to scale built on a guess about which operations will be common rather than on measured load, so the effort goes to a part that never carried the load.",
+            "A broker, data vendor or store chosen on a word such as \"ACID\", \"real-time\" or \"exactly once\" rather than on a guarantee the venture has written down and tested. Those words mean different things to different vendors.",
         ],
         lane=[
             "Whether the edge is statistically real: board-scientist.",
