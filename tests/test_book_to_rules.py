@@ -40,7 +40,9 @@ Repeated sentence for the mapper to find twice.
 ===== pdf 6 | front =====
 Unnumbered front matter from an older run.
 ===== pdf 7 | p. 5 =====
+Page five opens with a unique line for the anchor.
 Repeated sentence for the mapper to find twice.
+Closing words of page five come after the repeat.
 """
 
 SCREENS = """===== b000 | Page 7 of 90 ● 0% | Location 52 of 900 =====
@@ -173,13 +175,22 @@ with tempfile.TemporaryDirectory() as d:
         {'loc': '30', 'text': 'Nothing in this book says this sentence at all', 'note': ''},
         {'loc': '40', 'text': 'XQZJ damaged by OCR here, then: Chapter two talks about estimates that converge late',
          'note': ''},
+        {'loc': '40', 'text': 'Page five opens with a unique line for the anchor.', 'note': ''},
         {'loc': '50', 'text': 'Repeated sentence for the mapper to find twice.', 'note': ''},
+        {'loc': '55', 'text': 'Closing words of page five come after the repeat.', 'note': ''},
         {'loc': '60', 'text': 'A margin quote the owner highlighted ZZZZ junk junk', 'note': ''}]}))
     out_json = os.path.join(d, 'hl_pages.json')
     code, out, _ = run('hlmap.py', pages, hl, out_json)
-    got = [h['page'] for h in json.load(open(out_json, encoding='utf-8'))]
-    check('hlmap maps body and margin highlights, falls back past a damaged start or a damaged end, flags two '
-          'pages, marks a miss', got == ['1', '3', '?', '4', '4?5', '3'] and 'mapped 5 of 6, 1 on two blocks' in out)
+    rows = json.load(open(out_json, encoding='utf-8'))
+    check('hlmap maps body and margin highlights, falls back past a damaged start or a damaged end, marks a miss',
+          [h['page'] for h in rows] == ['1', '3', '?', '4', '5', '5', '5', '3'] and 'mapped 7 of 8' in out)
+    check('hlmap places a repeated match by location order, not at its first copy, and names the other copy',
+          rows[5].get('also') == ['4'] and '1 repeats placed by location order' in out)
+    check('hlmap flags a match that breaks location order, and not two highlights at one location on two pages',
+          rows[7].get('check') == 'out of location order' and '1 out of location order' in out
+          and not any(h.get('check') for h in rows[:7]))
+    code, out, err = run('hlmap.py', pages, hl, hl)
+    check('hlmap refuses to write over its input', code != 0 and 'overwrite' in err)
 
     clean = write('clean.md', '+ A rule paraphrases the book and cites p. 4.\n')
     copied = write('copied.md', '+ The rule says: Chapter two talks about estimates that converge late.\n')

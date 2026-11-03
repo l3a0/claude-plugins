@@ -53,7 +53,7 @@ Text the OCR read from a page's margin column follows the body after a `[margin]
 1. **`pg.py`** says whether each cited phrase is on its page. It answers OK, NEAR when the phrase is on a neighbouring page only, MISS, NOKEY when the text has no such page, or SHORT for a phrase under three words. A phrase may run from the end of its page's body onto the next page. A phrase that only starts on the next page is NEAR, so a citation one page early fails. A key written approximate, such as `L~6930`, accepts a neighbouring screen as OK\~. Every other verdict names where the phrase actually is. The exit status is 1 when any citation fails, or when none was given. `--file cites.txt` reads one `KEY:PHRASE` per line.
 2. **`ctx.py`** prints the 260 characters either side of the phrase, from the same text `pg.py` judged. That is what a reviewer reads to decide whether a rule claims more than its page says.
 3. **`split_parts.py`** cuts the text into one file per reader at chapter starts and prints each part's word count.
-4. **`hlmap.py`** finds the page of each of the owner's highlights, and flags one whose text also occurs on a second page.
+4. **`hlmap.py`** finds the page of each of the owner's highlights. Where the text occurs on more than one page, it picks the copy that fits the highlights' Kindle locations, and it flags any highlight whose page still breaks location order.
 5. **`overlap.py`** finds runs of six or more words a draft shares with the book.
 
 Matching folds case, curly quotes, dashes, ligatures and soft hyphens, and joins a word hyphenated across a line end or a page break. Run the scripts with `python3 -I`, which keeps Python from loading a module out of the run directory. `tests/test_book_to_rules.py` runs them on a synthetic book in CI.
@@ -93,7 +93,7 @@ python3 -I "$SKILL/scripts/hlmap.py" "$RUN/book_pages.txt" "$RUN/<ASIN>_highligh
 
 `split_parts.py` refuses starts out of book order and reports the front-matter blocks it left out, so give the preface a start of its own when it carries the book's argument. Read the word counts it prints, and split a part much larger than the rest.
 
-`hlmap.py` reports how many highlights it placed and how many matched on two pages. On *Rapid Development* it placed 184 of 187, and 5 of those matched on two pages, written as `28?612`. A reader can still find a missed one by its text. It searches margin text too, which placed four highlights the run's first mapper missed and moved a margin quote from p. 169 to p. 126.
+`hlmap.py` reports how many highlights it placed, how many repeats it placed by location order, and how many still break that order. Kindle locations run in book order, so the highlights with one match that keep that order serve as anchors, and a repeated match takes the copy nearest where its anchors put it. On *Code Complete*, taking the first copy instead put highlights on far pages, mostly reading-list entries that recur in the bibliography and headings that also sit in the table of contents. With location order, 21 repeats were placed and none breaks order. On *Rapid Development* it placed 184 of 187 and flagged two highlights whose only match is a far copy, so check every flagged row by hand. A reader can still find a missed one by its text. It searches margin text too, which placed four highlights the run's first mapper missed and moved a margin quote from p. 169 to p. 126.
 
 ### 3. Brief one reader per part
 
