@@ -5,16 +5,17 @@ description: Turn a book into rules for an engineering team and design principle
 
 # Book to rules
 
-Four books went through this pipeline in two days, ending on 2026-11-03: *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*. Each run worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the four review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them.
+Five books went through this pipeline in two days, ending on 2026-11-03. The first four, *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*, each worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them. The fifth, *Building Microservices*, ran with this skill and still cost at least 69.30 US dollars, because its review took seven rounds. Step 5's list of what other work owns is the lesson of that run.
 
-The worked examples are the four rounds of pull requests.
+The worked examples are the five sets of pull requests.
 
-| Book | l3a0/ithildin-runtime | l3a0/claude-plugins | l3a0/repo-template |
-| --- | --- | --- | --- |
-| *The Art of Scalability* | [PR #24](https://github.com/l3a0/ithildin-runtime/pull/24) | [PR #42](https://github.com/l3a0/claude-plugins/pull/42) | none |
-| *Designing Data-Intensive Applications* | [PR #25](https://github.com/l3a0/ithildin-runtime/pull/25) | [PR #46](https://github.com/l3a0/claude-plugins/pull/46) | [PR #74](https://github.com/l3a0/repo-template/pull/74) |
-| *Code Complete* | [PR #26](https://github.com/l3a0/ithildin-runtime/pull/26) | [PR #47](https://github.com/l3a0/claude-plugins/pull/47) | [PR #75](https://github.com/l3a0/repo-template/pull/75) |
-| *Rapid Development* | [PR #27](https://github.com/l3a0/ithildin-runtime/pull/27) | [PR #48](https://github.com/l3a0/claude-plugins/pull/48) | [PR #76](https://github.com/l3a0/repo-template/pull/76) |
+| Book | l3a0/ithildin-runtime | l3a0/claude-plugins | l3a0/repo-template | Review rounds |
+| --- | --- | --- | --- | --- |
+| *The Art of Scalability* | [PR #24](https://github.com/l3a0/ithildin-runtime/pull/24) | [PR #42](https://github.com/l3a0/claude-plugins/pull/42) | none | 1 |
+| *Designing Data-Intensive Applications* | [PR #25](https://github.com/l3a0/ithildin-runtime/pull/25) | [PR #46](https://github.com/l3a0/claude-plugins/pull/46) | [PR #74](https://github.com/l3a0/repo-template/pull/74) | 2 |
+| *Code Complete* | [PR #26](https://github.com/l3a0/ithildin-runtime/pull/26) | [PR #47](https://github.com/l3a0/claude-plugins/pull/47) | [PR #75](https://github.com/l3a0/repo-template/pull/75) | 1 |
+| *Rapid Development* | [PR #27](https://github.com/l3a0/ithildin-runtime/pull/27) | [PR #48](https://github.com/l3a0/claude-plugins/pull/48) | [PR #76](https://github.com/l3a0/repo-template/pull/76) | 1 |
+| *Building Microservices* | [PR #28](https://github.com/l3a0/ithildin-runtime/pull/28) | [PR #56](https://github.com/l3a0/claude-plugins/pull/56) | [PR #77](https://github.com/l3a0/repo-template/pull/77) | 7 |
 
 Read the review comment on the *Code Complete* project pull request first. Its round is the one the `ask-team` skill's review round and comment template were drawn from.
 
@@ -127,6 +128,19 @@ Then read each rule's passage with `ctx.py` and cut any word the page does not s
 
 ### 5. Write the rules into the three repositories
 
+Before drafting, list what other work already owns. A book's rules often reach mechanics that an open issue, an open pull request or an owner's ruling has already settled or is settling, such as how a cancel is sent or how a release takes over. Write the list to `$RUN/owners.md`, one line per owner, with its link, the mechanics it owns, and the ruling or proposal that binds them. Find the owners with `gh issue list` and `gh pr list` on the project repository and a search of their comments for the owner's dated rulings, and read each open pull request's diff, since a proposal there binds a rule as much as a ruling does.
+
+Then write each rule that touches an owner's mechanics as a guarantee with a pointer. The guarantee says what must hold, and the pointer names the owner that decides how. Step 6 pastes the same list into the review brief, so the lenses know it from round 1.
+
+*Building Microservices* shows the cost of skipping this. Its review on [PR #28](https://github.com/l3a0/ithildin-runtime/pull/28) ran seven rounds and cost at least 64.04 US dollars, mostly because each round's fixes wrote order-path and release mechanics into the design doc that open work already owned.
+
+- [#7](https://github.com/l3a0/ithildin-runtime/issues/7) had ruled that the loss stop does not unwind in slice 1, and rounds 1 to 4 still designed an unwind.
+- [#10](https://github.com/l3a0/ithildin-runtime/issues/10) owns the account's lease and how cancels are sent.
+- [#11](https://github.com/l3a0/ithildin-runtime/issues/11) and the open [PR #15](https://github.com/l3a0/ithildin-runtime/pull/15) own the release model and the pinned image digest, and rounds 1 to 5 each wrote handover mechanics that contradicted them.
+- [#5](https://github.com/l3a0/ithildin-runtime/issues/5) makes capture marketlake's in slice 1, and round 4 wrote a release rule for capture that round 5 cut to a pointer.
+
+Each fix drew new findings in the mechanics it had just written. Rounds 4 to 7 cut those passages to guarantees and pointers, and round 7 confirmed no veto or must-fix.
+
 Each repository gets its own branch and its own pull request, and each pull request body links the other two. Before branching, list the open pull requests that edit the same documents, since a second book's rules in flight will conflict. [PR #25](https://github.com/l3a0/ithildin-runtime/pull/25) conflicted with another open pull request in both of its documents.
 
 1. **The project repository**, such as l3a0/ithildin-runtime. Its `docs/design.md` gets a citation paragraph naming the book and how it is cited, then the rules. Its `docs/team-charter.md` gets each role's new duties and vetoes. A rule that changes a role's veto line is the owner's call, so the pull request puts it to the owner rather than making it.
@@ -137,21 +151,22 @@ A plugin check must hold in any repository, so word it for the property it prote
 
 ### 6. Run the review round
 
-Review all three pull requests in one round, by the procedure in the `/l3a0:ask-team` skill's `review-round.md`. It covers one brief for every lens, the completeness and over-reach lenses beside the roles, verifiers that refute by executing, fixes on every companion, pricing, the review comment on each pull request, the body's `## Revision` section and the owner's rulings. Its templates are the brief and the comment. Follow it as written, and add three things a book needs.
+Review all three pull requests in one round, by the procedure in the `/l3a0:ask-team` skill's `review-round.md`. It covers one brief for every lens, the completeness and over-reach lenses beside the roles, verifiers that refute by executing, fixes on every companion, pricing, the review comment on each pull request, the body's `## Revision` section and the owner's rulings. Its templates are the brief and the comment. Follow it as written, and add four things a book needs.
 
 1. **The brief's sources section.** The round's brief template leaves "Sources for checking a claim" for the source to supply. Fill `templates/review-sources.md` from this skill and paste it there. It names the book's text file and gives the `pg.py`, `ctx.py` and `overlap.py` commands, so every lens and verifier can check a citation without reading the book. The brief lives in the session's scratchpad, as the round says, and never in a repository.
 2. **The facts not to re-derive.** List the books the design doc and charter already carry, and the owner's dated rulings on the project's issues. A rule that contradicts or restates one of them is a finding, and checks 6 to 8 below say why.
-3. **Every citation, rechecked.** The round's fix step rechecks citations with the brief's helper. For a book that is `pg.py` over every citation in all three diffs, whether or not a lens flagged it, and `overlap.py` over each diff, each body and each comment before it is posted. The comment's "Citations corrected" section lists each miss.
+3. **What other work owns, from round 1.** Paste step 5's `$RUN/owners.md` under the brief's `## Out of scope`. A lens then reports a rule that writes an owner's mechanics as a finding to cut back to a guarantee and a pointer, rather than proposing mechanics of its own that the next round reviews. A rule that two roles' vetoes pull opposite ways goes to the owner, as the brief template says. On [PR #28](https://github.com/l3a0/ithildin-runtime/pull/28) the rule on resending a lost cancel was allowed in rounds 2 to 4, forbidden in round 5 and sent to the owner in round 6.
+4. **Every citation, rechecked.** The round's fix step rechecks citations with the brief's helper. For a book that is `pg.py` over every citation in all three diffs, whether or not a lens flagged it, and `overlap.py` over each diff, each body and each comment before it is posted. The comment's "Citations corrected" section lists each miss.
 
 On the book rounds, verifiers ran a model of the rules as written, an attack on a claimed type guard, and a copy of the repository with a limit inverted. A companion that misses a fix carries the stale rule into a second repository, as [PR #74](https://github.com/l3a0/repo-template/pull/74) did with a fencing claim the other two had already withdrawn. Seven lenses ran on the *Code Complete* and *Rapid Development* rounds. The *Rapid Development* round ran no verifiers, and the main thread checked each must-fix by running the commands itself.
 
 ### 7. Price the loop
 
-The round's pricing step prices its lenses and verifiers, and asks for any other loop that served the round on its own line. For a book that line is the readers, so run the `l3a0:loop-cost` skill on the reader agents' transcripts too, and add their line under `### Cost` in the project pull request's comment, after the round's sum, where the template places other loops. The *Code Complete* round cost at least 24.34 US dollars: 9.32 for seven readers, 10.30 for seven lenses and 4.72 for three verifiers. The *Rapid Development* round cost at least 16.13: 7.33 for seven readers and 8.79 for seven lenses.
+The round's pricing step prices its lenses and verifiers, and asks for any other loop that served the round on its own line. For a book that line is the readers, so run the `l3a0:loop-cost` skill on the reader agents' transcripts too, and add their line under `### Cost` in the project pull request's comment, after the round's sum, where the template places other loops. The *Code Complete* round cost at least 24.34 US dollars: 9.32 for seven readers, 10.30 for seven lenses and 4.72 for three verifiers. The *Rapid Development* round cost at least 16.13: 7.33 for seven readers and 8.79 for seven lenses. The *Building Microservices* loop cost at least 69.30: 5.26 for five readers and 64.04 for the lenses and verifiers of seven review rounds.
 
 ## Checks to run before opening the pull requests
 
-Checks 1 to 23 are findings a review made on one of the four rounds, after the pull requests were open. Checks 24 and 25 came from building this skill, whose own review found that a test against the highlights alone misses copied text, and whose version clashed with another open pull request's. Run them on the drafts, and a review round has less to find.
+Checks 1 to 23 are findings the reviews of the first four books made, after the pull requests were open. Checks 24 and 25 came from building this skill, whose own review found that a test against the highlights alone misses copied text, and whose version clashed with another open pull request's. Check 26 came from the seven rounds on *Building Microservices*. Run them on the drafts, and a review round has less to find.
 
 ### Citations
 
@@ -192,3 +207,7 @@ Checks 1 to 23 are findings a review made on one of the four rounds, after the p
 23. **The markdown holds.** A tilde before a location is escaped as `L\~`, and a renumbered list keeps markdownlint's numbering rule.
 24. **No draft shares six words in a row with the book.** Run `overlap.py` on the diff, the pull request body and the review comment, and rewrite every hit that is more than the book's own short phrase.
 25. **The version is the next free one.** `gh pr list -R l3a0/claude-plugins --state open` shows what the open pull requests claim. A patch bump changes `plugin.json` alone.
+
+### What other work owns
+
+26. **A rule that reaches another issue's mechanics states a guarantee and points to that issue.** Read `$RUN/owners.md` against every rule that names how something is sent, released, retried or halted. Where an open issue, an open pull request or an owner's ruling owns that, the rule keeps what must hold and links the owner for how. [PR #28](https://github.com/l3a0/ithildin-runtime/pull/28) designed an unwind that [#7](https://github.com/l3a0/ithildin-runtime/issues/7) had ruled out of slice 1 and a release handover that [PR #15](https://github.com/l3a0/ithildin-runtime/pull/15) never allows, and each took rounds to cut.

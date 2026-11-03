@@ -183,7 +183,7 @@ Prices a finished plan, build or review loop in tokens and dollars, measured fro
 
 ### book-to-rules
 
-Four books became rules for an engineering team in two days, and each run worked out the same pipeline again at about 15 to 32 US dollars a book. This skill holds that pipeline in seven steps.
+Five books became rules for an engineering team in two days. The first four runs each worked out the same pipeline again at about 15 to 32 US dollars a book. This skill holds that pipeline in seven steps.
 
 1. Get the full text, through `kindle-highlights` for a Kindle book or `book-text` for a PDF.
 2. Split it into reading parts at chapter starts, and find the page of each of the owner's highlights.
@@ -193,7 +193,7 @@ Four books became rules for an engineering team in two days, and each run worked
 6. Review all three pull requests in one round, by ask-team's review round, with the book's text and citation checkers added to its brief.
 7. Price the loop with `loop-cost`.
 
-Its `pg.py` says whether each cited phrase is on its page, names the right page when it is not, and exits non-zero, so a wrong page stops a run before a reviewer finds it. The readers run as the plugin's `book-reader` agent, which has no shell, because the book's text is untrusted input. The skill also lists twenty-five checks to run before the pull requests open, twenty-three of them findings the four review rounds made, such as a rule claiming more than its page supports, or a never-skip list that points to a group instead of naming each protection. The book's text, the OCR output and the reader notes stay in a run directory outside every repository, because the repositories are public and the book is copyrighted. `overlap.py` checks a diff, a pull request body or a comment for six or more words in a row shared with the book.
+Its `pg.py` says whether each cited phrase is on its page, names the right page when it is not, and exits non-zero, so a wrong page stops a run before a reviewer finds it. The readers run as the plugin's `book-reader` agent, which has no shell, because the book's text is untrusted input. The skill also lists twenty-six checks to run before the pull requests open, twenty-four of them findings the books' reviews made, such as a rule claiming more than its page supports, or a never-skip list that points to a group instead of naming each protection. The book's text, the OCR output and the reader notes stay in a run directory outside every repository, because the repositories are public and the book is copyrighted. `overlap.py` checks a diff, a pull request body or a comment for six or more words in a row shared with the book.
 
 ## License
 
