@@ -10,8 +10,10 @@ a margin column share baselines, because it reads each baseline across both colu
 1. Every pixel at or above --threshold turns white, and darker pixels stretch to fill the range, so gray shading
    vanishes while text stays dark.
 2. The page splits into a body crop and a margin crop, --gap of the page width left of the body column. The body
-   column's left edge is the median x of the first pass's long lines, read from FIRST_PASS_DIR/<stem>.ocr.tsv.
-   --split skips that and cuts every page at one fixed fraction of its width.
+   column's left edge is the --percentile of the x of the first pass's long lines, read from
+   FIRST_PASS_DIR/<stem>.ocr.tsv. A low percentile holds the edge when a list or a quotation indents many lines,
+   and a gap narrower than the gutter keeps the cut out of the margin notes. --split skips that and cuts every page
+   at one fixed fraction of its width.
 3. Each crop gets a --border of white pixels and is scaled up --scale times.
 
 Writes OUT_DIR/<stem>_body.png and, where the margin is wider than --min-margin pixels, OUT_DIR/<stem>_margin.png.
@@ -19,7 +21,7 @@ A margin crop left from an earlier run is removed when this run writes none for 
 had no first-pass .tsv and the pages that had no long line, since both keep one whole-page body crop. OUT_DIR must
 sit outside every git repository.
 """
-import argparse, pathlib, statistics, sys
+import argparse, pathlib, sys
 from PIL import Image, ImageOps
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -30,14 +32,16 @@ def whiten(im, threshold):
     return im.convert('L').point(lambda v: 255 if v >= threshold else int(v * 255 / threshold))
 
 
-def body_left(tsv_text, min_chars):
-    """The median left edge of the long lines in a first-pass OCR .tsv, or None when it has no long line."""
+def body_left(tsv_text, min_chars, percentile=10):
+    """The left edge of the body column: the given percentile, by lower rank, of the x of the long lines in a
+    first-pass OCR .tsv. None when the page has no long line."""
     xs = []
     for row in tsv_text.splitlines():
         p = row.split('\t', 2)
         if len(p) == 3 and len(p[2]) > min_chars:
             xs.append(float(p[1]))
-    return statistics.median(xs) if xs else None
+    xs.sort()
+    return xs[int(percentile / 100 * (len(xs) - 1))] if xs else None
 
 
 def crops(im, cut, border, scale, min_margin):
@@ -56,7 +60,8 @@ def main(argv=None):
     ap.add_argument('--glob', default='p-*.png')
     ap.add_argument('--threshold', type=int, default=185, help='gray level at and above which a pixel turns white')
     ap.add_argument('--split', type=float, help='cut every page at this fraction of its width instead')
-    ap.add_argument('--gap', type=float, default=0.03, help='how far left of the body column to cut')
+    ap.add_argument('--gap', type=float, default=0.02, help='how far left of the body column to cut')
+    ap.add_argument('--percentile', type=float, default=10, help='which long line marks the body column edge')
     ap.add_argument('--min-chars', type=int, default=45, help='a first-pass line longer than this is body text')
     ap.add_argument('--min-margin', type=int, default=40, help='narrowest margin crop worth writing, in pixels')
     ap.add_argument('--border', type=int, default=64)
@@ -69,7 +74,7 @@ def main(argv=None):
         split = a.split
         if split is None:
             tsv = pathlib.Path(a.first_pass_dir) / f'{page.stem}.ocr.tsv'
-            left = body_left(tsv.read_text(encoding='utf-8'), a.min_chars) if tsv.exists() else None
+            left = body_left(tsv.read_text(encoding='utf-8'), a.min_chars, a.percentile) if tsv.exists() else None
             if left is None:
                 (no_long if tsv.exists() else no_tsv).append(page.stem)
             split = max(0.0, left - a.gap) if left is not None else 0.0

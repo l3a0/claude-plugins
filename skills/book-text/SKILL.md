@@ -104,8 +104,15 @@ uv run -q --with 'pillow>=10' python $SKILL/prep.py $RUN/pages $RUN/text $RUN/cl
 `prep.py` changes each page in three ways.
 
 1. **Whitening.** Every pixel at or above gray level 185 turns white, and darker pixels stretch to fill the range, so the shading vanishes while the text stays dark. `--threshold` sets the level. Text printed in a gray lighter than the threshold vanishes with the shading, so lower the threshold if that happens.
-2. **Splitting.** The page splits into a body crop and a margin crop, 3% of the page width left of the body column (`--gap`). The body column's left edge is the median x of the first pass's lines longer than 45 characters (`--min-chars`), since only body text runs that long. A page with no such line keeps one whole-page body crop. `--split FRACTION` cuts every page at one fixed fraction instead.
+2. **Splitting.** The page splits into a body crop and a margin crop, 2% of the page width left of the body column (`--gap`). The body column's left edge is the 10th percentile, by lower rank, of the x of the first pass's lines longer than 45 characters (`--percentile`, `--min-chars`), since only body text runs that long. A page with no such line keeps one whole-page body crop, and the script lists those pages. `--split FRACTION` cuts every page at one fixed fraction instead.
 3. **Padding and scaling.** Each crop gets a 64-pixel white border and is scaled up 2 times (`--border`, `--scale`). The border keeps text off the crop's edge, where the cut runs, and the scaling enlarges small type such as the margin notes.
+
+The hand run cut at the median x minus 3%, and a review of it on 2026-11-03 found two faults, measured on 590 pages with an ordinary layout. A page's body edge was found from its pixels and compared with each rule's cut.
+
+1. **Lost first letters.** Where a list or a quotation indents most of a page's long lines, the median moves right and the cut lands inside the lines that are not indented. Their first letters went to the margin crop on 28 pages.
+2. **Clipped margin notes.** The gutter between the margin notes and the body is about 3% of the page, so a 3% gap cut into the right edge of the notes on 294 pages, and slivers of them started body lines.
+
+The 10th percentile minus 2% lost letters on none of the 590 pages and clipped notes on 1. A second OCR pass under the new rule agreed, with margin slivers in the body falling from 174 pages to 2.
 
 ### B4. Second pass on the crops
 
@@ -128,12 +135,13 @@ These figures come from runs on 2026-11-03, on the owner's 672-page PDF, which s
 - **Offset.** The vote gave offset 22, with 615 of 672 pages agreeing by this script's count. The hand count on the day gave 616. Stray numbers cast 3 votes for two other offsets, and the remaining pages print no number at their top or foot.
 - **Blank pages.** Six pages came back with no text, PDF pages 3, 12, 20, 22, 646 and 671.
 - **Speed.** The whole book OCRed in a few minutes with 8 jobs at once. A later timing of 56 second-pass crops took 6.3 seconds, which puts the 1,304 crops of the second pass at about two and a half minutes.
-- **Agreement with the hand run.** `prep.py`'s crops were byte-identical to the hand run's, the second pass's `.tsv` files matched, and all 650 printed pages of `book_pages.txt` matched.
+- **Agreement with the hand run.** The first version of `prep.py`, which used the hand run's median rule, made crops byte-identical to the hand run's. The second pass's `.tsv` files matched, and all 650 printed pages of `book_pages.txt` matched. The default cut has since changed, as B3 says.
 
 ### Limits of route B
 
 - **Tables come out scrambled.** The recognizer returns each table cell as its own line and sorts lines top to bottom, so cells whose tops sit at slightly different heights interleave across columns, and a table's text comes out in the wrong order. Check a table against the page image before quoting it.
 - **A hyphenated compound loses its hyphen** when it breaks at a line end, such as "self-" before "contained". The join cannot tell a split word from a compound.
+- **Some layouts defeat the column cut.** The cut assumes at least a tenth of a page's long lines start at the body edge. On *Rapid Development* it moved a table of contents' hanging chapter numbers whole onto the `[margin]` line, filed the left column of 4 two-column index pages under `[margin]`, and still cut into tables or figures that start near the left edge on 11 of 19 such pages. Read those pages against their images.
 - **The margin column must sit left of the body.** `prep.py` cuts one vertical line per page. A book with its margin on the right, or on alternating sides, needs `--split` per side or a change to `crops()`.
 - **One image per page.** See B1.
 - **Front matter is outside the parts and the citation check.** Its pages carry no printed number, so `--part` ranges and `ctx.py` reach printed pages only. Front matter stays in `book_pages.txt`.

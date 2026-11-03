@@ -319,7 +319,12 @@ if Image:
     check('a pixel exactly at the threshold turns white', prep.whiten(Image.new('L', (1, 1), 185), 185).getpixel((0, 0)) == 255)
 
     first_pass = '0.25\t0.40\tshort\n0.30\t0.38\t' + 'x' * 50 + '\n0.40\t0.40\t' + 'y' * 50 + '\n0.5\t0.42\t' + 'z' * 46
-    check('the body column starts at the median x of long lines', prep.body_left(first_pass, 45) == 0.40)
+    check('the body column starts at the 10th percentile x of long lines', prep.body_left(first_pass, 45) == 0.38)
+    check('--percentile picks another rank', prep.body_left(first_pass, 45, 50) == 0.40)
+    # 14 body lines at the column edge and 17 indented ones, the shape that pulled a median cut into the text.
+    indented = ''.join(f'0.{k:02d}\t0.27\t{"b" * 50}\n' for k in range(14))
+    indented += ''.join(f'0.{k:02d}\t{0.31 + (k % 2) / 100}\t{"i" * 50}\n' for k in range(14, 31))
+    check('indented lines do not move the body edge', prep.body_left(indented, 45) == 0.27)
     check('no long line gives no body column', prep.body_left('0.1\t0.4\tshort', 45) is None)
     check('a line of exactly --min-chars is not long', prep.body_left('0.1\t0.4\t' + 'a' * 45, 45) is None)
 
@@ -331,11 +336,12 @@ if Image:
         page.save(tmp / 'pages' / 'p-001.png')
         (tmp / 'text' / 'p-000.ocr.tsv').write_text(first_pass)  # p-001 has no first pass
         code, out = run(prep.main, [str(tmp / 'pages'), str(tmp / 'text'), str(tmp / 'clean')])
+        check('prep lists a page with no first pass', "1 pages had no first-pass .tsv: ['p-001']" in out)
         check('prep writes a body and a margin crop, and only a body crop with no first pass',
               sorted(p.name for p in (tmp / 'clean').iterdir()) == ['p-000_body.png', 'p-000_margin.png', 'p-001_body.png'])
         body = Image.open(tmp / 'clean' / 'p-000_body.png')
         margin = Image.open(tmp / 'clean' / 'p-000_margin.png')
-        cut = int(W * (0.40 - 0.03))
+        cut = int(W * (0.38 - 0.02))
         check('the body crop starts just left of the body column, padded and doubled',
               body.size == ((W - cut + 128) * 2, (H + 128) * 2))
         check('the margin crop is the rest, padded and doubled', margin.size == ((cut + 128) * 2, (H + 128) * 2))
@@ -347,6 +353,18 @@ if Image:
         check('--split, --border and --scale override the defaults',
               Image.open(tmp / 'fixed' / 'p-001_body.png').size == (W // 2 + 20, H + 20))
         run(prep.main, [str(tmp / 'pages'), str(tmp / 'text'), str(tmp / 'clean'), '--split', '0.04'])
+        (tmp / 'wide').mkdir()
+        Image.new('L', (1000, 100), 255).save(tmp / 'wide' / 'p-000.png')
+        (tmp / 'wtext').mkdir()
+        (tmp / 'wtext' / 'p-000.ocr.tsv').write_text(indented)
+        run(prep.main, [str(tmp / 'wide'), str(tmp / 'wtext'), str(tmp / 'wclean')])
+        check('the default cut sits 0.02 left of the edge, between the margin notes and the body',
+              Image.open(tmp / 'wclean' / 'p-000_margin.png').size == ((250 + 128) * 2, (100 + 128) * 2))
+        run(prep.main, [str(tmp / 'wide'), str(tmp / 'wtext'), str(tmp / 'wclean'), '--percentile', '50'])
+        check('--percentile reaches the cut', Image.open(tmp / 'wclean' / 'p-000_margin.png').size[0] == (290 + 128) * 2)
+        (tmp / 'wtext' / 'p-000.ocr.tsv').write_text('0.1\t0.3\tonly short lines\n')
+        code, out = run(prep.main, [str(tmp / 'wide'), str(tmp / 'wtext'), str(tmp / 'wclean')])
+        check('prep lists a page with no long line', "1 pages had no line over 45 characters: ['p-000']" in out)
         check('a margin narrower than --min-margin gets no crop, and its old crop is removed',
               sorted(p.name for p in (tmp / 'clean').iterdir()) == ['p-000_body.png', 'p-001_body.png'])
 
