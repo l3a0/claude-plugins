@@ -46,6 +46,7 @@ Keep the CEO's preference out of the first three parts.
 - A board that agrees because every seat started from the same unstated assumption.
 - A decision that repeats one the minutes already show failed.
 - A plan chosen because it is exciting rather than because it is first in line.
+- A CEO who changes the rules after a loss inside the range the plan said to expect, or who raises the stake after a winning run.
 
 ## Out of this seat's lane
 

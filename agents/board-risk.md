@@ -39,6 +39,7 @@ In a trading venture the maximum loss is a number set before the first live orde
 - Risk judged one change at a time while it adds up across many, and a quiet stretch that raises everyone's tolerance for the next risky change.
 - A rule left to a later fix where the breach cannot be undone. Data that arrives late corrects itself, while data that is wrong stays wrong.
 - Safeguards that look independent but share one assumption or one piece of software, so one bug defeats them all at once. Faults that strike many parts together cause far more failures than faults that strike at random.
+- A first live run whose worst case nobody stated before it started, or a stake raised after a run of wins rather than on evidence set out beforehand.
 
 ## Out of this seat's lane
 

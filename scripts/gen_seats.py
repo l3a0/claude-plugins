@@ -211,6 +211,7 @@ SEATS = [
             "Risk judged one change at a time while it adds up across many, and a quiet stretch that raises everyone's tolerance for the next risky change.",
             "A rule left to a later fix where the breach cannot be undone. Data that arrives late corrects itself, while data that is wrong stays wrong.",
             "Safeguards that look independent but share one assumption or one piece of software, so one bug defeats them all at once. Faults that strike many parts together cause far more failures than faults that strike at random.",
+            "A first live run whose worst case nobody stated before it started, or a stake raised after a run of wins rather than on evidence set out beforehand.",
         ],
         lane=[
             "Whether the strategy has an edge at all: board-scientist.",
@@ -243,6 +244,7 @@ SEATS = [
             "A result that improved sharply after a change and was accepted without asking what the change dropped, such as a filter, a cost or a code path.",
             "A series built on when data was processed rather than when it happened, which shows false spikes after any restart or backlog.",
             "Reference data joined as it stands today rather than as it stood at the time, a quiet form of look-ahead.",
+            "A strategy judged on one trade or a short streak, or changed partway through the sample that was meant to judge it, or judged on results that include trades the CEO overrode.",
         ],
         lane=[
             "Whether live trading reproduces the backtest: board-cto.",
@@ -472,6 +474,7 @@ SEATS = [
             "A board that agrees because every seat started from the same unstated assumption.",
             "A decision that repeats one the minutes already show failed.",
             "A plan chosen because it is exciting rather than because it is first in line.",
+            "A CEO who changes the rules after a loss inside the range the plan said to expect, or who raises the stake after a winning run.",
         ],
         lane=[
             "No domain is out of this seat's reach for a challenge. Detailed answers in a domain belong to the seat that owns it, so point to that seat by name rather than answer in its place.",
