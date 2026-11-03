@@ -40,6 +40,7 @@ In a trading venture this means one code path for signals and orders, fed by the
 - A past run that cannot be repeated because the code reads the clock or a random source directly rather than a recorded value.
 - A plan to scale built on a guess about which operations will be common rather than on measured load, so the effort goes to a part that never carried the load.
 - A broker, data vendor or store chosen on a word such as "ACID", "real-time" or "exactly once" rather than on a guarantee the venture has written down and tested. Those words mean different things to different vendors.
+- Safety checks that run in testing and are switched off, compiled out or skipped in production, such as Python's `assert` under `-O` or a debug flag, so the live system runs without the guards the tests exercised.
 
 ## Out of this seat's lane
 

@@ -28,6 +28,15 @@ switches and native serialization come from Designing Data-Intensive
 Applications (Kleppmann, 1st ed., O'Reilly Media, 2017), as the same section
 of ithildin-runtime's docs/design.md adopts it with Kindle locations.
 
+The checks on rules held by structure rather than convention, guards that
+production keeps, neutral values for bad input, conversion at the adapter,
+contract tests for stand-ins, boundary and dirty-data tests, expected values
+from the specification, a second implementation of what must be exact, bug
+fixes whose test fails before the fix, measured tuning and secrets in error
+text come from Code Complete (McConnell, 2nd ed., Microsoft Press, 2004), as
+ithildin-runtime's docs/design.md and docs/team-charter.md adopt it with
+printed pages.
+
 Run from anywhere:
 
     python3 scripts/gen_team.py           # write the eight files
@@ -99,6 +108,8 @@ ROLES = [
             "Search the change for a direct read of the time of day or of a random source, such as `datetime.now()`, `time.time()` or an unseeded `random`, inside code whose result must be repeatable. Each one gives a different answer on a rerun, so it goes through a clock or a seeded generator passed in at the edge. Check too that elapsed time comes from a monotonic clock, and that the order of events comes from a sequence number rather than the time of day, which jumps backwards when it is corrected.",
             "Where the change needs one process to act at a time, or several stores to agree, check that it uses an existing coordination service or one store's own transaction rather than a leader election, a lock protocol or a distributed commit written in house. Check too that it coordinates only the part whose rule needs it. A commit that spans several systems fails whenever any one of them fails, can hold its locks until someone steps in, and makes its coordinator one more database to run.",
             "Where the change splits data or work by key, check that the hash is stable across processes and runs, since a language's built-in hash can differ from one process to the next. Check too that keys map to a fixed number of partitions, many more than the machines, rather than to the hash modulo the machine count, which moves most keys when one machine is added.",
+            "Where the repository draws boundaries between its packages, such as the one path that may reach an irreversible action, check that a tool in CI enforces them and that a test adding a forbidden import fails it. A language that enforces no boundary leaves one held only by a comment or a convention, and that one erodes. Where one step must follow another, check that the later step takes the earlier one's output as its argument, so the code cannot run them out of order.",
+            "Search code outside the tests for `assert` used as a guard, and for a check compiled out, skipped or switched off in production by a debug flag or a build setting. Python drops every `assert` when it runs with `-O`, so a guard written that way is tested and then absent where it matters. A guard on an irreversible action or on recorded data raises explicitly and runs in every environment.",
         ],
     },
     {
@@ -117,6 +128,7 @@ ROLES = [
             "Where the repository keeps a holdout, check that no code path in the change can load it, by searching for where its dates or file are read.",
             "Check that a chosen parameter sits on a plateau, by reading or running the neighbouring values, rather than on a lone peak.",
             "Check that every pinned number names its data vintage and its specification, and that a null result has its code, its pinned test and its log entry.",
+            "Where a change is made for speed, check that the pull request carries a measurement before and after on the same representative data, and that a change which gains nothing is reverted. More than half of attempted tunings gain little or slow the code, and the effect of one depends on the language, its version and its libraries, so experience predicts it poorly.",
             "Where a claim quotes latency or response time, check that it gives percentiles, such as the median and the 99th, rather than a mean, and that percentiles from several machines or time windows were combined by merging the underlying samples or histograms, never by averaging the percentiles. A request that waits on several calls is as slow as the slowest of them, so a small share of slow calls reaches a large share of requests.",
         ],
     },
@@ -160,6 +172,8 @@ ROLES = [
             "Check that a call to an outside system that times out is treated as an unknown outcome rather than a failure, since the action may have happened and only the reply been lost. The id that lets the outside system recognise a repeat is created once, where the action starts, and carried end to end, rather than made fresh for each attempt or each layer.",
             "Where only one process may act at a time, through a lock, a lease or a leader, check that the store or the outside system refuses a write carrying an older grant number than one it has already accepted, where the grant number rises with each grant. A process paused by garbage collection or a suspended virtual machine can wake after its lease has expired and still act as if it held it. Where the outside system cannot check the number, check that it rides in something the system keeps, such as a file name. Where the system neither checks nor keeps it, nothing fences the write, so check that the design says so and holds the one actor some other way, such as a lock released only when its holder exits, like `flock`, never a POSIX record lock that closing any descriptor for the file releases. Check that a late write from an old holder is detected and halts, and that no rule marks an action as never sent because the outside system shows no record of it, since a request can still land after its sender has gone. Detection is a backstop, not the guard. A check in front of the outside system fences only the step it guards, and a pause after that check still lets the write through. Check too that a failover cannot issue an id the old leader already used, including after a restore from backup.",
             "Where the change removes duplicates by an id, check that every message is recorded as it arrived, and that a uniqueness constraint in the store enforces applying it once, in the same step as the write. A check that no row with that id exists has nothing to lock, so two writers can each pass it. A repeated id whose content differs from the first is recorded beside it and halts rather than being dropped.",
+            "Check that data from an outside system is converted into the codebase's own types at the adapter, so no vendor type, raw dictionary or vendor exception reaches past it, and that every result an outside call returns, such as a status code, an exit code or a partial fill, is checked. Where values of one type are easy to swap, such as a price and a quantity, check that they are distinct types or passed by keyword.",
+            "Where a stand-in replaces an outside system in tests, such as a fake, a simulator or a stub, check that one suite of contract tests runs against both the stand-in and the real system or its recorded responses, so the stand-in keeps every promise the real one makes. A stand-in for a source with no data raises or reports the data missing, and never returns an empty list or a zero.",
         ],
     },
     {
@@ -179,6 +193,7 @@ ROLES = [
             "Score each new way the change can fail by how likely it is, how severe it is and how hard it is to notice, each as 1, 3 or 9, and multiply. A failure nobody would notice scores worst, so it needs a detector before it ships. A change whose score passes the threshold the repository sets is split rather than shipped whole, because risk adds up across the changes in a release.",
             "Check that testing a limit and recording the action happen in one serial step. When the read, the check and the write are separate steps, two actions taken at once can each pass a limit that together they break. Route actions that share a limit through one queue processed in order, or through one transaction at serializable isolation, which the store runs as if no other ran beside it. Pay that price only for limits whose breach cannot be undone. A rule whose breach a later correction fixes cheaply may be checked after the fact.",
             "Check that a state the code assumes cannot happen, such as a negative balance, a repeated id or a gap in a sequence, halts and alerts the owner rather than being ignored, clamped or only logged. What must never happen holds in every case, faults included. Only what must eventually happen, such as a reply, may wait for a fault to clear.",
+            "Search the path to the gate and the code that reads outside input for handling that turns a bad value into a usable one: a neutral value, the closest legal value, a logged warning followed by carrying on, a default that reads as a valid choice, a function whose result starts as success, a value such as -1 or zero standing for missing, or a branch over a closed set whose last case is the default rather than a failure. Where a wrong result costs more than no result, each one must halt instead.",
         ],
     },
     {
@@ -197,6 +212,9 @@ ROLES = [
             "Check that each number a test pins names where it came from, so a re-pin can say what moved.",
             "Where the repository keeps a benchmark or a replay, compare the change's counters and timings with the base's. Counters on a deterministic run must match. A timing that moves past the tolerance the repository records, or past the spread of repeated runs at the base where it records none, is a finding in either direction, because a sudden improvement can mean a code path or a filter was dropped.",
             "For each fault the change claims to handle, such as a crash halfway through a write, a timeout, a lost reply or a slow dependency, name the test that injects that fault, remove or break the handling in a copy, and check that the test fails. Error handling that never runs is where serious bugs hide.",
+            "For each limit or threshold the change touches, check for tests at one below it, at it and one above it, where a `>=` written for `>` hides. For each input from outside, check for tests with dirty data, meaning absent, stale, empty, oversized and wrong-typed values, each asserting the behaviour the repository requires rather than a quiet default. Developers who believe they cover 95% of their code typically cover 50 to 60%, so read the branch coverage the run reports rather than trusting an estimate.",
+            "Check that each expected value comes from the specification or a hand calculation on numbers chosen to make the check easy, never from running the code and pinning what it printed. Where a result must be exact, such as money, check that a second, plain implementation computes it and a test compares the two.",
+            "For a bug fix, run its new test against the commit before the fix and check that it fails there. Check too that the pull request names the cause and the similar code it searched. One study found more than half of first fixes were wrong.",
         ],
     },
     {
@@ -237,6 +255,7 @@ ROLES = [
             "For each new dependency, name who publishes it, how widely it is used, and whether its version is pinned.",
             "For each credential the change uses, name where it is read from and what it is allowed to do. A credential that can withdraw, transfer, publish or delete more than its use needs is a veto.",
             "Search for decoding in a language's native object format, such as Python's `pickle`, Java serialization or `yaml.load` without a safe loader, on data that is stored or that comes from outside. Decoding it can run any code an attacker wrote, and these formats neglect versioning. Check too that input from outside is bounded before use, with each value checked against a sane range and each size capped.",
+            "Check that error messages, exceptions and logs from code that holds a credential carry no secret, token or account number, by inducing a failure with a sentinel credential and searching what was printed and logged.",
         ],
     },
 ]

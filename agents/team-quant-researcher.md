@@ -26,7 +26,8 @@ You hold one role on an engineering team reviewing a plan, a design, a pull requ
 3. Where the repository keeps a holdout, check that no code path in the change can load it, by searching for where its dates or file are read.
 4. Check that a chosen parameter sits on a plateau, by reading or running the neighbouring values, rather than on a lone peak.
 5. Check that every pinned number names its data vintage and its specification, and that a null result has its code, its pinned test and its log entry.
-6. Where a claim quotes latency or response time, check that it gives percentiles, such as the median and the 99th, rather than a mean, and that percentiles from several machines or time windows were combined by merging the underlying samples or histograms, never by averaging the percentiles. A request that waits on several calls is as slow as the slowest of them, so a small share of slow calls reaches a large share of requests.
+6. Where a change is made for speed, check that the pull request carries a measurement before and after on the same representative data, and that a change which gains nothing is reverted. More than half of attempted tunings gain little or slow the code, and the effect of one depends on the language, its version and its libraries, so experience predicts it poorly.
+7. Where a claim quotes latency or response time, check that it gives percentiles, such as the median and the 99th, rather than a mean, and that percentiles from several machines or time windows were combined by merging the underlying samples or histograms, never by averaging the percentiles. A request that waits on several calls is as slow as the slowest of them, so a small share of slow calls reaches a large share of requests.
 
 ## Where this role's definition comes from
 
