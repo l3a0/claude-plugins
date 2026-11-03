@@ -49,13 +49,13 @@ the agents in any of three ways.
 ```bash
 S=${CLAUDE_SKILL_DIR}/scripts/agent-cost.py
 D=~/.claude/projects/<project>/<session>/subagents
-$S --dir $D a561459b341fb4459 a60a37fc12890ef20   # by id
+$S --dir $D a1b2c3d4e5f600001 a1b2c3d4e5f600002   # by id
 $S --dir $D --ids-file ids.txt                     # a file of ids, "-" for stdin
-$S --dir $D --match '^Read RD part'                # by spawn description
+$S --dir $D --match '^Read part'                   # by spawn description
 ```
 
-1. **By id.** An id can be written `a56...`, `agent-a56...` or
-   `agent-a56....jsonl`. An id with no transcript in the folder stops the
+1. **By id.** An id can be written `a1b2...`, `agent-a1b2...` or
+   `agent-a1b2....jsonl`. An id with no transcript in the folder stops the
    script with an error that names it, so a typo never prices short.
 2. **By a file of ids.** One or more ids per line, with `#` starting a comment.
 3. **By description.** `--match` takes a Python regular expression and
@@ -64,8 +64,9 @@ $S --dir $D --match '^Read RD part'                # by spawn description
    This is the way to price a loop after a context compaction has dropped the
    ids, as long as its agents' descriptions share a pattern.
 
-Plain transcript paths work too, as they always have:
-`agent-cost.py <transcript.jsonl> [<transcript.jsonl> ...]`.
+Plain transcript paths work too: `$S <transcript.jsonl> [<transcript.jsonl> ...]`.
+A path that does not exist is an error, never looked up by its file name in
+the folder.
 
 ### Pass a list of ids to the script, not to the shell
 
@@ -85,8 +86,8 @@ ids, or `match:REGEX` for a description match.
 
 ```bash
 $S --dir $D \
-  --group 'reading=match:^Read RD part' \
-  --group 'lenses=match:on RD PRs$' \
+  --group 'reading=match:^Read part' \
+  --group 'lenses=match:lens on PR' \
   --group 'verifiers=@verifier-ids.txt'
 ```
 
@@ -107,7 +108,7 @@ checkout of l3a0/claude-plugins, `python3 tests/test_agent_cost.py` runs them.
 
 Give one line per loop in the report to the owner, as in this example.
 
-> The decompose loop on #531 cost at least 5.29 US dollars: 18.3M tokens over 107 turns, almost all cache reads.
+> The decompose loop on [l3a0/quantitative-trading#531](https://github.com/l3a0/quantitative-trading/issues/531) cost at least 5.29 US dollars: 18.3M tokens over 107 turns, almost all cache reads.
 
 A review gives its lenses and its verifiers a line each and then their sum,
 and any reading agents a line apart, as `--group` prints them.

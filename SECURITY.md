@@ -60,3 +60,9 @@ exact access). Reports of particular interest:
   deleting local worktrees and branches. In scope is any path where text in
   an issue, a comment or a page steers one of those actions, or where the
   pruning loop calls unpushed work safe.
+- `loop-cost` reads Claude Code session transcripts under
+  `~/.claude/projects`, which hold anything a session read or wrote, and
+  prints only token counts and dollars. Its skill then posts those figures as
+  a `## Cost` comment through the user's `gh` login. In scope is any path that
+  puts transcript content, rather than its totals, into the output or a
+  comment.

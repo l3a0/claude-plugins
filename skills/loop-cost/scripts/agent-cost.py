@@ -11,8 +11,9 @@ agent id (`a1b2...`, `agent-a1b2...` or `agent-a1b2....jsonl`) resolved to
 DIR/agent-<id>.jsonl. DIR defaults to the current directory and is normally
 ~/.claude/projects/<project>/<session>/subagents. An argument that is not an
 existing file is split on spaces and commas, so a list of ids passed as one
-word (a zsh variable, which zsh does not split) still works. An id with no
-transcript in DIR is an error that names it.
+word (a zsh variable, which zsh does not split) still works. A token holding
+a folder separator is a path and is never looked up in DIR. An id or path
+with no transcript is an error that names it.
 
 --ids-file FILE reads ids from FILE, one or more per line, `#` starting a
 comment; `-` reads standard input. --match REGEX selects every agent in DIR
@@ -140,14 +141,25 @@ def resolve(tokens, folder):
         if os.path.isfile(arg):
             paths.append(arg)
             continue
+        found, lost = [], []
         for token in re.split(r"[\s,]+", arg.strip()):
             if not token:
                 continue
-            path = token if os.path.isfile(token) else agent_path(token, folder)
-            if os.path.isfile(path):
-                paths.append(path)
+            # A token with a folder in it is a path, never an id, so a path
+            # that does not exist is reported rather than looked up in DIR.
+            if os.sep in token or os.path.isfile(token):
+                path = token
             else:
-                missing.append(token)
+                path = agent_path(token, folder)
+            if os.path.isfile(path):
+                found.append(path)
+            else:
+                lost.append(token)
+        if lost and not found and os.sep in arg:
+            # Report a missing path whole, even when it holds a space.
+            lost = [arg]
+        paths += found
+        missing += lost
     if missing:
         fail(f"no transcript in {folder} for {len(missing)} agent(s): "
              + ", ".join(missing))
