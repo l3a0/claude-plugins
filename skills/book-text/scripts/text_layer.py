@@ -5,9 +5,10 @@
 
 Runs `pdftotext -enc UTF-8` into RUN_DIR/book.txt and splits it into pages at the form feeds pdftotext writes
 after every page. Without --offset, the offset comes from the page numbers in each page's first and last lines.
-Each --drop removes every line that matches it, such as a watermark repeated across pages. Writes
-RUN_DIR/book_pages.txt and RUN_DIR/parts/NAME.txt. It also prints every line that is left on two or more pages and
-carries a web address, because a download site's watermark usually names the site.
+Each --drop removes every line that matches it, such as a watermark repeated across pages, and the script prints
+each distinct line it dropped with the pages it came from. Writes RUN_DIR/book_pages.txt and RUN_DIR/parts/NAME.txt.
+It also prints every line that is left on two or more pages and carries a web address, because a download site's
+watermark usually names the site. RUN_DIR must sit outside every git repository.
 """
 import argparse, collections, pathlib, re, subprocess, sys
 
@@ -33,19 +34,24 @@ def main(argv=None):
     ap.add_argument('--part', action='append', default=[], type=booktext.parse_part, metavar='NAME:FIRST-LAST')
     a = ap.parse_args(argv)
 
-    run = pathlib.Path(a.run_dir)
-    run.mkdir(parents=True, exist_ok=True)
-    subprocess.run(['pdftotext', '-enc', 'UTF-8', a.pdf, str(run / 'book.txt')], check=True)
+    run = booktext.run_dir(a.run_dir)
+    pdf = pathlib.Path(a.pdf).resolve()  # an absolute path cannot be read as a pdftotext option
+    subprocess.run(['pdftotext', '-enc', 'UTF-8', str(pdf), str(run / 'book.txt')], check=True)
     pages = split_pages((run / 'book.txt').read_text(encoding='utf-8'))
 
     drops = [re.compile(d) for d in a.drop]
-    dropped = 0
+    dropped = collections.defaultdict(list)
     kept = []
-    for page in pages:
-        lines = page.split('\n')
-        keep = [ln for ln in lines if not any(d.search(ln) for d in drops)]
-        dropped += len(lines) - len(keep)
+    for n, page in enumerate(pages, 1):
+        keep = []
+        for ln in page.split('\n'):
+            if any(d.search(ln) for d in drops):
+                dropped[ln.strip()].append(n)
+            else:
+                keep.append(ln)
         kept.append(keep)
+    for line, on in sorted(dropped.items(), key=lambda kv: -len(kv[1])):
+        print(f'dropped {line!r} from {len(on)} lines on PDF pages {sorted(set(on))}')
 
     repeated = collections.Counter(s for lines in kept for s in {ln.strip() for ln in lines if WEB.search(ln)})
     print('repeated lines with a web address:', [(n, s) for s, n in repeated.most_common() if n > 1])
@@ -58,7 +64,7 @@ def main(argv=None):
         print(f'offset {offset} agrees with {agree} pages')
     else:
         offset = a.offset
-    print(f'dropped {dropped} lines')
+    print(f'dropped {sum(map(len, dropped.values()))} lines')
 
     blocks = [booktext.block(i + 1, offset, '\n'.join(lines)) for i, lines in enumerate(kept)]
     booktext.write_book(run, blocks, a.part)

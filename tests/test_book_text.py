@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for skills/book-text/scripts on synthetic inputs.
 
-    uv run -q --with pillow python tests/test_book_text.py
+    uv run -q --with 'pillow>=10' python tests/test_book_text.py
 
 Every fixture is made here: a PDF written byte by byte, page images drawn with Pillow, and hand-written OCR rows.
 None holds book text. The text-layer test needs pdftotext and the image tests need Pillow, and each is skipped
@@ -60,15 +60,36 @@ check('the offset is the most common header and footer vote', offset == 3)
 check('every numbered page agrees with it', agree == 8)
 check('a number deep in the body casts no vote, and a chapter number in a header casts one', set(votes) == {3, 2})
 check('a page with no number gives no offset', booktext.find_offset([['a'], ['b']])[0] is None)
+# Printed pages 100-105 on PDF pages 110-115, each number on the third line from the top, under a running head.
+late = [['x']] * 109 + [['Running head', 'Chapter title', str(n), 'Body line.', 'More body.', 'And more.', 'End.']
+                        for n in range(100, 106)]
+check('a three-digit number on the third line votes', booktext.find_offset(late)[:2] == (10, 6))
 check('a page before printed page 1 is front matter', booktext.label(3, 3) == 'front 3' and booktext.label(4, 3) == 'p. 1')
 check('a block header carries both page numbers', booktext.block(40, 37, 'x') == '===== pdf 40 | p. 3 =====\nx\n')
 check('a part is NAME:FIRST-LAST', booktext.parse_part('1-intro:1-50') == ('1-intro', 1, 50))
+check('a part can be one page', booktext.parse_part('x:5-5') == ('x', 5, 5))
 for bad in ('intro', 'intro:50-1', 'a b:1-2'):
     try:
         booktext.parse_part(bad)
         check(f'part {bad!r} is refused', False)
     except ValueError:
         check(f'part {bad!r} is refused', True)
+
+
+def exits(fn, *args):
+    try:
+        fn(*args)
+    except SystemExit:
+        return True
+    return False
+
+
+check('-p image names map to their pages', booktext.image_pages(['p-002-000', 'p-001-000']) == {1: 'p-001-000', 2: 'p-002-000'})
+check('plain image names map from 0, past 999', booktext.image_pages([f'p-{i:03d}' for i in range(1001)])[1001] == 'p-1000')
+check('a page with two images stops the run', exits(booktext.image_pages, ['p-001-000', 'p-001-001', 'p-002-000']))
+check('a page with no image stops the run', exits(booktext.image_pages, ['p-001-000', 'p-003-000']))
+check('a gap in plain names stops the run', exits(booktext.image_pages, ['p-000', 'p-002']))
+check('mixed names stop the run', exits(booktext.image_pages, ['p-000', 'p-001-000']))
 
 
 # --- the text-layer route ------------------------------------------------------------------------------------------
@@ -111,14 +132,19 @@ with tempfile.TemporaryDirectory() as tmp:
             book.append([str(printed), f'Chapter text on printed page {printed}.', 'A plain closing line.'])
         book[3].append(MARK)
         book[5].append(MARK)
+        book[4] += ['see www.once.org', 'and www.twice.org', 'again www.twice.org']  # on one page each
         write_pdf(tmp / 'book.pdf', book)
         code, out = run(text_layer.main, [str(tmp / 'book.pdf'), str(tmp / 'run'), '--drop', '^Shared from ',
                                           '--part', 'first:1-2', '--part', 'rest:3-5'])
         check('text_layer finishes', code == 0)
         check('text_layer finds the offset from the header numbers', 'offset 2 agrees with 5 pages' in out)
         check('text_layer reports the lines it dropped', 'dropped 2 lines' in out)
+        check('text_layer names each dropped line and its pages', f"dropped '{MARK}' from 2 lines on PDF pages [4, 6]" in out)
         code, out = run(text_layer.main, [str(tmp / 'book.pdf'), str(tmp / 'look')])
         check('text_layer names a watermark that carries a web address', f"(2, '{MARK}')" in out)
+        check('a web address on only one page is not reported', 'once.org' not in out and 'twice.org' not in out)
+        run(text_layer.main, [str(tmp / 'book.pdf'), str(tmp / 'look'), '--drop', r'example\.com'])
+        check('--drop matches anywhere in a line', MARK not in (tmp / 'look' / 'book_pages.txt').read_text())
         text = (tmp / 'run' / 'book_pages.txt').read_text(encoding='utf-8')
         check('every PDF page gets one block', text.count('===== pdf ') == 7)
         check('front matter is labelled front', '===== pdf 2 | front 2 =====\nContents' in text)
@@ -131,6 +157,16 @@ with tempfile.TemporaryDirectory() as tmp:
         check('a part holds exactly its printed range', first.count('=====\n') == 2 and '| p. 3 ' not in first)
         code, out = run(text_layer.main, [str(tmp / 'book.pdf'), str(tmp / 'run2'), '--offset', '1'])
         check('--offset overrides the vote', '===== pdf 2 | p. 1 =====' in (tmp / 'run2' / 'book_pages.txt').read_text())
+        code, out = run(text_layer.main, [str(tmp / 'book.pdf'), str(tmp / 'run'), '--part', 'tail:4-9'])
+        check('a part that runs past the book says so', 'tail: 2 pages, short of the 6 in its range' in out)
+        check('a rerun removes part files it does not write',
+              sorted(p.name for p in (tmp / 'run' / 'parts').iterdir()) == ['tail.txt'])
+
+        if shutil.which('git'):
+            subprocess.run(['git', 'init', '-q', str(tmp / 'repo')], check=True)
+            code, _ = run(text_layer.main, [str(tmp / 'book.pdf'), str(tmp / 'repo' / 'run')])
+            check('a run directory inside a git repository is refused',
+                  code not in (0, None) and not (tmp / 'repo' / 'run').exists())
 
         write_pdf(tmp / 'bare.pdf', [['no numbers'], ['anywhere here']])
         code, _ = run(text_layer.main, [str(tmp / 'bare.pdf'), str(tmp / 'run3')])
@@ -141,17 +177,33 @@ with tempfile.TemporaryDirectory() as tmp:
 
 with tempfile.TemporaryDirectory() as tmp:
     bp = pathlib.Path(tmp) / 'book_pages.txt'
-    bp.write_text('\n'.join([booktext.block(1, 1, 'Front words.'),
-                             booktext.block(2, 1, 'The first page talks about\ncoupling and cohe-\nsion at length.'),
-                             booktext.block(3, 1, 'The second page is about schedules.\n[margin] A side note.'),
-                             booktext.block(4, 1, 'The third page.')]), encoding='utf-8')
-    code, out = run(ctx.main, [str(bp), '1:Coupling and cohesion', '2:a side note'])
-    check('ctx finds a quote across a line break and a split word', 'NOT FOUND' not in out and code == 0)
+    bp.write_text('\n'.join([
+        booktext.block(1, 1, 'Front words.'),
+        booktext.block(2, 1, 'Alpha Beta Gamma. The first page talks about\ncoupling and cohe-\nsion at length. It ends '
+                             'with the start of a quote that'),
+        booktext.block(3, 1, 'runs onto the second page. The second page is about schedules and a self-\ncontained '
+                             'unit, then a dash -\nNext word.\n[margin] A side note.'),
+        booktext.block(4, 1, 'The third page says It\u2019s the Programmer\u2019s job. Zeta Eta Theta.')]), encoding='utf-8')
+    code, out = run(ctx.main, [str(bp), '1:Coupling and cohesion', '2:a side note', '2:self-contained unit',
+                               '2:dash - Next word', "3:It's the Programmer's job",
+                               '1:start of a quote that runs onto the second page'])
+    check('ctx finds split words, compounds, curly quotes and a quote over the page break',
+          'NOT FOUND' not in out and code == 0)
+    code, out = run(ctx.main, [str(bp), '1:coupling'])
+    check('ctx prints 260 characters either side by default, in the book\'s case',
+          'Alpha Beta Gamma. The first page' in out and 'runs onto the second' in out)
+    code, out = run(ctx.main, [str(bp), '1:page talks', '--width', '5'])
+    check('--width limits the context', 'irst page talks abou' in out and 'Gamma' not in out and 'coupling' not in out)
     code, out = run(ctx.main, [str(bp), '3:coupling'])
     check('ctx says NOT FOUND for a quote on another page, and exits 1', 'NOT FOUND' in out and code == 1)
-    code, out = run(ctx.main, [str(bp), '--check', '1:cohesion at length', '3:about schedules', '1:no such words'])
+    code, out = run(ctx.main, [str(bp), '1:second page is about'])
+    check('a quote that starts on the next page is not on the cited page', 'NOT FOUND' in out)
+    code, out = run(ctx.main, [str(bp), '--check', '1:cohesion at length', '3:about schedules', '1:about schedules'])
     check('--check says OK on the cited page', out.startswith('OK   1 [1]'))
-    check('--check says NEAR one page off', 'NEAR 3 [2]' in out)
+    check('--check says NEAR for the page before', 'NEAR 3 [2]' in out)
+    check('--check says NEAR for the page after', 'NEAR 1 [2]' in out)
+    check('--check exits 0 when nothing is a MISS', code == 0)
+    code, out = run(ctx.main, [str(bp), '--check', '1:no such words'])
     check('--check says MISS and exits 1 otherwise', 'MISS 1 []' in out and code == 1)
     check('front matter is not a citable page', 'Front' not in ''.join(booktext.read_book(bp).values()))
 
@@ -177,6 +229,8 @@ with tempfile.TemporaryDirectory() as tmp:
     tsv(tmp / 'text2' / 'p-002_margin.ocr.tsv', [(0.1, 0.1, 'See also'), (0.12, 0.1, 'Chapter 9.')])
     tsv(tmp / 'text2' / 'p-003_body.ocr.tsv', [(0.1, 0.3, 'Page two text.')])
     tsv(tmp / 'text2' / 'p-005_body.ocr.tsv', [(0.1, 0.3, 'Page four text.')])
+    for i in (1, 4):
+        tsv(tmp / 'text2' / f'p-{i:03d}_body.ocr.tsv', [])  # OCR of a blank page writes an empty file
     args = [str(tmp / 'pages'), str(tmp / 'text2'), str(tmp / 'run'), '--first-pass', str(tmp / 'text'),
             '--part', 'one:1-2', '--part', 'two:3-4']
     code, out = run(stitch.main, args)
@@ -192,9 +246,52 @@ with tempfile.TemporaryDirectory() as tmp:
     check('a part holds its printed range', '| p. 3 =' in two and '| p. 4 =' in two and '| p. 2 =' not in two)
     code, _ = run(stitch.main, [str(tmp / 'pages'), str(tmp / 'text2'), str(tmp / 'run2')])
     check('stitch stops when it has neither an offset nor a first pass', code not in (0, None))
+    run(stitch.main, args + ['--offset', '1'])
+    check('--offset overrides the first pass', '===== pdf 2 | p. 1 =====' in (tmp / 'run' / 'book_pages.txt').read_text())
+    code, _ = run(stitch.main, args + ['--pages', '7'])
+    check('stitch stops when the images fall short of the page count', code not in (0, None))
+    tsv(tmp / 'text2' / 'p-004_margin.ocr.tsv', [(0.1, 0.1, 'Only a margin.')])
+    code, out = run(stitch.main, args)
+    check('stitch lists a page with margin text but no body', 'an empty body: PDF pages [5]' in out)
+    (tmp / 'text2' / 'p-003_body.ocr.tsv').unlink()
+    code, out = run(stitch.main, args)
+    check('stitch stops when a body OCR file is missing', code not in (0, None))
     (tmp / 'pages' / 'p-003.png').unlink()
     code, _ = run(stitch.main, args[:3] + ['--offset', '2'])
     check('stitch stops when a page image is missing', code not in (0, None))
+
+
+# --- the scan route: the OCR runner, with a stand-in OCR program ----------------------------------------------------
+
+import ocr_pages  # noqa: E402
+
+with tempfile.TemporaryDirectory() as tmp:
+    tmp = pathlib.Path(tmp)
+    (tmp / 'img').mkdir()
+    stub = tmp / 'stub.sh'
+    stub.write_text('#!/bin/sh\ncase "$1" in *bad*) echo broken >&2; exit 3;; esac\n'
+                    'printf "0.1\\t0.2\\tread %s\\n" "$(basename "$1")"\n')
+    stub.chmod(0o755)
+    for name in ('p-a.png', 'p-bad.png', 'p-gone.png'):
+        (tmp / 'img' / name).write_bytes(b'')
+    ocr = lambda: run(ocr_pages.main, [str(tmp / 'img'), str(tmp / 'out'), '--ocr', str(stub), '--jobs', '2'])
+    code, out = ocr()
+    check('ocr_pages exits 1 when an image fails', code == 1)
+    check('a failed image gets no .tsv', not (tmp / 'out' / 'p-bad.ocr.tsv').exists())
+    check('a good image gets its rows', (tmp / 'out' / 'p-a.ocr.tsv').read_text() == '0.1\t0.2\tread p-a.png\n')
+    check('no partial file is left behind', not list((tmp / 'out').glob('*.part')))
+    (tmp / 'out' / 'p-a.ocr.tsv').write_text('kept\n')
+    (tmp / 'img' / 'p-gone.png').unlink()
+    ocr()
+    check('a rerun keeps a .tsv newer than its image', (tmp / 'out' / 'p-a.ocr.tsv').read_text() == 'kept\n')
+    check('a rerun removes a .tsv whose image is gone', not (tmp / 'out' / 'p-gone.ocr.tsv').exists())
+    future = (tmp / 'out' / 'p-a.ocr.tsv').stat().st_mtime + 60
+    os.utime(tmp / 'img' / 'p-a.png', (future, future))
+    (tmp / 'out' / 'p-bad.ocr.tsv').write_text('old\n')
+    os.utime(tmp / 'img' / 'p-bad.png', (future, future))
+    ocr()
+    check('a rerun reads an image remade since its .tsv', 'read p-a.png' in (tmp / 'out' / 'p-a.ocr.tsv').read_text())
+    check('a failed rerun removes the older .tsv', not (tmp / 'out' / 'p-bad.ocr.tsv').exists())
 
 
 # --- the scan route: prep and OCR ----------------------------------------------------------------------------------
@@ -219,10 +316,12 @@ if Image:
     check('whiten keeps black text black', white.getpixel((400, 160)) == 0)
     check('whiten stretches a darker gray', white.getpixel((400, 410)) == int(SOFT * 255 / 185))
     check('the threshold is a setting', prep.whiten(page, 201).getpixel((750, 110)) < 255)
+    check('a pixel exactly at the threshold turns white', prep.whiten(Image.new('L', (1, 1), 185), 185).getpixel((0, 0)) == 255)
 
     first_pass = '0.25\t0.40\tshort\n0.30\t0.38\t' + 'x' * 50 + '\n0.40\t0.40\t' + 'y' * 50 + '\n0.5\t0.42\t' + 'z' * 46
     check('the body column starts at the median x of long lines', prep.body_left(first_pass, 45) == 0.40)
     check('no long line gives no body column', prep.body_left('0.1\t0.4\tshort', 45) is None)
+    check('a line of exactly --min-chars is not long', prep.body_left('0.1\t0.4\t' + 'a' * 45, 45) is None)
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = pathlib.Path(tmp)
@@ -247,6 +346,9 @@ if Image:
                         '--border', '10', '--scale', '1'])
         check('--split, --border and --scale override the defaults',
               Image.open(tmp / 'fixed' / 'p-001_body.png').size == (W // 2 + 20, H + 20))
+        run(prep.main, [str(tmp / 'pages'), str(tmp / 'text'), str(tmp / 'clean'), '--split', '0.04'])
+        check('a margin narrower than --min-margin gets no crop, and its old crop is removed',
+              sorted(p.name for p in (tmp / 'clean').iterdir()) == ['p-000_body.png', 'p-001_body.png'])
 
     font = next((f for f in ('/System/Library/Fonts/Helvetica.ttc', '/System/Library/Fonts/Supplemental/Arial.ttf')
                  if os.path.exists(f)), None)

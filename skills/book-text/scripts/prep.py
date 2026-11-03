@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Prepare scanned page images for a second OCR pass: whiten gray shading, then split the body column from the
-margin column. Needs Pillow, so run it as `uv run -q --with pillow python prep.py ...`.
+margin column. Needs Pillow, so run it as `uv run -q --with 'pillow>=10' python prep.py ...`.
 
     prep.py PAGE_DIR FIRST_PASS_DIR OUT_DIR [--threshold 185] [--split FRACTION] [--glob 'p-*.png']
 
@@ -15,9 +15,15 @@ a margin column share baselines, because it reads each baseline across both colu
 3. Each crop gets a --border of white pixels and is scaled up --scale times.
 
 Writes OUT_DIR/<stem>_body.png and, where the margin is wider than --min-margin pixels, OUT_DIR/<stem>_margin.png.
+A margin crop left from an earlier run is removed when this run writes none for that page. Prints the pages that
+had no first-pass .tsv and the pages that had no long line, since both keep one whole-page body crop. OUT_DIR must
+sit outside every git repository.
 """
-import argparse, pathlib, statistics
+import argparse, pathlib, statistics, sys
 from PIL import Image, ImageOps
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import booktext  # noqa: E402
 
 
 def whiten(im, threshold):
@@ -57,20 +63,27 @@ def main(argv=None):
     ap.add_argument('--scale', type=int, default=2)
     a = ap.parse_args(argv)
 
-    out = pathlib.Path(a.out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    written = 0
+    out = booktext.run_dir(a.out_dir)
+    written, no_tsv, no_long = 0, [], []
     for page in sorted(pathlib.Path(a.page_dir).glob(a.glob)):
         split = a.split
         if split is None:
             tsv = pathlib.Path(a.first_pass_dir) / f'{page.stem}.ocr.tsv'
             left = body_left(tsv.read_text(encoding='utf-8'), a.min_chars) if tsv.exists() else None
+            if left is None:
+                (no_long if tsv.exists() else no_tsv).append(page.stem)
             split = max(0.0, left - a.gap) if left is not None else 0.0
         im = whiten(Image.open(page), a.threshold)
+        names = set()
         for name, c in crops(im, int(im.width * split), a.border, a.scale, a.min_margin):
             c.save(out / f'{page.stem}_{name}.png')
+            names.add(name)
             written += 1
+        if 'margin' not in names:
+            (out / f'{page.stem}_margin.png').unlink(missing_ok=True)
     print(f'prepared {written} crops in {out}')
+    print(f'{len(no_tsv)} pages had no first-pass .tsv: {no_tsv}')
+    print(f'{len(no_long)} pages had no line over {a.min_chars} characters: {no_long}')
 
 
 if __name__ == '__main__':

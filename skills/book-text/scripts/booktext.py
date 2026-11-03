@@ -8,7 +8,7 @@ N is the 1-based PDF page number and M the printed page number, so M = N - offse
 is labelled `front N` instead, with its PDF page number, so each front matter page keeps a label of its own.
 Every script in this folder writes or reads that one format.
 """
-import collections, pathlib, re
+import collections, pathlib, re, subprocess, sys
 
 HEADER = re.compile(r'^===== pdf (\d+) \| (p\. (\d+)|front \d+) =====$', re.M)
 PAGE_NUMBER = re.compile(r'\d{1,4}')
@@ -57,17 +57,70 @@ def parse_part(spec):
     return m.group(1), int(m.group(2)), int(m.group(3))
 
 
+def run_dir(path):
+    """Create an output folder and return it, refusing one inside a git repository.
+
+    Every output holds a copyrighted book's text or page images, and a folder inside a repository is one
+    `git add -A` away from publishing it.
+    """
+    path = pathlib.Path(path).resolve()
+    probe = path
+    while not probe.exists():
+        probe = probe.parent
+    try:
+        inside = subprocess.run(['git', '-C', str(probe), 'rev-parse', '--show-toplevel'],
+                                capture_output=True, text=True).returncode == 0
+    except FileNotFoundError:  # no git, so no repository to leak into
+        inside = False
+    if inside:
+        sys.exit(f'{path} is inside a git repository, so its book text could be committed. Use a folder outside it.')
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def image_pages(stems):
+    """Map each PDF page number to its page image's stem, from the names `pdfimages -png` gives.
+
+    `pdfimages -p -png` names an image p-PPP-NNN, with PPP its 1-based page, so a page with no image or two images
+    shows. Plain `pdfimages -png` names it p-NNN, numbering images from 0, which is the page only when every page
+    holds exactly one image. Stops on a page with two images, a gap, or a mix of the two names.
+    """
+    with_page = [re.fullmatch(r'.*-(\d+)-(\d+)', s) for s in stems]
+    if all(with_page):
+        pages = collections.defaultdict(list)
+        for s, m in zip(stems, with_page):
+            pages[int(m.group(1))].append(s)
+        doubled = [n for n, ss in pages.items() if len(ss) > 1]
+        if doubled:
+            sys.exit(f'PDF pages {sorted(doubled)} hold more than one image')
+        numbered = {n: ss[0] for n, ss in pages.items()}
+    else:
+        plain = [re.fullmatch(r'.*-(\d+)', s) for s in stems]
+        if any(with_page) or not all(plain):
+            sys.exit('page image names must all end in -NNN (pdfimages -png) or all in -PPP-NNN (pdfimages -p -png)')
+        numbered = {int(m.group(1)) + 1: s for s, m in zip(stems, plain)}
+    missing = sorted(set(range(1, max(numbered, default=0) + 1)) - set(numbered))
+    if missing:
+        sys.exit(f'no page image for PDF pages {missing}')
+    return dict(sorted(numbered.items()))
+
+
 def write_book(out_dir, blocks, parts):
-    """Write book_pages.txt and one parts/NAME.txt per part, and print each part's size."""
-    out_dir = pathlib.Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    """Write book_pages.txt and one parts/NAME.txt per part, and print each part's size.
+
+    Part files from an earlier run are removed first, so none is left holding old labels or text.
+    """
+    out_dir = run_dir(out_dir)
     (out_dir / 'book_pages.txt').write_text('\n'.join(blocks), encoding='utf-8')
+    for old in (out_dir / 'parts').glob('*.txt'):
+        old.unlink()
     if parts:
         (out_dir / 'parts').mkdir(exist_ok=True)
     for name, first, last in parts:
         seg = [b for b in blocks if (p := printed_page(b)) is not None and first <= p <= last]
         (out_dir / 'parts' / f'{name}.txt').write_text('\n'.join(seg), encoding='utf-8')
-        print(f'{name}: {len(seg)} pages, {sum(map(len, seg))} chars')
+        short = f', short of the {last - first + 1} in its range' if len(seg) != last - first + 1 else ''
+        print(f'{name}: {len(seg)} pages{short}, {sum(map(len, seg))} chars')
 
 
 def read_book(path):

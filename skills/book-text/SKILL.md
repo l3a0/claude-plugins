@@ -20,13 +20,13 @@ A page block is one PDF page of text under a header line:
 
 The first number is the 1-based PDF page and the second is the printed page. The difference between them is the book's **offset**, 37 in this example, and it is one number for the whole book. A page before printed page 1 gets `front N` instead of `p. M`, where N is again the PDF page number. A scanned page's margin column follows its body on one line that starts `[margin] `.
 
-**Keep the run directory outside every repository.** It holds a copyrighted book's full text. Use `~/Documents/Claude/kindle/<book-slug>/`, the folder `kindle-highlights` already uses, so a book's highlights and its text sit together. No book page, crop or OCR output may enter a tracked file, a test fixture or a pull request.
+**Keep the run directory outside every repository.** It holds a copyrighted book's full text. Every script refuses an output folder inside a git repository, since one `git add -A` there would stage the book. The 2026-11-03 runs used `~/Documents/Claude/kindle/<book-slug>/`, beside the book's Kindle highlights. No book page, crop or OCR output may enter a tracked file, a test fixture or a pull request.
 
 ## Prerequisites
 
 1. **poppler**, for `pdfinfo`, `pdffonts`, `pdftotext` and `pdfimages`. Install it with `brew install poppler`.
 2. **python3**, which runs every script here.
-3. **Pillow**, for the scan route's `prep.py` only. It need not be installed globally, because `uv run -q --with pillow python <script>` fetches it for one run.
+3. **Pillow**, for the scan route's `prep.py` only. Either install it for python3, or use **uv**, whose `uv run -q --with 'pillow>=10' python <script>` fetches it for one run.
 4. **macOS with Xcode Command Line Tools**, for the scan route's OCR only. `ocr_pages.py` compiles Apple Vision's text recognizer with `swiftc` on first use.
 
 The scripts sit in `scripts/` next to this file. The commands below write `$SKILL` for that folder and `$RUN` for the run directory.
@@ -52,15 +52,21 @@ The script works in four steps.
 
 1. It runs `pdftotext -enc UTF-8` into `$RUN/book.txt`. pdftotext writes a form feed after every page, so splitting at form feeds gives one piece of text per PDF page.
 2. It finds the offset by counting the page numbers printed in headers and footers. A line among the first or last three lines of a page that holds only a number votes for PDF page minus that number. The most common vote wins, and the script prints how many pages agree. `--offset N` overrides the vote.
-3. It removes every line matching a `--drop` regular expression. A download site's watermark is the usual target, so the script prints every line on two or more pages that carries a web address. Rerun with `--drop` naming it.
-4. It writes `book_pages.txt` and one part per `--part NAME:FIRST-LAST`, where FIRST and LAST are printed pages.
+3. It removes every line matching a `--drop` regular expression. A download site's watermark is the usual target, so the script prints every line on two or more pages that carries a web address. Rerun with `--drop` naming it. The script prints each distinct line it dropped and the PDF pages it came from, so a pattern that also catches the book's own lines shows at once.
+4. It writes `book_pages.txt` and one part per `--part NAME:FIRST-LAST`, where FIRST and LAST are printed pages. Part files from an earlier run are removed first, and a part whose range runs past the book says how many pages it fell short.
 
-**Measured on *Code Complete* (952 PDF pages).** The vote gave offset 37, with 814 pages agreeing. Stray numbers cast 3 votes for two other offsets. A watermark line sat on 7 pages, and the web-address report named it first. The script's output matched the hand run on every printed page except the blank lines left where the watermark was dropped, on five pages.
+### Measured on *Code Complete*
 
-**Limits of route A.**
+These figures come from one run on 2026-11-03, on the owner's 952-page PDF, which stays outside the repository.
+
+- **Offset.** The vote gave offset 37, with 814 pages agreeing. Stray numbers cast 3 votes for two other offsets.
+- **Watermark.** A watermark line sat on 7 pages, and the web-address report named it first.
+- **Agreement with the hand run.** The non-blank lines of every page matched the hand run. Blank lines differ where the watermark was dropped, and the hand run's empty block after the last page is gone.
+
+### Limits of route A
 
 - **pdftotext reads a margin column inline.** *Code Complete*'s margin notes, such as cross-references, come out as lines between body paragraphs rather than on a `[margin]` line.
-- **The offset is one number.** A book with unnumbered plates inserted mid-book changes its offset partway. The vote then shows two large counts rather than one, and the book needs a run per stretch.
+- **The offset is one number.** A book with unnumbered plates inserted mid-book changes its offset partway. The vote then shows two large counts rather than one. The scripts take one offset for the whole book, so such a book needs them extended first.
 - **A watermark without a web address goes unreported.** Read a few pages of `book.txt` before trusting the report.
 
 ## Route B: a scanned PDF of page images
@@ -76,10 +82,10 @@ The first pass is still needed, because it locates the body column that the seco
 
 ```bash
 pdfimages -list BOOK.pdf | head    # one image per page is what the rest assumes
-mkdir -p $RUN/pages && pdfimages -png BOOK.pdf $RUN/pages/p
+mkdir -p $RUN/pages && pdfimages -p -png BOOK.pdf $RUN/pages/p
 ```
 
-pdfimages names the images `p-000.png`, `p-001.png` and so on, so `p-000.png` is PDF page 1. Check that the image count equals the page count from `pdfinfo`, because a page with two images shifts every later page by one. `stitch.py` stops when a number is missing, but it cannot see an extra image. *Rapid Development* gave 672 images for 672 pages, each about 1104 by 1387 pixels at 210 pixels per inch.
+`-p` puts the page number in each name, so `p-001-000.png` is the first image on PDF page 1. `stitch.py` reads that number, and it stops on a page with two images or a page with no image. A missing last page shows only against the page count, so pass `--pages` from `pdfinfo` to `stitch.py`. Without `-p`, pdfimages numbers images from `p-000.png`, which matches pages only when every page holds exactly one image. The 2026-11-03 run used that plain form, and *Rapid Development* gave 672 images for 672 pages, each about 1104 by 1387 pixels at 210 pixels per inch.
 
 ### B2. First pass on whole pages
 
@@ -87,12 +93,12 @@ pdfimages names the images `p-000.png`, `p-001.png` and so on, so `p-000.png` is
 python3 $SKILL/ocr_pages.py $RUN/pages $RUN/text --jobs 8
 ```
 
-`ocr_pages.py` runs Vision on each image, several at a time, and writes `<stem>.ocr.tsv`, one recognized line per row as `y`, `x` and the text, where `y` and `x` are the line's top and left edges as fractions of the page. It compiles the Vision program that `kindle-highlights` ships, `skills/kindle-highlights/scripts/ocr.swift`, into `$RUN/bin/ocr` on first use. The script points at that file rather than copying it, so the two skills share one recognizer. A rerun skips any image whose `.tsv` already exists, so a stopped run resumes.
+`ocr_pages.py` runs Vision on each image, several at a time, and writes `<stem>.ocr.tsv`, one recognized line per row as `y`, `x` and the text, where `y` and `x` are the line's top and left edges as fractions of the page. It compiles the Vision program that `kindle-highlights` ships, `skills/kindle-highlights/scripts/ocr.swift`, into `$RUN/bin/ocr` on first use. The script points at that file rather than copying it, so the two skills share one recognizer, and it relies on that program's output staying `y`, `x`, text. A rerun skips an image whose `.tsv` is newer than the image, so a stopped run resumes and a remade crop is read again. A `.tsv` appears only once its OCR has finished. An image whose OCR fails gets no `.tsv`, and the script exits 1. A `.tsv` whose image has gone from the folder is removed.
 
 ### B3. Whiten the shading and split the columns
 
 ```bash
-uv run -q --with pillow python $SKILL/prep.py $RUN/pages $RUN/text $RUN/clean
+uv run -q --with 'pillow>=10' python $SKILL/prep.py $RUN/pages $RUN/text $RUN/clean
 ```
 
 `prep.py` changes each page in three ways.
@@ -110,24 +116,27 @@ python3 $SKILL/ocr_pages.py $RUN/clean $RUN/text2 --glob '*.png' --jobs 8
 ### B5. Stitch the pages and parts
 
 ```bash
-python3 $SKILL/stitch.py $RUN/pages $RUN/text2 $RUN --first-pass $RUN/text --part 1-intro:1-50
+python3 $SKILL/stitch.py $RUN/pages $RUN/text2 $RUN --first-pass $RUN/text --pages 672 --part 1-intro:1-50
 ```
 
-Each page block holds the body lines in reading order, then one `[margin]` line carrying the margin column. A hyphen at a line end joins to the next line when that line starts in lowercase, which mends a word split across lines. The offset comes from the first pass's header and footer numbers, the same vote route A takes, or from `--offset N`. The script lists every page with no text by its PDF page number.
+Each page block holds the body lines in reading order, then one `[margin]` line carrying the margin column. A hyphen at a line end joins to the next line when that line starts in lowercase, which mends a word split across lines. The offset comes from the first pass's header and footer numbers, the same vote route A takes, or from `--offset N`, which wins when both are given. The script stops when a page has no body `.tsv`, since that means its OCR failed. It lists the pages with no text, and separately the pages with margin text but an empty body.
 
-**Measured on *Rapid Development* (672 PDF pages).**
+### Measured on *Rapid Development*
+
+These figures come from runs on 2026-11-03, on the owner's 672-page PDF, which stays outside the repository.
 
 - **Offset.** The vote gave offset 22, with 615 of 672 pages agreeing by this script's count. The hand count on the day gave 616. Stray numbers cast 3 votes for two other offsets, and the remaining pages print no number at their top or foot.
 - **Blank pages.** Six pages came back with no text, PDF pages 3, 12, 20, 22, 646 and 671.
 - **Speed.** The whole book OCRed in a few minutes with 8 jobs at once. A later timing of 56 second-pass crops took 6.3 seconds, which puts the 1,304 crops of the second pass at about two and a half minutes.
 - **Agreement with the hand run.** `prep.py`'s crops were byte-identical to the hand run's, the second pass's `.tsv` files matched, and all 650 printed pages of `book_pages.txt` matched.
 
-**Limits of route B.**
+### Limits of route B
 
 - **Tables come out scrambled.** The recognizer returns each table cell as its own line and sorts lines top to bottom, so cells whose tops sit at slightly different heights interleave across columns, and a table's text comes out in the wrong order. Check a table against the page image before quoting it.
 - **A hyphenated compound loses its hyphen** when it breaks at a line end, such as "self-" before "contained". The join cannot tell a split word from a compound.
 - **The margin column must sit left of the body.** `prep.py` cuts one vertical line per page. A book with its margin on the right, or on alternating sides, needs `--split` per side or a change to `crops()`.
 - **One image per page.** See B1.
+- **Front matter is outside the parts and the citation check.** Its pages carry no printed number, so `--part` ranges and `ctx.py` reach printed pages only. Front matter stays in `book_pages.txt`.
 - **The OCR is macOS only.** Vision is Apple's framework. `prep.py` and `stitch.py` run anywhere.
 
 ## Step 2: check citations
@@ -137,18 +146,18 @@ python3 $SKILL/ctx.py $RUN/book_pages.txt '64:the quoted words' '212:another quo
 python3 $SKILL/ctx.py $RUN/book_pages.txt --check '64:the quoted words' '212:another quote'
 ```
 
-Without `--check`, `ctx.py` prints 260 characters either side of each quote on its cited page, or NOT FOUND. With `--check`, it prints one verdict per citation.
+Without `--check`, `ctx.py` prints 260 characters either side of each quote on its cited page, in the book's own case, or NOT FOUND. A quote that starts on the cited page and runs onto the next counts as on the cited page. With `--check`, it prints one verdict per citation.
 
-1. **OK** means the quote is on the cited page.
-2. **NEAR** means it is only on the page before or after, which usually means a quote that starts at the foot of one page.
-3. **MISS** means it is on neither.
+1. **OK** means the quote is on the cited page, or starts there and runs onto the next.
+2. **NEAR** means the whole quote is on the page before or after instead, so the cited page is probably off by one.
+3. **MISS** means it is on none of them.
 
-Matching ignores case, line breaks and a hyphen that splits a word across lines. The script exits 1 on any MISS or NOT FOUND, so a pipeline can stop on a bad citation. A quote from a scanned book can miss on an OCR error rather than a wrong page, so read the context before calling the citation wrong.
+Matching ignores case, runs of whitespace, curly against straight quotes, and hyphens, so a word split across lines and a compound broken at its hyphen both match. The script exits 1 on any MISS or NOT FOUND, so a pipeline can stop on a bad citation. A quote from a scanned book can miss on an OCR error rather than a wrong page, so read the context before calling the citation wrong.
 
 ## Tests
 
-`tests/test_book_text.py` checks every script on inputs it makes itself: a PDF written byte by byte, page images drawn with Pillow that carry a gray box and a margin note, and hand-written OCR rows. On macOS it also runs Vision end to end on a drawn page and checks that the shaded text survives and the margin note lands on the `[margin]` line. CI runs it on Linux, where that OCR check skips.
+`tests/test_book_text.py` checks every script on inputs it makes itself: a PDF written byte by byte, page images drawn with Pillow that carry a gray box and a margin note, hand-written OCR rows, and a stand-in OCR program for `ocr_pages.py`. On macOS it also runs Vision end to end on a drawn page and checks that the shaded text survives and the margin note lands on the `[margin]` line. CI runs it on Linux, where only that Vision check skips.
 
 ```bash
-uv run -q --with pillow python tests/test_book_text.py
+uv run -q --with 'pillow>=10' python tests/test_book_text.py
 ```

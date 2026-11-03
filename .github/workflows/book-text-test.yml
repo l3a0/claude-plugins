@@ -10,6 +10,6 @@ jobs:
         with:
           persist-credentials: false
       - name: Install pdftotext and Pillow
-        run: sudo apt-get install -y --no-install-recommends poppler-utils python3-pil
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils python3-pil
       - name: book-text script tests
         run: /usr/bin/python3 tests/test_book_text.py

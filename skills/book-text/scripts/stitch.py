@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Assemble a scanned book's column-split OCR into page-numbered text and reading parts.
 
-    python3 stitch.py PAGE_DIR OCR_DIR RUN_DIR [--offset N] [--first-pass DIR] [--part NAME:FIRST-LAST ...]
+    python3 stitch.py PAGE_DIR OCR_DIR RUN_DIR [--offset N] [--first-pass DIR] [--pages N] [--part NAME:FIRST-LAST ...]
 
-PAGE_DIR holds one image per PDF page, named the way `pdfimages -png` names them: p-000.png is PDF page 1.
-OCR_DIR holds <stem>_body.ocr.tsv and <stem>_margin.ocr.tsv for each page. Each page block holds the body lines in
-reading order, with a hyphen at a line end joined to a lowercase continuation, then one `[margin]` line carrying
-the margin column. Without --offset, the offset comes from the page numbers in the first-pass OCR of whole pages,
-which --first-pass names. Writes RUN_DIR/book_pages.txt and RUN_DIR/parts/NAME.txt, and lists the blank pages.
+PAGE_DIR holds one image per PDF page, named the way pdfimages names them: p-001-000.png from `pdfimages -p -png`,
+or p-000.png from `pdfimages -png`, both PDF page 1. --pages, the page count from pdfinfo, catches missing pages at
+the end. OCR_DIR holds <stem>_body.ocr.tsv and, where the page has a margin crop, <stem>_margin.ocr.tsv. The script
+stops when a body .tsv is missing, since that means its OCR failed. Each page block holds the body lines in reading
+order, with a hyphen at a line end joined to a lowercase continuation, then one `[margin]` line carrying the margin
+column. Without --offset, the offset comes from the page numbers in the first-pass OCR of whole pages, which
+--first-pass names. Writes RUN_DIR/book_pages.txt and RUN_DIR/parts/NAME.txt, and lists the pages with no text and
+the pages whose body is empty.
 """
 import argparse, pathlib, re, sys
 
@@ -36,13 +39,18 @@ def main(argv=None):
     ap.add_argument('--glob', default='p-*.png')
     ap.add_argument('--offset', type=int, help='PDF page number minus printed page number')
     ap.add_argument('--first-pass', help='folder of whole-page OCR, used to find the offset')
+    ap.add_argument('--pages', type=int, help="the PDF's page count, from pdfinfo")
     ap.add_argument('--part', action='append', default=[], type=booktext.parse_part, metavar='NAME:FIRST-LAST')
     a = ap.parse_args(argv)
 
-    stems = [p.stem for p in sorted(pathlib.Path(a.page_dir).glob(a.glob))]
-    numbers = [int(re.search(r'(\d+)$', s).group(1)) + 1 for s in stems]
-    if numbers != list(range(1, len(stems) + 1)):
-        sys.exit(f'{a.page_dir} must hold one image per PDF page numbered from 0 with no gaps')
+    pages = booktext.image_pages([p.stem for p in pathlib.Path(a.page_dir).glob(a.glob)])
+    if a.pages is not None and len(pages) != a.pages:
+        sys.exit(f'{a.page_dir} has images for {len(pages)} pages, not the {a.pages} the PDF holds')
+    stems = list(pages.values())
+    ocr = pathlib.Path(a.ocr_dir)
+    failed = [n for n, s in pages.items() if not (ocr / f'{s}_body.ocr.tsv').exists()]
+    if failed:
+        sys.exit(f'no body OCR for PDF pages {failed}, so rerun ocr_pages.py on the crops')
 
     offset = a.offset
     if offset is None:
@@ -54,14 +62,14 @@ def main(argv=None):
             sys.exit('no page carries a header or footer number, so pass --offset')
         print(f'offset {offset} agrees with {agree} of {len(stems)} pages, votes {votes.most_common(3)}')
 
-    ocr = pathlib.Path(a.ocr_dir)
-    blocks, blank = [], []
-    for n, s in zip(numbers, stems):
+    blocks, blank, no_body = [], [], []
+    for n, s in pages.items():
         body, margin = tsv_lines(ocr / f'{s}_body.ocr.tsv'), tsv_lines(ocr / f'{s}_margin.ocr.tsv')
-        if not body and not margin:
-            blank.append(n)
+        if not body:
+            (no_body if margin else blank).append(n)
         blocks.append(booktext.block(n, offset, page_text(body, margin)))
     print(f'{len(blocks)} pages, {len(blank)} with no text: PDF pages {blank}')
+    print(f'{len(no_body)} with margin text but an empty body: PDF pages {no_body}')
     booktext.write_book(a.run_dir, blocks, a.part)
 
 

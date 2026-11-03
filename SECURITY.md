@@ -61,7 +61,7 @@ exact access). Reports of particular interest:
   an issue, a comment or a page steers one of those actions, or where the
   pruning loop calls unpushed work safe.
 - `book-text` reads a book PDF the user supplies with poppler's command-line
-  tools and Apple Vision, and makes no network call. Its output is a
-  copyrighted book's full text, kept in a run directory outside every
-  repository. In scope is any way its scripts send that text off the
-  machine, or write it outside the run directory they are given.
+  tools and Apple Vision, and its scripts make no network call. Its output
+  is a copyrighted book's full text, and each script refuses an output
+  folder inside a git repository. In scope is any way its scripts send that
+  text off the machine, or write it outside the folders they are given.
