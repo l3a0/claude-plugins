@@ -33,6 +33,19 @@ truncated highlights. Its goal moved from the highlights to the book's full text
 full-book path under Step 5. Its figures stay out of the recovery counts above, and its gotchas sit in the
 steps below.
 
+Three more runs exported every highlight in full, so they had nothing to recover and their figures stay out of
+the recovery counts too.
+
+1. *Designing Data-Intensive Applications* (580 highlights, 0 truncated, 0 hidden) captured the full text the
+   same way. Its reader footer showed page numbers instead of locations, which `locmap.py` repairs (step 8 of
+   the full-book path).
+2. *Code Complete* (113 highlights, 1 note, 0 truncated, 0 hidden) paged its notebook with
+   `notebook_pages.js` and drove Chrome through `cjs.sh`.
+3. *Rapid Development* (187 highlights, 15 notes, 0 truncated, 0 hidden) did the same.
+
+Neither of the last two would open in the web reader, so their full text came from the owner's own copies,
+and `hlmap.py` gave each highlight its printed page (see "Matching highlights to printed pages").
+
 ## The one prerequisite that unblocks everything
 
 Driving the page needs **JavaScript execution in the tab** — any browser-control MCP that can
@@ -52,18 +65,39 @@ requires Chrome's **"Allow JavaScript from Apple Events"** to be ON:
   Control_Chrome JS scrape instead.
 - The same error stopped the extension's `javascript_tool` and `screenshot` on the sixth run, right after a
   1Password autofill. AppleScript from the shell still worked, because it is the route Control Chrome takes and
-  needs only the Apple Events setting above:
-  `osascript -e 'tell application "Google Chrome" to execute (tab id T of window id W) javascript (read POSIX file "<path to snippet.js>")'`.
-  A small runner script that takes the snippet's path keeps the quoting manageable. `execute` returns only a
-  synchronous value, so an async snippet stores its result on `window` and a second call polls for it.
+  needs only the Apple Events setting above. [scripts/cjs.sh](scripts/cjs.sh) is that route as a runner. Use it
+  whenever the browser tools cannot run JavaScript in the tab and Control Chrome is not installed. The
+  2026-11-03 runs of *Code Complete* and *Rapid Development* drove Chrome through it.
+
+  ```
+  "$SKILL/scripts/cjs.sh" --list                                # window id, tab id, URL of every tab
+  "$SKILL/scripts/cjs.sh" W T "$SKILL/scripts/notebook_pages.js"   # run a file in tab T of window W
+  "$SKILL/scripts/cjs.sh" W T -e 'JSON.stringify(window.__pg)'   # run one expression, such as a poll
+  ```
+
+  Its limits come from AppleScript.
+
+  1. It needs Chrome's Allow JavaScript from Apple Events, and the macOS Automation grant for the terminal to
+     control Chrome.
+  2. It addresses a tab by window id and tab id, never by "the active tab", so another session's tabs cannot
+     redirect it. `--list` prints the ids, and they hold for the tab's life.
+  3. `execute` returns only a synchronous value, and AppleScript mangles anything but a string. So an async
+     script stores its result on `window` and returns at once, and a second call polls for it with
+     `JSON.stringify`.
+  4. A download started from it can be blocked or can raise a native Save dialog (Step 2). So set
+     `window.__khNoDownload = true` before `extract_highlights.js` and post the payload to the receiver
+     instead.
+
   This route has a cost. Any process that holds macOS's Automation grant to control Chrome, which Step 5's
   `osascript` window steps need too, can then run JavaScript in any tab on any site, including pages 1Password
-  has just filled. Chrome has no per-site switch for it short of an enterprise DevTools policy. So have the
-  runner read `URL of tab id T of window id W` first and refuse unless it starts with
-  `https://read.amazon.com/`, and undo the setting and the grant after the run (Step 6).
+  has just filled. Chrome has no per-site switch for it short of an enterprise DevTools policy. So `cjs.sh`
+  reads the tab's URL first and refuses unless it starts with `https://read.amazon.com/`, and it never launches
+  Chrome. Undo the setting and the grant after the run (Step 6).
 - Screen-control of the browser may be read-only tier and the **Kindle desktop app** screen may be
   blocked entirely — but neither matters much anymore: captures come from the page's own canvas
   (below), and the desktop app is used only via its **files on disk**, which needs no screen access.
+  Where the desktop app is blocked, do not get around the block with scripted keystrokes or window captures
+  (see "Opening a book in the reader" under Step 5).
 - **Shared Chrome hazard:** if another session is driving the same Chrome, open your own tab —
   and for the reader (which only renders while visible), your own **window** (see Step 5).
   One run had another session open ten `127.0.0.1:91xx` tabs into the reader window mid-sweep. Address tabs by id, never by "the active tab".
@@ -100,6 +134,25 @@ Gotchas:
   dedupe fetched rows against what you have on `(loc, text)` before believing a bigger count.
   The sixth run confirmed it on a second book. All 382 rows were in the DOM, and the token served 303 more over
   5 pages, every one an exact copy.
+- **Page with [scripts/notebook_pages.js](scripts/notebook_pages.js).** It fetches the pages through that
+  endpoint, appends each new row to `#kp-notebook-annotations`, and stops at the first page that adds no new
+  row, which also ends a circular token. A row is new when its location plus its text has not been seen. The
+  script runs async and returns `started`, so poll `JSON.stringify(window.__pg)` until `done` is true. A
+  `capped: true` means its 60-page limit stopped it with pages left, so run it again. It reads the ASIN from the
+  book's `/dp/` link on the page, since the notebook ignores `?asin=` in its own URL, and takes
+  `window.__khAsin` when that is set. On 2026-11-03 it loaded *Code Complete*'s 113 highlights and 1 note and
+  *Rapid Development*'s 187 highlights and 15 notes. Neither book had a truncated or hidden row. The full
+  sequence through `cjs.sh`, with the receiver running from the run directory:
+
+  ```
+  "$SKILL/scripts/cjs.sh" W T "$SKILL/scripts/notebook_pages.js"
+  "$SKILL/scripts/cjs.sh" W T -e 'JSON.stringify(window.__pg)'      # repeat until done is true
+  "$SKILL/scripts/cjs.sh" W T -e 'window.__khNoDownload = true'
+  "$SKILL/scripts/cjs.sh" W T "$SKILL/scripts/extract_highlights.js"
+  "$SKILL/scripts/cjs.sh" W T -e "fetch('http://127.0.0.1:8931/json?name=<ASIN>_highlights', {method: 'POST', body: window.__khl}); 'posted'"
+  ```
+
+  The receiver saves `pages/<ASIN>_highlights.json`, where Step 4 looks for it.
 - The export limit doesn't just truncate: past its budget it **hides highlights entirely** —
   the row has a location but NO text (only the banner). The scraper keeps these
   (`hidden: true, text: null`); never filter rows by text presence, filter by `loc`.
@@ -179,6 +232,16 @@ items). Only the rendered pages have the text, as **rasterized images** (`<img s
 
 Reader mechanics (hard-won):
 
+- **Opening a book in the reader.** `https://read.amazon.com/?asin=<ASIN>` lands on `/kindle-library`, not
+  in the book. The library page carries the book as `#library-item-option-<ASIN>`, which is where to open it.
+  Some books never open in the web reader at all. On 2026-11-03 two Microsoft Press titles sold as
+  DV-Professional editions, *Code Complete* and *Rapid Development*, would not. The Mac Kindle app
+  (`com.amazon.Lassen`) is no way around that, because policy blocks it for computer use. Do not get around
+  that block with scripted keystrokes, such as System Events `keystroke`, or with window captures, such as
+  `screencapture -l`. Reading the app's files on disk in Step 4 is still fine, since it needs no screen. For
+  such a book the route to its text is the owner's own copy, a PDF or a scan, through this plugin's
+  `book-text` skill (`/l3a0:book-text`). Then "Matching highlights to printed pages" below gives each
+  highlight its page.
 - **The reader can sit behind `read.amazon.com/checkpoint/continue`**, a page that reads "Website
   Temporarily Unavailable". On the sixth run it showed no challenge to solve, and loading the reader again once
   a minute got past it within a few minutes. A page that does show a challenge is the user's to clear.
@@ -474,6 +537,57 @@ Scalability* this way.
    directory with the captures, like extracted highlights. Keep the run directory outside any git repository,
    where one `git add -A` would stage it. Step 6's cleanup applies: restore the display settings, stop the
    receiver and close the tabs.
+8. **Put locations back when the footer shows pages.** Some books' reader footer reads "Page 7 of 1054"
+   instead of a location, while the highlights and every citation use locations. The gap check in step 6
+   above then reads page steps instead of location steps. Each highlight is a known passage at a known location, so
+   `locmap.py` finds the opening 45 letters and digits of every highlight in each screen's text, pins that
+   screen to the smallest location found on it, and interpolates the screens between two pins by their order.
+   It drops any pin that breaks location order, such as a short phrase matched at an earlier repeat. From the
+   run directory:
+
+   ```
+   python3 "$SKILL/scripts/locmap.py"     # reads book.txt and the one *_highlights.json, writes book_loc.txt
+   ```
+
+   Each header in `book_loc.txt` gains `| Location N` on a pinned screen and `| Location ~N` on an
+   interpolated one. The seventh run, *Designing Data-Intensive Applications*, showed pages. Its 588 captures
+   gave 572 distinct screens. The script found 578 of the 580 highlights, pinned 231 screens and interpolated
+   the other 341. Interpolation assumes the locations per screen stay even between two pins, so a citation
+   from a `~` screen is approximate.
+
+### Matching highlights to printed pages (when the full text exists)
+
+The notebook cites by Kindle location, which a reader of the printed book cannot use. When the book's full
+text exists with one header per printed page, such as `===== pdf 110 | p. 73 =====` from the owner's own
+copy, [scripts/hlmap.py](scripts/hlmap.py) gives each highlight its page:
+
+```
+python3 "$SKILL/scripts/hlmap.py" book_pages.txt <ASIN>_highlights.json   # writes highlights_pages.json
+```
+
+It matches on letters and digits alone, by windows of 50, 35 and then 22 characters taken from the start, a
+third of the way in and halfway in, so OCR slips and a garbled opening cost nothing. It leaves margin text,
+the part of a page after a `[margin]` marker, out of the first pass and looks there only for a highlight the
+body lacks. On 2026-11-03 the run's own matchers placed 111 of *Code Complete*'s 113 highlights and 180 of
+*Rapid Development*'s 187. The misses and the wrong pages fell into three classes, and the script now handles
+each one.
+
+1. **Repeated text.** A reference recurs in a chapter's reading list and in the book's closing bibliography. A
+   heading or a figure caption recurs in the table of contents or the list of figures. The run's lookup took
+   the earliest copy, which put 16 of *Code Complete*'s highlights on a page their locations rule out. Sorted
+   by location, the highlights must fall on pages in book order. So among a highlight's candidate pages the
+   script keeps the one that lies between the pages of its nearest neighbours that matched only once. That
+   settled 19 on *Code Complete* and 3 on *Rapid Development*. Two on each stay ambiguous and list their other
+   pages under `also`, such as the section heading "Sandwich Integration".
+2. **Margin text.** *Rapid Development* sets its chapter epigraphs in the margin column, which the body pass
+   leaves out. The margin pass finds 4 of its 7 unmatched highlights there and marks them `"margin": true`.
+   The other 3 stay unmatched.
+3. **Text the print words differently.** The Kindle text of one bibliography entry carries `http://` where the
+   print has none. The window from halfway in skips past it.
+
+On the same text the script now maps all 113 *Code Complete* highlights and 184 of the 187 from *Rapid
+Development*, with two ambiguous on each. A highlight hidden by the export limit has no text, so it stays
+unmatched. Check every `ambiguous` and `unmatched` line it prints against the page before citing it.
 
 ## Step 6 — QA before declaring done
 
@@ -488,7 +602,7 @@ Scalability* this way.
   words (inflections accepted, tickers skipped), joined words, first-letter loss, hidden
   highlights that start lowercase. The book's own typos stay. "untill", "Annoucement" and
   "p.m.. ET" were all in the printed page, so a repeated non-word is not proof of an OCR slip.
-- If the run used the `osascript` fallback, turn off Chrome's View → Developer → Allow JavaScript from Apple
+- If the run used the `osascript` fallback or `cjs.sh`, turn off Chrome's View → Developer → Allow JavaScript from Apple
   Events, and remove the terminal's Chrome entry under System Settings → Privacy & Security → Automation if it
   was granted for this run.
 - Delete the run directory's `db/` copy. It holds every book's highlights for the account, not just

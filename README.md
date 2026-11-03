@@ -43,6 +43,8 @@ gotcha in the skill was earned by real debugging across those runs. The fifth ru
 into scripts. They read each highlight's known character length from the Kindle app, sweep the reader,
 match recognized words to the reader's own highlight overlays, and check every recovered span against
 that length.
+Three more books, 880 highlights in all, exported in full with nothing blocked. For two of them the
+skill also gave each highlight its printed page, from the owner's own copy of the book.
 The build story — why the export limit exists, the three unlocks that beat it, and what a
 library of exports becomes — is written up in
 [How to Take Back Your Kindle Highlights](blog/how-to-take-back-your-kindle-highlights.md),

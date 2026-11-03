@@ -13,6 +13,10 @@
  * the SECOND automatic download from an origin: fallback is to stash the payload on
  * window.__khl (this script does) and POST it to scripts/receiver.py:
  *   fetch('http://127.0.0.1:8931/json?name=<asin>_highlights', {method:'POST', body: window.__khl})
+ *
+ * Set window.__khNoDownload = true first to skip the download and only stash the payload. Do that when the
+ * download is sure to fail, such as from the cjs.sh runner or with Chrome's "ask where to save each file" on,
+ * where it would raise a native Save dialog that page JavaScript cannot dismiss.
  */
 (() => {
   const norm = s => s ? s.replace(/ /g, ' ').replace(/\s+/g, ' ').trim() : s;
@@ -33,7 +37,8 @@
   // Best-effort book metadata (fill edition/publisher/year by hand in the build step).
   const titleEl = document.querySelector('h3.kp-notebook-metadata, #kp-notebook-annotations h3, h3.a-spacing-top-small');
   const authorEl = document.querySelector('#kp-notebook-annotations p.a-color-secondary, p.kp-notebook-metadata.a-color-secondary');
-  const asin = new URLSearchParams(location.search).get('asin')
+  const asin = window.__khAsin  // set by hand when the page shows no /dp/ link, as notebook_pages.js asks
+    || new URLSearchParams(location.search).get('asin')
     || (document.querySelector('a[href*="/dp/"]')?.href.match(/\/dp\/([A-Z0-9]{10})/) || [])[1]
     || null;
 
@@ -52,8 +57,8 @@
   a.href = URL.createObjectURL(blob);
   a.download = (asin || 'kindle') + '_highlights.json';
   document.body.appendChild(a);
-  a.click();
+  if (!window.__khNoDownload) a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
 
-  return JSON.stringify({ downloaded: a.download, count: payload.count, truncated: payload.truncated, book: payload.book });
+  return JSON.stringify({ downloaded: window.__khNoDownload ? null : a.download, count: payload.count, truncated: payload.truncated, book: payload.book });
 })()
