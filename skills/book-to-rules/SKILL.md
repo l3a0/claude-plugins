@@ -74,7 +74,7 @@ Set `SKILL` to this skill's folder first, such as `SKILL=<plugin>/skills/book-to
 
 The text comes from one of two places.
 
-1. **A PDF the owner supplies.** The `book-text` skill turns it into `book_pages.txt`, one block per printed page, with margin text after `[margin]`. It is open as [PR #51](https://github.com/l3a0/claude-plugins/pull/51) at the time of writing. Until it merges, the PDF path has no skill, and the *Code Complete* and *Rapid Development* runs' own scripts in their run directories are the only worked example.
+1. **A PDF the owner supplies.** The `book-text` skill in this plugin, added by [PR #51](https://github.com/l3a0/claude-plugins/pull/51), turns it into `book_pages.txt`, one block per printed page, with margin text after `[margin]` and front matter numbered by PDF page.
 2. **The Kindle book alone.** The `kindle-highlights` skill extracts the owner's highlights into `<ASIN>_highlights.json`, and its full-book path sweeps the Cloud Reader into `book.txt`, one block per screen, headed by the reader's footer.
 
 Before a Cloud Reader sweep, set the reader's footer to show locations. The footer shows whatever the reader is set to, and the *Designing Data-Intensive Applications* sweep came back headed by Kindle page numbers alone. For such a sweep, the `kindle-highlights` skill's `locmap.py` pins each screen to the locations of the highlights found on it, interpolates the rest, and writes `book_loc.txt` with `Location N` and `Location ~N` headers. The scripts read all three forms, but only a location the reader printed is exact.
