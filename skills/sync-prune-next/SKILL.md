@@ -348,6 +348,26 @@ gh issue list --repo "$REPO" --state closed --limit 1000 --search "closed:>=$sin
 
 Report the totals posted in the round's summary, with their links.
 
+### Review each open slice's risks
+
+A repository whose design doc adopts *Rapid Development*'s risk rule keeps the risks to each slice's delivery on the slice's parent issue, under a heading `## Risks`, and reviews the list before the next card of that slice is taken. l3a0/ithildin-runtime's and l3a0/repo-template's `## How work is cut and ordered` both carry that rule. Step 4 is where the next card is named, so the review happens here. Skip this part where the repository's design doc carries no such rule, and say so in one line.
+
+These print the open parent cards the board holds, then for one parent whether its body has the heading and when the last review was posted.
+
+```bash
+jq -r '[.. | objects | select(.kind? == "parent") | "\(.n) \(.ms // "")"] | unique[]' <scratch>/board.json
+gh issue view <n> --repo "$REPO" --json body --jq '.body | test("(?m)^## Risks[ \\t]*\\r?$")'
+gh issue view <n> --repo "$REPO" --json comments --jq '[.comments[] | select(.body | test("\\A## Risks review\\r?\\n")) | .createdAt] | max'
+```
+
+For each open parent:
+
+1. **A parent with no `## Risks` heading is reported as missing.** The round writes no list of its own, because which risks matter is a judgement for the slice's plan, and a list drafted to fill the gap would read as one that was weighed.
+2. **The age of the last review is reported**, from the newest comment opening with `## Risks review`, or as never when there is none.
+3. **A parent whose slice holds a card step 4 recommends is reviewed now.** A card belongs to the slice whose milestone it shares. Read the list against what moved since the last review: pull requests merged, issues closed, `## Cost` comments past their `## Estimate`, and incidents. Edit the list in the parent's body to match, keeping the repository's ranking, which puts every risk to something that cannot be undone above every risk to something that can. Then post a comment opening with the line `## Risks review`, giving the date, the risks in their new order with each one's rank at the last review, and what moved. Post it even when nothing moved, because a review that leaves no trace looks the same as one that never ran.
+
+Report each parent's state in the round's summary, with links to the reviews posted.
+
 ## In each repository
 
 What follows holds for one repository only, as its own copy recorded it.
