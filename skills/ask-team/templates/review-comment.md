@@ -8,7 +8,7 @@ Round <N>, of `<anchor sha>`<, run together with the review of <companion links>
 
 ### Veto, confirmed and still blocking
 
-1. **<One-line claim> (<lens>).** <Why it is not fixed in this round, and what lifts it: the fix, or the owner's written override linked here.>
+1. **<One-line claim> (<lens>).** <Why it is not fixed in this round, and what lifts it: the fix, the owner's written override linked here, or for two vetoes that no one fix can satisfy, the owner's written ruling.>
 
 ### Must fix, confirmed and fixed
 
@@ -40,7 +40,7 @@ Surviving vetoes and must-fixes, by the lens that raised them: <lens> <count>, <
 
 ### For the owner
 
-1. **<A question only the owner can rule on, such as one the ask-team skill sends to the board, or a change to a role's vetoes. Work outside this pull request's scope is filed as an issue under `### Left alone` instead.>** <What the revision does meanwhile. For a finding only the owner's ruling can settle: "This waits for the ruling, and the review stays open."> A dated line on <link> settles it.
+1. **<A question only the owner can rule on, such as one the ask-team skill sends to the board, a change to a role's vetoes, two vetoes that no one fix can satisfy, a rule that contradicts an open proposal, or a guarantee an owner does not state. Work outside this pull request's scope is filed as an issue under `### Left alone` instead.>** <What the revision does meanwhile. For a finding only the owner's ruling can settle: "This waits for the ruling, and the review stays open."> A dated line on <link> settles it.
 
 <Or: "Nothing here." On a companion pull request, point to where the questions sit.>
 
