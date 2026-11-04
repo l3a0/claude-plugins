@@ -300,7 +300,8 @@ with tempfile.TemporaryDirectory() as d:
 
     for n, mark in enumerate(')]"\'-'):
         text = f'one{mark} keep{mark} two'
-        repo, doc = stopped_merge(f'no-mark{n}', f'{text}\n', edited(text, ('one', 'ONE')), edited(text, ('two', 'TWO')))
+        repo, doc = stopped_merge(f'no-mark{n}', f'{text}\n', edited(text, ('one', 'ONE')),
+                                  edited(text, ('two', 'TWO')))
         code, out, _ = fine_merge(repo, 'doc.md')
         check(f'fine_merge does not cut at {mark}', code == 1 and 'doc.md: 1 conflicts' in out)
 
