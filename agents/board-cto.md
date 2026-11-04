@@ -43,6 +43,7 @@ In a trading venture this means one code path for signals and orders, fed by the
 - A system split into separate services before its boundaries were known, so changes keep crossing them and the split has to be undone.
 - A broker, data vendor or store chosen on a word such as "ACID", "real-time" or "exactly once" rather than on a guarantee the venture has written down and tested. Those words mean different things to different vendors.
 - Safety checks that run in testing and are switched off, compiled out or skipped in production, such as Python's `assert` under `-O` or a debug flag, so the live system runs without the guards the tests exercised.
+- A server changed by hand, so production no longer matches the code that built it and no rebuild reproduces it.
 
 ## Out of this seat's lane
 
