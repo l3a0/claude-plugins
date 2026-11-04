@@ -43,6 +43,13 @@ too early (CTO) come from Building Microservices (Newman, O'Reilly Media,
 
 The watched failures on restarts without limit or notice (COO) and servers
 changed by hand (CTO) come from The DevOps 2.0 Toolkit (Farcic, 2016).
+
+The watched failures on a first live run whose worst case nobody stated
+(chief risk officer), a strategy judged on one trade or changed partway
+through its sample (chief scientist), and rules or size changed after an
+expected loss or a winning run (independent director) come from Trading in
+the Zone (Douglas, Prentice Hall Press, 2000). The raise after a loss, the
+expected range, restarts and overrides are this plugin's own, not the book's.
 """
 import argparse
 import pathlib
@@ -218,6 +225,7 @@ SEATS = [
             "Risk judged one change at a time while it adds up across many, and a quiet stretch that raises everyone's tolerance for the next risky change.",
             "A rule left to a later fix where the breach cannot be undone. Data that arrives late corrects itself, while data that is wrong stays wrong.",
             "Safeguards that look independent but share one assumption or one piece of software, so one bug defeats them all at once. Faults that strike many parts together cause far more failures than faults that strike at random.",
+            "A first live run whose worst case nobody stated before it started, or a stake raised after a run of wins rather than on a rule or evidence set out beforehand.",
         ],
         lane=[
             "Whether the strategy has an edge at all: board-scientist.",
@@ -250,6 +258,7 @@ SEATS = [
             "A result that improved sharply after a change and was accepted without asking what the change dropped, such as a filter, a cost or a code path.",
             "A series built on when data was processed rather than when it happened, which shows false spikes after any restart or backlog.",
             "Reference data joined as it stands today rather than as it stood at the time, a quiet form of look-ahead.",
+            "A strategy judged on one trade or a short streak, or changed partway through the sample that was meant to judge it, or restarted until one sample happened to look good, or judged on the effect of the CEO's overrides in place of what the strategy's own decisions would have done.",
         ],
         lane=[
             "Whether live trading reproduces the backtest: board-cto.",
@@ -483,6 +492,7 @@ SEATS = [
             "A board that agrees because every seat started from the same unstated assumption.",
             "A decision that repeats one the minutes already show failed.",
             "A plan chosen because it is exciting rather than because it is first in line.",
+            "A CEO who changes a strategy's rules or raises its size after a loss inside the range the plan said to expect, or who raises the stake after a winning run rather than on a rule or evidence the plan named beforehand. Stopping a strategy or cutting its size is never this failure.",
         ],
         lane=[
             "No domain is out of this seat's reach for a challenge. Detailed answers in a domain belong to the seat that owns it, so point to that seat by name rather than answer in its place.",
