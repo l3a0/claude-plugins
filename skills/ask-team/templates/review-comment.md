@@ -40,7 +40,7 @@ Surviving vetoes and must-fixes, by the lens that raised them: <lens> <count>, <
 
 ### For the owner
 
-1. **<A question only the owner can rule on, such as one the ask-team skill sends to the board, a change to a role's vetoes, two vetoes that no one fix can satisfy, a rule that contradicts an open proposal, or a guarantee an owner does not state. Work outside this pull request's scope is filed as an issue under `### Left alone` instead.>** <What the revision does meanwhile. For a finding only the owner's ruling can settle: "This waits for the ruling, and the review stays open."> A dated line on <link> settles it.
+1. **<A question only the owner can rule on, such as one the ask-team skill sends to the board, a change to a role's vetoes, two vetoes that no one fix can satisfy, a conflict with an open proposal that a veto or a ruling disputes, or a guarantee an owner does not state. Work outside this pull request's scope is filed as an issue under `### Left alone` instead.>** <What the revision does meanwhile. For a finding only the owner's ruling can settle: "This waits for the ruling, and the review stays open."> A dated line on <link> settles it.
 
 <Or: "Nothing here." On a companion pull request, point to where the questions sit.>
 
