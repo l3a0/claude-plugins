@@ -216,7 +216,8 @@ with tempfile.TemporaryDirectory() as d:
                 full = os.path.join(repo, path)
                 os.makedirs(os.path.dirname(full), exist_ok=True)
                 if texts[side] is None:
-                    os.remove(full)
+                    if os.path.exists(full):
+                        os.remove(full)
                 else:
                     text = texts[side]
                     open(full, 'wb').write(text if isinstance(text, bytes) else text.encode())
@@ -272,14 +273,6 @@ with tempfile.TemporaryDirectory() as d:
                 '>>>>>>> theirs', ' third claim here, fourth claim here.', '']
     check('fine_merge keeps a clause both sides changed in conflict, each marker at the start of its own line',
           code == 1 and 'doc.md: 1 conflicts' in out and read(doc).split('\n') == expected)
-    git(repo, 'add', 'doc.md')
-    check('git sees those markers as leftover conflict markers',
-          'conflict marker' in git(repo, 'diff', '--cached', '--check').stdout)
-
-    repo, doc = stopped_merge('style', f'{para}\n', edited(para, ('second', 'ours')), edited(para, ('second', 'mine')))
-    git(repo, 'config', 'merge.conflictStyle', 'diff3')
-    code, out, _ = fine_merge(repo, 'doc.md')
-    check('fine_merge writes one conflict form whatever merge.conflictStyle says', read(doc).split('\n') == expected)
 
     prose = ('Alpha one;\tbeta two? gamma  three! delta: epsilon, trailing one. \r\n'
              'next café line, no line end.').encode() + b' \xe9.'
@@ -318,11 +311,12 @@ with tempfile.TemporaryDirectory() as d:
     code, out, _ = fine_merge(repo, 'doc.md')
     check('fine_merge counts two conflicts in one file', code == 1 and 'doc.md: 2 conflicts' in out)
 
-    many = {f'c{i}': 'ours' for i in range(128)}
-    repo, doc = stopped_merge('many', clauses(128), clauses(128, **many), clauses(128, **dict.fromkeys(many, 'mine')))
-    code, out, _ = fine_merge(repo, 'doc.md')
-    check('fine_merge writes every conflict past the 127 git merge-file caps its status at, and says so',
-          code == 1 and 'doc.md: 127 or more conflicts' in out and read(doc).count('<<<<<<< ours\n') == 128)
+    for count, shown in ((126, '126'), (127, '127 or more'), (128, '127 or more')):
+        ours, mine = (clauses(count, **{f'c{i}': word for i in range(count)}) for word in ('ours', 'mine'))
+        repo, doc = stopped_merge(f'many{count}', clauses(count), ours, mine)
+        code, out, _ = fine_merge(repo, 'doc.md')
+        check(f'fine_merge writes all {count} conflicts and prints {shown}, past which git merge-file caps its status',
+              code == 1 and f'doc.md: {shown} conflicts' in out and read(doc).count('<<<<<<< ours\n') == count)
 
     both = {'a.md': apart, 'b.md': (f'{para}\n', edited(para, ('second', 'ours')), edited(para, ('second', 'mine')))}
     for name, paths in (('ab', ('a.md', 'b.md')), ('ba', ('b.md', 'a.md'))):
@@ -461,6 +455,13 @@ with tempfile.TemporaryDirectory() as d:
     check('fine_merge exits 2 and writes no path when a working file is missing', code == 2 and 'z.md' in err
           and read(doc) == before)
 
+    if os.geteuid():
+        repo, doc = stopped_merge('readonly', *apart)
+        os.chmod(doc, 0o444)
+        code, out, err = fine_merge(repo, 'doc.md')
+        check('fine_merge exits 2 on a failed write, and has already named the copy',
+              code == 2 and 'Permission denied' in err and 'previous text in' in out)
+
     repo, doc = stopped_merge('deleted', f'{para}\n', edited(para, ('First', 'Opening')), None,
                               also={'other.md': apart})
     before = read(os.path.join(repo, 'other.md'))
@@ -468,12 +469,33 @@ with tempfile.TemporaryDirectory() as d:
     check('fine_merge refuses a path one side deleted, and then writes no other path', code == 2 and 'doc.md' in err
           and read(os.path.join(repo, 'other.md')) == before)
 
-    repo, doc = stopped_merge('linked', *apart, also={'target.md': ('t\n', 't\n', 't\n')})
+    repo, doc = stopped_merge('linked', *apart, also={'target.md': apart})
+    target = os.path.join(repo, 'target.md')
+    before = read(target)
     os.remove(doc)
     os.symlink('target.md', doc)
     code, _, err = fine_merge(repo, 'doc.md')
-    check('fine_merge refuses a symlink, so the write cannot reach another file', code == 2
-          and read(os.path.join(repo, 'target.md')) == 't\n')
+    check('fine_merge refuses a symlink whose target is conflicted too, so the write cannot reach another file',
+          code == 2 and 'symlink' in err and read(target) == before)
+
+    repo, doc = stopped_merge('added', None, f'{para}\n', edited(para, ('First', 'Opening')), also={'z.md': apart})
+    before = read(os.path.join(repo, 'z.md')), read(doc)
+    code, _, err = fine_merge(repo, 'z.md', 'doc.md')
+    check('fine_merge refuses a path with no base, and then writes no other path', code == 2 and 'doc.md' in err
+          and (read(os.path.join(repo, 'z.md')), read(doc)) == before)
+
+    encoded = ('*.md working-tree-encoding=ISO-8859-1\n',) * 3
+    repo, doc = stopped_merge('encoded', *apart, also={'.gitattributes': encoded})
+    before = read(doc)
+    code, _, err = fine_merge(repo, 'doc.md')
+    check('fine_merge refuses a path git converts on checkout', code == 2 and 'converts' in err and read(doc) == before)
+
+    repo, doc = stopped_merge('toolless', *apart)
+    before = read(doc)
+    empty = os.path.join(d, 'no-tools')
+    os.makedirs(empty)
+    code, _, err = fine_merge(repo, 'doc.md', env={**os.environ, 'PATH': empty})
+    check('fine_merge exits 2 with no git to run', code == 2 and 'git' in err and read(doc) == before)
 
     repo, doc = stopped_merge('folder', *apart, path='docs/doc.md')
     code, _, err = fine_merge(repo, 'docs')

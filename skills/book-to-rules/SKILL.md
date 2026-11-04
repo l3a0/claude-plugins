@@ -60,8 +60,6 @@ Text the OCR read from a page's margin column follows the body after a `[margin]
 
 Matching folds case, curly quotes, dashes, ligatures and soft hyphens, and joins a word hyphenated across a line end or a page break. Run the scripts with `python3 -I`, which keeps Python from loading a module out of the run directory. `tests/test_book_to_rules.py` runs them on a synthetic book in CI.
 
-`fine_merge.py` reads no book text and uses none of this. It merges `main` into a branch clause by clause, as step 5 says.
-
 ## The pipeline, in seven steps
 
 1. Get the full text.
@@ -156,7 +154,7 @@ Each repository gets its own branch and its own pull request, and each pull requ
 
 A plugin check must hold in any repository, so word it for the property it protects and give the project's case as one example. [PR #46](https://github.com/l3a0/claude-plugins/pull/46) scoped five checks that would otherwise have fired in repositories with no such property, such as an `fsync` check against a GitHub comment.
 
-A rule sits on one long line, so merging `main` into a branch conflicts on the whole paragraph even when the two sides touched different sentences. When `git merge` stops on a Markdown file like that, run `fine_merge.py` on what it stopped on, before any hand edits. Expect most merges to still need some hand resolution. The script's docstring says what it refuses, what it saves and what each exit status means.
+A rule sits on one long line, so merging `main` into a branch conflicts on the whole paragraph even when the two sides touched different sentences. When `git merge` stops on a Markdown file like that, run `fine_merge.py` on what it stopped on, from the repository root and before any hand edits. Expect most merges to still need some hand resolution. The script's docstring says what it refuses, what it saves and what each exit status means.
 
 ```bash
 git fetch origin main
