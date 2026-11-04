@@ -16,7 +16,7 @@ The worked examples are the six sets of pull requests. The first four ran before
 | *Code Complete* | [PR #26](https://github.com/l3a0/ithildin-runtime/pull/26) | [PR #47](https://github.com/l3a0/claude-plugins/pull/47) | [PR #75](https://github.com/l3a0/repo-template/pull/75) | 1 |
 | *Rapid Development* | [PR #27](https://github.com/l3a0/ithildin-runtime/pull/27) | [PR #48](https://github.com/l3a0/claude-plugins/pull/48) | [PR #76](https://github.com/l3a0/repo-template/pull/76) | 1 |
 | *Building Microservices* | [PR #28](https://github.com/l3a0/ithildin-runtime/pull/28) | [PR #56](https://github.com/l3a0/claude-plugins/pull/56) | [PR #77](https://github.com/l3a0/repo-template/pull/77) | 8 |
-| *Trading in the Zone* | [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31) | [PR #59](https://github.com/l3a0/claude-plugins/pull/59) | [PR #79](https://github.com/l3a0/repo-template/pull/79) | 14 |
+| *Trading in the Zone* | [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31) | [PR #59](https://github.com/l3a0/claude-plugins/pull/59) | none | 14 |
 
 Read the review comment on the *Code Complete* project pull request first. Its round is the one the `ask-team` skill's review round and comment template were drawn from.
 
@@ -150,7 +150,7 @@ Each repository gets its own branch and its own pull request, and each pull requ
 
 1. **The project repository**, such as l3a0/ithildin-runtime. Its `docs/design.md` gets a citation paragraph naming the book and how it is cited, then the rules. Its `docs/team-charter.md` gets each role's new duties and vetoes. A rule that changes a role's veto line is the owner's call, so the pull request puts it to the owner rather than making it.
 2. **This plugin**, l3a0/claude-plugins. Role checks go into `scripts/gen_team.py` and board-seat failures into `scripts/gen_seats.py`, never into `agents/*.md` by hand. Regenerate with `python3 scripts/gen_team.py && python3 scripts/gen_seats.py`, and confirm with both scripts' `--check`. Bump the patch version in `.claude-plugin/plugin.json` to the next number above every open pull request's, since other sessions claim versions too. The title takes the form `feat(ask-team, ask-board): add <topic> checks from <Book> (v<next version>)`.
-3. **The template**, l3a0/repo-template. Its `docs/design.md` gets the rules that hold for any new repository, worded without the project's names.
+3. **The template**, l3a0/repo-template. Its `docs/design.md` gets the rules that hold for any new repository, worded without the project's names. Ask before opening this pull request whether the book's rules hold beyond the project, and open none when they do not. The owner closed [PR #79](https://github.com/l3a0/repo-template/pull/79) unmerged on 2026-11-04, because the rules for judging a trading strategy over a sample did not apply to a generic template, after 14 review rounds had read it.
 
 A plugin check must hold in any repository, so word it for the property it protects and give the project's case as one example. [PR #46](https://github.com/l3a0/claude-plugins/pull/46) scoped five checks that would otherwise have fired in repositories with no such property, such as an `fsync` check against a GitHub comment.
 
