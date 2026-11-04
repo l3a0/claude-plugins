@@ -37,6 +37,10 @@ and on progress reported as a percentage and late work answered with more
 helpers or fewer checks (COO), come from Rapid Development (McConnell,
 Microsoft Press, 1996).
 
+The watched failures on growth promised without a rewrite and services split
+too early (CTO) come from Building Microservices (Newman, O'Reilly Media,
+2015), whose quote of Jeff Dean the owner adopted on 2026-11-03.
+
 The watched failures on a first live run whose worst case nobody stated
 (chief risk officer), a strategy judged on one trade or changed partway
 through its sample (chief scientist), and rules or size changed after an
@@ -282,6 +286,8 @@ SEATS = [
             "A plan to grow that exists only as an intention. A design ready to grow names its next split and the written limit of what is built now.",
             "A past run that cannot be repeated because the code reads the clock or a random source directly rather than a recorded value.",
             "A plan to scale built on a guess about which operations will be common rather than on measured load, so the effort goes to a part that never carried the load.",
+            "A design that promises to grow a hundredfold with no rewrite, which builds for load it may never see, or one that names no load at which a rewrite would be planned. Jeff Dean's rule is to design for about ten times growth and plan to rewrite before about a hundred times.",
+            "A system split into separate services before its boundaries were known, so changes keep crossing them and the split has to be undone.",
             "A broker, data vendor or store chosen on a word such as \"ACID\", \"real-time\" or \"exactly once\" rather than on a guarantee the venture has written down and tested. Those words mean different things to different vendors.",
             "Safety checks that run in testing and are switched off, compiled out or skipped in production, such as Python's `assert` under `-O` or a debug flag, so the live system runs without the guards the tests exercised.",
         ],
