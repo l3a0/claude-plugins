@@ -168,7 +168,7 @@ A caller's own skill should name this mode where it lists its lenses, so a reade
 
 ## A full review round on pull requests
 
-`review-round.md` is the procedure for a session that reviews its own pull requests, alone or as companions that land one rule in several repositories. It adds a brief every lens reads, fixes on every companion, the order of pricing and posting, the body's `## Revision` section, and the rule for when another round follows, and points back to the steps above for seating, prompts, verification and the comment's parts. Its templates are under `templates/`, and `scripts/brief_anchors.py` prints a brief's subject list.
+`review-round.md` is the procedure for a session that reviews its own pull requests, alone or as companions that land one rule in several repositories. It adds a brief every lens reads, fixes on every companion, the order of pricing and posting, the body's `## Revision` section, and the rule for when another round follows, and points back to the steps above for seating, prompts, verification and the comment's parts. Its templates are under `templates/`, including the brief that hands an unfinished review to a new session. `scripts/brief_anchors.py` prints a brief's subject list, and `scripts/review_post.py` posts a round's comments and edits the `## Revision` section.
 
 ## Building is not a review
 

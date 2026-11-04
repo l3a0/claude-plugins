@@ -55,6 +55,10 @@ exact access). Reports of particular interest:
   role agent that ignores its instruction under the session's own
   permissions is out of scope, since the session's permission mode is the
   boundary there.
+- `review_post.py`, in `ask-team`, posts review comments and edits pull
+  request bodies as the user's `gh` login, sending back a body it read from
+  GitHub. In scope is any path where text in a pull request steers what it
+  posts, or where it writes outside the body's `## Revision` section.
 - `update-build-board` and `sync-prune-next` act on GitHub as the user's
   `gh` login, setting labels, posting comments, dispatching a workflow, and
   deleting local worktrees and branches. In scope is any path where text in
@@ -68,9 +72,9 @@ exact access). Reports of particular interest:
 - `loop-cost` reads Claude Code session transcripts under
   `~/.claude/projects`, which hold anything a session read or wrote, and
   prints only token counts and dollars. Its skill then posts those figures as
-  a `## Cost` comment through the user's `gh` login. In scope is any path that
-  puts transcript content, rather than its totals, into the output or a
-  comment.
+  a `## Cost` comment through the user's `gh` login, with a skill proposal in
+  the session's own words. In scope is any path that puts transcript content,
+  rather than its totals, into the output or a comment.
 - `book-to-rules` reads a copyrighted book's full text, which is untrusted
   input, and opens pull requests and posts comments on public repositories
   as the user's `gh` login. The book's text, its OCR output and the reader
