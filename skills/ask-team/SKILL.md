@@ -146,7 +146,7 @@ Post one comment on the pull request or issue whose first line is the review hea
 3. What was refuted or left alone, with the reason.
 4. `### For the owner`, listing any question only the owner can rule on, including one for the board, or saying there is none.
 
-Price the review with the plugin's `l3a0:loop-cost` skill, counting every role, lens and verifier transcript. Put the figure at the end of the comment, and post it as a separate comment starting with the line `## Cost` on the issue the subject tracks, in the form the `l3a0:loop-cost` skill shows, because the status round's cost-total sweep reads only `## Cost` comments on issues. Every post follows `review-round.md`'s step 7 on a refused or unanswered post.
+Price the review with the plugin's `l3a0:loop-cost` skill, counting every role, lens and verifier transcript. Put the figure at the end of the comment, and post it as a separate comment starting with the line `## Cost` on the issue the subject tracks, in the form the `l3a0:loop-cost` skill shows, because the status round's cost-total sweep reads only `## Cost` comments on issues.
 
 ## Lens mode, inside another review
 
