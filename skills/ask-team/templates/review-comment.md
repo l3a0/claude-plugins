@@ -1,6 +1,6 @@
 ## <`## Review, round <N>` on a round that is not the last, and on the last round the final heading the ask-team skill's step 6 gives>
 
-Round <N>, of `<anchor sha>`<, run together with the review of <companion links>, which carry the same rules>. The roles followed <`docs/team-charter.md` at `<sha>`, or their agent files' defaults, since the repository has no charter>. <Count> lenses ran blind to each other: completeness, over-reach, and through `/l3a0:ask-team`'s lens mode the <roles>. <Count> verifiers then tried to refute every veto and must-fix by executing<, and the main thread confirmed <which must-fixes> by running <command>>. <Quote commands with paths relative to the repository, never an absolute local path.> `<fix sha>` applies what survived<here>. <Or, where nothing survived: "Nothing survived verification, so this round changes nothing.">
+Round <N>, of `<anchor sha>`<, run together with the review of <companion links>, which carry the same rules>. The roles followed <`docs/team-charter.md` at `<sha>`, or their agent files' defaults, since the repository has no charter>. <Count> lenses ran blind to each other: completeness, over-reach, and through `/l3a0:ask-team`'s lens mode the <roles>. <Count> verifiers then tried to refute every veto and must-fix by executing<, and the main thread confirmed <which must-fixes> by running <command>>. <Quote commands with paths relative to the repository, never an absolute local path.> `<fix sha>` applies what survived<here>. <Or, where nothing survived: "Nothing survived verification, so this round changes nothing."> <On the last round, where it applied should-fixes: "No lens read this round's should-fix edits." Name any that changes a limit, an order of steps, a permission or a halt condition.>
 
 ### Veto, confirmed and fixed
 
@@ -40,7 +40,7 @@ Surviving vetoes and must-fixes, by the lens that raised them: <lens> <count>, <
 
 ### For the owner
 
-1. **<A question only the owner can rule on, such as one the ask-team skill sends to the board, or a change to a role's vetoes. Work outside this pull request's scope is filed as an issue under `### Left alone` instead.>** <What the revision does meanwhile.> A dated line on <link> settles it.
+1. **<A question only the owner can rule on, such as one the ask-team skill sends to the board, or a change to a role's vetoes. Work outside this pull request's scope is filed as an issue under `### Left alone` instead.>** <What the revision does meanwhile. For a finding only the owner's ruling can settle: "This waits for the ruling, and the review stays open."> A dated line on <link> settles it.
 
 <Or: "Nothing here." On a companion pull request, point to where the questions sit.>
 
