@@ -189,14 +189,17 @@ handover, after the loop's last agent has reported.
    its templates and its scripts for the procedure, and extend what covers
    part of it. On 2026-11-04 a report proposed writing down a review brief that
    `ask-team`'s `templates/review-brief.md` already held.
-6. **Write the outcome where the cost goes.** Add it to the `## Cost` comment,
-   or to the review comment when no issue is tracked.
+6. **Write the outcome where the cost goes.** Add it to the `## Cost` comment.
+   When no issue is tracked, add it to the last review comment on the pull
+   request, which is the closing comment where one is posted. Describe the
+   procedure in the session's own words, and quote no transcript, file content
+   or path, because the comment is public.
 
    > ### Skill proposal
    >
-   > Each round of this review edited the pull request's `## Revision` section
-   > by hand. Extend `ask-team` with a script that holds the edit, so the next
-   > round does not work it out.
+   > Each round of this review read an issue's comments by hand before posting
+   > its `## Cost` comment. Extend `ask-team`'s `review_post.py` to take an issue
+   > target, so the next round does not work it out.
 
    Name the skill, what it would hold, the scripts for its `scripts/` folder and
    what the next run would no longer work out, and copy any scratchpad script

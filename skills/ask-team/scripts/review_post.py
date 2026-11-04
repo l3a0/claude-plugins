@@ -13,18 +13,18 @@ only when every changed line sits inside the section and a second run would
 change nothing, and it reads the body back. A line already in the section is
 not added twice, so a retry changes nothing.
 
-`comment` refuses a file that does not itself carry the heading, the round and
-its anchor, because a retry could not recognise that post. It then checks every
-pull request's head, and every earlier comment by the same login, and posts on
-none of them if a head differs or an earlier comment has the same key and other
-text. It skips a pull request that already carries this comment, so a retry
+`comment` refuses a file that does not itself carry the heading, the round, its
+anchor and the head, because a retry could not recognise that post. It then
+checks every pull request's head, and every earlier comment by the same login,
+since anyone can comment on a public pull request, and posts on none of them if
+a head differs or an earlier comment has the same key with other text or twice
+over. It skips a pull request that already carries this comment, so a retry
 posts only what is missing. GitHub takes no key on a comment, so this narrows
 the window for a double post rather than closing it.
 
 A write that fails says the outcome is unknown, since the request may have
 landed. Rerun the same command, which looks before it writes. The tests run
 against a stand-in `gh`, so no test covers what the real one prints.
-review-round.md's steps 7 and 8 say why each check is here.
 """
 
 import argparse
@@ -99,7 +99,7 @@ def find_section(lines):
         if ITEM.match(plain):
             end, seen = i + 1, True
         elif plain.strip():
-            if not seen or not (i == end or plain.startswith((" ", "\t"))):
+            if not seen or not plain.startswith((" ", "\t")):
                 break
             end = i + 1
     return starts[0], end
@@ -110,6 +110,8 @@ def items(lines, start, end):
     for i in range(start + 1, end):
         m = ITEM.match(lines[i].rstrip("\r"))
         if m:
+            if int(m[1]) in found:
+                sys.exit(f"the {SECTION} section numbers two items {m[1]}, so a retry could not find its line. Edit it by hand")
             found[int(m[1])] = (i, m[2])
     return found
 
@@ -138,7 +140,7 @@ def splice(body, text, replace):
             sys.exit(f"the body has no {SECTION} section, so item {replace} does not exist")
         at = insertion_point(lines)
         added = ["", SECTION, "", f"1. {text}"]
-        if at == len(lines):
+        if at == len(lines) or lines[at].strip():
             added.append("")
         return "\n".join(lines[:at] + [s + eol for s in added] + lines[at:])
     start, end = found
@@ -191,7 +193,7 @@ def revision(args):
         sys.exit(f"not OWNER/REPO#N: {args.pull}")
     repo, num = m["repo"], m["num"]
     text = args.line.strip()
-    if not text or "\n" in text:
+    if not text or "\n" in text or "\r" in text:
         sys.exit("a revision entry is one non-empty line")
     body = view(repo, num, "body")
     os.makedirs(args.scratch, exist_ok=True)
@@ -225,7 +227,7 @@ def carries(comment, heading, round_no, anchor):
 
 
 def comment(args):
-    targets = []
+    targets, seen = [], set()
     for spec in args.targets:
         m = TARGET.match(spec)
         if not m:
@@ -237,6 +239,12 @@ def comment(args):
         if not carries(text, args.heading, args.round, m["anchor"]):
             sys.exit(f"posting nothing, because {m['file']} does not start with {args.heading!r} and name "
                      f"round {args.round} and {m['anchor'][:7]}, so a retry could not recognise it")
+        if m["head"][:7] not in text:
+            sys.exit(f"posting nothing, because {m['file']} does not name the head {m['head'][:7]}")
+        pull = f"{m['repo']}#{m['num']}"
+        if pull in seen:
+            sys.exit(f"posting nothing, because {pull} is named twice")
+        seen.add(pull)
         targets.append((m, text))
     wrong = []
     for m, _ in targets:
@@ -255,6 +263,8 @@ def comment(args):
         if any(body.strip() != text.strip() for body in mine):
             sys.exit(f"posting nothing, because {name} already carries this heading, round and anchor with "
                      "different text. Report it, and post by hand once it is settled")
+        if len(mine) > 1:
+            sys.exit(f"posting nothing, because {name} already carries this comment {len(mine)} times. Report it")
         if mine:
             print(f"{name}: already carries this comment, so skipped")
         else:

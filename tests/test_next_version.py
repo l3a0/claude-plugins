@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory() as BIN:
     check('a minor bump moves the next free version with it', 'next free version is 0.7.1' in out)
 
     code, out = run([pull(8, 'a')], {'main': '0.6.24', 'a': '0.6.20'}, '--pr', '8')
-    check('a claim below main moves', 'PR 8 claims nothing above main, so it takes 0.6.25' in out)
+    check('a claim below main moves if it bumps the plugin', 'PR 8 claims nothing above main. If it bumps the plugin, it takes 0.6.25' in out)
 
     code, out = run([pull(8, 'a'), pull(9, 'b')], {'main': '0.6.24', 'a': '0.6.25', 'b': '0.6.26'}, '--pr', '8')
     check('a claim above main with no clash stays', 'PR 8 keeps 0.6.25' in out)
@@ -76,7 +76,7 @@ with tempfile.TemporaryDirectory() as BIN:
     code, out = run([pull(8, 'a'), pull(9, 'b')], {'main': '0.6.24', 'a': '0.6.25', 'b': '0.6.25'}, '--pr', '9')
     check('two claims on one number move', 'PR 9 shares 0.6.25 with PR 8' in out and 'takes 0.6.26' in out)
 
-    code, out = run([pull(8, 'a'), pull(9, 'b'), pull(10, 'c')], {'main': '0.6.24', 'a': '0.6.25', 'b': '0.6.25', 'c': '0.6.25'}, '--pr', '10')
+    code, out = run([pull(10, 'c'), pull(9, 'b'), pull(8, 'a')], {'main': '0.6.24', 'a': '0.6.25', 'b': '0.6.25', 'c': '0.6.25'}, '--pr', '10')
     check('a third claim on one number names the first', 'PR 10 shares 0.6.25 with PR 8' in out)
 
     code, out = run([pull(8, 'a', 'feat: x (v0.6.25)')], {'main': '0.6.24', 'a': '0.6.26'})
@@ -109,6 +109,10 @@ with tempfile.TemporaryDirectory() as BIN:
 
     code, out = run([pull(8, 'raw1')], {'main': '0.6.24', 'raw1': 'not json'})
     check('a manifest that is not JSON stops with a named error', code != 0 and 'PR 8' in out and 'Traceback' not in out)
+
+    for raw in ('{}', '[1]'):
+        code, out = run([pull(8, 'raw2')], {'main': '0.6.24', 'raw2': raw})
+        check(f'a manifest of {raw} stops with a named error', code != 0 and 'PR 8' in out and 'Traceback' not in out)
 
     code, out = run([], {'main': 'x'})
     check('a malformed main stops with a named error', code != 0 and 'main' in out and 'Traceback' not in out)

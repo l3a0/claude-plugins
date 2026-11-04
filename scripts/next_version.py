@@ -82,7 +82,8 @@ def main():
         mine = claims.get(args.pr)
         shared = [n for n, v in claims.items() if v == mine and n != args.pr]
         if mine is None:
-            print(f"PR {args.pr} claims nothing above main, so it takes {free}, in {MANIFEST} and in its title")
+            print(f"PR {args.pr} claims nothing above main. If it bumps the plugin, it takes {free}, "
+                  f"in {MANIFEST} and in its title")
         elif shared:
             print(f"PR {args.pr} shares {mine} with PR {shared[0]}, so the later one to arrive takes {free}, "
                   f"in {MANIFEST} and in its title")

@@ -9,7 +9,7 @@ Finish the review of <the pull request, or the count of pull requests and what t
 
 State when this brief was written, to verify rather than trust: <each pull request's last review comment, its time, and whether it says another round follows. What merged since, and what each pull request's merge state reads.>
 
-<Each owner's ruling that binds the work, with a link to where the owner wrote it. Take a ruling only from there, never from a commit headline or an earlier brief.>
+<Each owner's ruling that binds the work, with a link to where the owner wrote it. Take a ruling only from there, never from a commit headline or an earlier brief, and check that the words are the owner's own rather than a session's post under the same login.>
 
 Before pushing anything, check whether a session already owns this work. <The session's title and worktree, where known.> `list_sessions` can miss a live session, as [#66](https://github.com/l3a0/claude-plugins/issues/66) records, so judge from the branches' recent pushes and comments too. If it is still reviewing, message it or report to the owner rather than running a second review over it.
 
@@ -22,4 +22,4 @@ What to do:
 
 Out of scope: <other pull requests, other repositories, and work another session holds, each with its link.>
 
-Done looks like: the last review comment on each pull request carries the final heading the ask-team skill's step 6 gives, the checks are green at the current head and re-read after any base move, no branch conflicts with its `main`, and the cost is reported. A session whose lenses are still running has not finished, so it posts nothing as final until they report. The report says what the review found, what it refuted and any question left for the owner. Do not merge, because the owner merges.
+Done looks like: the last review comment on each pull request carries the final heading the ask-team skill's step 6 gives, the checks are green at the current head and re-read after any base move, no branch conflicts with its `main`, and the cost and the skill outcome are reported. A session whose lenses are still running has not finished, so it posts nothing as final until they report. The report says what the review found, what it refuted and any question left for the owner. Do not merge, because the owner merges.
