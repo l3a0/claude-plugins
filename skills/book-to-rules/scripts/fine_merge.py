@@ -13,9 +13,9 @@ stop that leaves a path conflicted, such as a merge, a rebase or a cherry-pick.
 A conflict keeps its markers at the start of their own lines, inside the paragraph, so rejoin those lines when
 resolving it. Each file's previous text is saved first and the copy printed, because a hand resolution, or one rerere
 replayed, looks the same to git as a fresh stop. The copies sit in the worktree's git folder, so they go when the
-worktree does. Line ends and ident come out in the stored form until the next checkout. A symlink, a path git converts
-with a clean filter or a working-tree encoding, and a path git does not hold as conflicted with a base, ours and theirs
-are refused, and then no path is written. The exit status is 0 when no conflict remains, 1 when one does and 2 when no
+worktree does. Line ends and ident come out in the stored form until the next checkout. A symlink, a path whose
+attributes name a filter or a working-tree encoding, and a path git does not hold as conflicted with a base, ours and
+theirs are refused, and then no path is written. The exit status is 0 when no conflict remains, 1 when one does and 2 when no
 path was given, a path was refused, or a read, a write or a tool failed.
 
 The price of merging clauses is a clean result that can still read wrong, as when one side renames a term and the
@@ -63,7 +63,7 @@ def stages(path):
         fail(f'{path}: is a symlink, so writing it would reach another file')
     attributes = git('check-attr', 'filter', 'working-tree-encoding', '--', path)
     if re.search(rb': (filter|working-tree-encoding): (?!(unspecified|unset)$)', attributes, re.M):
-        fail(f'{path}: git converts this path on checkout, so the form git stores cannot be written back')
+        fail(f'{path}: git may convert this path on checkout, so the form git stores cannot be written back')
     # The real path lets an absolute path through a linked folder, such as macOS's /var, match the index.
     sides = [git('show', f':{n}:./{os.path.relpath(os.path.realpath(path))}') for n in (2, 1, 3)]
     if any(MARK in side for side in sides):

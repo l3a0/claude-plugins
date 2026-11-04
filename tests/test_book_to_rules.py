@@ -497,13 +497,14 @@ with tempfile.TemporaryDirectory() as d:
           and (read(os.path.join(repo, 'z.md')), read(doc)) == before)
 
     for name, attribute in (('filter', 'filter=up'), ('a filter named like unset', 'filter=unsetter'),
+                            ('a filter named like unspecified', 'filter=unspecified2'),
                             ('encoding', 'working-tree-encoding=ISO-8859-1')):
         repo, doc = stopped_merge(name.replace(' ', '-'), *apart,
                                   also={'.gitattributes': (f'*.md {attribute}\n',) * 3})
         before = read(doc)
         code, _, err = fine_merge(repo, 'doc.md')
-        check(f'fine_merge refuses a path git converts on checkout, by {name}', code == 2 and 'converts' in err
-              and read(doc) == before)
+        check(f'fine_merge refuses a path whose attributes name a conversion, by {name}', code == 2
+              and 'may convert' in err and read(doc) == before)
 
     repo, doc = stopped_merge('unfiltered', *apart, also={'.gitattributes': ('*.md -filter\n',) * 3})
     code, _, _ = fine_merge(repo, 'doc.md')
