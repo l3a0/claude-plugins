@@ -58,6 +58,8 @@ Text the OCR read from a page's margin column follows the body after a `[margin]
 4. **`hlmap.py`** finds the page of each of the owner's highlights. Where the text occurs on more than one page, it picks the copy that fits the highlights' Kindle locations, and it flags any highlight whose page still breaks location order.
 5. **`overlap.py`** finds runs of six or more words a draft shares with the book.
 
+`fine_merge.py` reads no book text and uses none of these. It merges `main` into a branch clause by clause, as step 5 says.
+
 Matching folds case, curly quotes, dashes, ligatures and soft hyphens, and joins a word hyphenated across a line end or a page break. Run the scripts with `python3 -I`, which keeps Python from loading a module out of the run directory. `tests/test_book_to_rules.py` runs them on a synthetic book in CI.
 
 ## The pipeline, in seven steps
@@ -153,6 +155,15 @@ Each repository gets its own branch and its own pull request, and each pull requ
 3. **The template**, l3a0/repo-template. Its `docs/design.md` gets the rules that hold for any new repository, worded without the project's names. Ask before opening this pull request whether the book's rules hold beyond the project, and open none when they do not. The owner closed [PR #79](https://github.com/l3a0/repo-template/pull/79) unmerged on 2026-11-04, because the rules for judging a trading strategy over a sample did not apply to a generic template, after 14 review rounds had read it.
 
 A plugin check must hold in any repository, so word it for the property it protects and give the project's case as one example. [PR #46](https://github.com/l3a0/claude-plugins/pull/46) scoped five checks that would otherwise have fired in repositories with no such property, such as an `fsync` check against a GitHub comment.
+
+A rule sits on one long line, so merging `main` into a branch conflicts on the whole paragraph even when the two sides touched different sentences. When `git merge` stops on such a file, run `fine_merge.py` before touching the file. It merges clause by clause, leaves in conflict only the clauses both sides changed, and exits 1 when any remain. Replayed over the 11 merges in l3a0/ithildin-runtime's pull requests that stopped on a Markdown file, it cut the text in conflict from 400,221 bytes to 83,427.
+
+```bash
+git merge origin/main
+python3 -I "$SKILL/scripts/fine_merge.py" "$(git merge-base HEAD origin/main)" origin/main docs/design.md docs/team-charter.md
+```
+
+It rewrites each path from the three commits, so a hand resolution made before it runs is lost, and it refuses a path with other uncommitted edits. A conflict's markers sit on lines of their own inside the paragraph, so rejoin those lines into one when resolving it. The price is a clean merge that can still read wrong, as when one side renames a term and the other uses the old name in the next clause. So read every paragraph both sides changed before committing the merge.
 
 ### 6. Run the review round
 
