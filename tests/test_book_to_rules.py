@@ -4,9 +4,9 @@
     python3 tests/test_book_to_rules.py
 
 The fixture is invented text in every header form booktext.py reads, printed pages and Kindle screens, so it holds
-no book text and runs on the Linux CI runner.
+no book text and runs on the Linux CI runner. fine_merge.py runs on invented paragraphs in throwaway repositories.
 """
-import json, os, subprocess, sys, tempfile
+import json, os, shutil, stat, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS = os.path.join(HERE, '..', 'skills', 'book-to-rules', 'scripts')
@@ -70,9 +70,9 @@ Estimated screen two about quorum reads.
 """
 
 
-def run(script, *args, cwd=None):
+def run(script, *args, cwd=None, env=None):
     p = subprocess.run([sys.executable, '-I', os.path.join(SCRIPTS, script), *args], capture_output=True, text=True,
-                       cwd=cwd)
+                       cwd=cwd, env=env)
     return p.returncode, p.stdout, p.stderr
 
 
@@ -204,112 +204,205 @@ with tempfile.TemporaryDirectory() as d:
         return subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c',
                                'commit.gpgsign=false', *args], cwd=repo, capture_output=True, text=True)
 
-    def stopped_merge(name, base, ours, theirs, path='doc.md'):
-        """A repository whose main and theirs branches changed path, with git's own merge stopped or finished."""
+    def two_sides(name, versions):
+        """A repository whose main and theirs branches changed paths from one base, as {path: (base, ours, theirs)}."""
         repo = os.path.join(d, name)
-        os.makedirs(os.path.dirname(os.path.join(repo, path)), exist_ok=True)
-        full = os.path.join(repo, path)
+        os.makedirs(repo)
 
-        def commit(text):
-            open(full, 'wb').write(text.encode())
+        def commit(side):
+            for path, texts in versions.items():
+                full = os.path.join(repo, path)
+                os.makedirs(os.path.dirname(full), exist_ok=True)
+                if texts[side] is None:
+                    os.remove(full)
+                else:
+                    open(full, 'wb').write(texts[side].encode())
             git(repo, 'add', '.')
             git(repo, 'commit', '-m', 'change')
 
         git(repo, 'init', '-b', 'main')
-        commit(base)
+        commit(0)
         git(repo, 'checkout', '-b', 'theirs')
-        commit(theirs)
+        commit(2)
         git(repo, 'checkout', 'main')
-        commit(ours)
-        git(repo, 'merge', 'theirs')
-        return repo, full
+        commit(1)
+        return repo
 
-    def fine_merge(repo, *paths, cwd=None):
-        base = git(repo, 'merge-base', 'HEAD', 'theirs').stdout.strip()
-        return run('fine_merge.py', base, 'theirs', *paths, cwd=cwd or repo)
+    def stopped_merge(name, base, ours, theirs, path='doc.md', also=None):
+        repo = two_sides(name, {path: (base, ours, theirs), **(also or {})})
+        git(repo, 'merge', 'theirs')
+        return repo, os.path.join(repo, path)
+
+    def fine_merge(repo, *paths, cwd=None, env=None):
+        return run('fine_merge.py', *paths, cwd=cwd or repo, env=env)
 
     def read(path):
         return open(path, 'rb').read().decode()
 
+    def edited(text, *swaps):
+        for old, new in swaps:
+            text = text.replace(old, new)
+        return f'{text}\n'
+
     para = 'First claim here, second claim here, third claim here, fourth claim here.'
-    repo, doc = stopped_merge('apart', f'{para}\nA second paragraph.\n',
-                              f'{para.replace("First", "Opening")}\nA second paragraph.\n',
-                              f'{para.replace("third", "other")}\nA second paragraph.\n')
+    apart = f'{para}\n', edited(para, ('First', 'Opening')), edited(para, ('third', 'other'))
+    joined = 'Opening claim here, second claim here, other claim here, fourth claim here.\n'
+
+    repo, doc = stopped_merge('apart', *apart)
     check('fine_merge starts from a paragraph git itself stops on', '<<<<<<<' in read(doc))
     code, out, _ = fine_merge(repo, 'doc.md')
-    check('fine_merge joins changes to two clauses of one paragraph, with the file\'s line breaks intact',
-          code == 0 and 'doc.md: 0 conflicts' in out and read(doc)
-          == 'Opening claim here, second claim here, other claim here, fourth claim here.\nA second paragraph.\n')
+    check('fine_merge joins changes to two clauses of one paragraph',
+          code == 0 and 'doc.md: 0 conflicts' in out and read(doc) == joined)
+    shown = git(repo, 'diff', '--', 'doc.md').stdout
+    check('git diff lists the joined paragraph for reading, as the skill says', 'Opening claim here, second' in shown)
 
     repo, doc = stopped_merge('appended', f'{para}\n', f'{para} A fifth sentence on the end.\n',
-                              f'{para.replace("third", "other")}\n')
+                              edited(para, ('third', 'other')))
     code, out, _ = fine_merge(repo, 'doc.md')
     check('fine_merge joins a sentence added to a paragraph\'s end with a change to a clause just before the last',
           code == 0 and read(doc)
           == 'First claim here, second claim here, other claim here, fourth claim here. A fifth sentence on the end.\n')
 
-    repo, doc = stopped_merge('same', f'{para}\n', f'{para.replace("second", "ours")}\n',
-                              f'{para.replace("second", "mine")}\n')
+    repo, doc = stopped_merge('same', f'{para}\n', edited(para, ('second', 'ours')), edited(para, ('second', 'mine')))
     code, out, _ = fine_merge(repo, 'doc.md')
-    lines = read(doc).split('\n')
+    expected = ['First claim here,', '<<<<<<< ours', ' ours claim here,', '=======', ' mine claim here,',
+                '>>>>>>> theirs', ' third claim here, fourth claim here.', '']
     check('fine_merge keeps a clause both sides changed in conflict, each marker at the start of its own line',
-          code == 1 and 'doc.md: 1 conflicts' in out
-          and lines == ['First claim here,', '<<<<<<< HEAD', ' ours claim here,', '=======', ' mine claim here,',
-                        '>>>>>>> theirs', ' third claim here, fourth claim here.', ''])
+          code == 1 and 'doc.md: 1 conflicts' in out and read(doc).split('\n') == expected)
     git(repo, 'add', 'doc.md')
-    check('git sees those markers as leftover conflict markers', 'conflict marker' in git(repo, 'diff', '--cached',
-                                                                                         '--check').stdout)
+    check('git sees those markers as leftover conflict markers',
+          'conflict marker' in git(repo, 'diff', '--cached', '--check').stdout)
 
-    prose = 'Ends a clause; asks why? Says so! Keeps  two spaces, a trailing one. \r\nand\u00a0more: \u2014 caf\u00e9.'
-    repo, doc = stopped_merge('exact', prose, prose, prose)
-    code, out, _ = run('fine_merge.py', 'HEAD', 'HEAD', 'doc.md', cwd=repo)
-    check('fine_merge rebuilds an unchanged file byte for byte, with no line end on its last line',
-          code == 0 and open(doc, 'rb').read() == prose.encode())
-
-    marks = 'One; two, three? four! five: six.'
-    repo, doc = stopped_merge('marks', f'{marks}\n', f'{marks.replace("One", "1")}\n',
-                              f'{marks.replace("four", "4")}\n')
+    repo, doc = stopped_merge('style', f'{para}\n', edited(para, ('second', 'ours')), edited(para, ('second', 'mine')))
+    git(repo, 'config', 'merge.conflictStyle', 'diff3')
     code, out, _ = fine_merge(repo, 'doc.md')
-    check('fine_merge cuts at a semicolon, a question mark and an exclamation mark too',
-          code == 0 and read(doc) == '1; two, three? 4! five: six.\n')
+    check('fine_merge writes one conflict form whatever merge.conflictStyle says', read(doc).split('\n') == expected)
 
-    repo, doc = stopped_merge('marks2', 'One; two\n', '1; two\n', 'One; 2\n')
+    prose = 'Alpha one;\tbeta two? gamma  three! delta: epsilon, trailing one. \r\nnext café line, no line end.'
+    repo, doc = stopped_merge('exact', prose, edited(prose, ('Alpha', 'Ours')).rstrip('\n'),
+                              edited(prose, ('epsilon', 'Theirs')).rstrip('\n'))
+    code, out, _ = fine_merge(repo, 'doc.md')
+    check('fine_merge keeps tabs, double spaces, a carriage return, UTF-8 and a missing last line end exactly',
+          code == 0 and open(doc, 'rb').read() == edited(prose, ('Alpha', 'Ours'), ('epsilon', 'Theirs'))[:-1].encode())
+
+    for n, mark in enumerate('.,:;?!'):
+        text = f'one{mark} keep{mark} two'
+        repo, doc = stopped_merge(f'mark{n}', f'{text}\n', edited(text, ('one', 'ONE')), edited(text, ('two', 'TWO')))
+        code, _, _ = fine_merge(repo, 'doc.md')
+        check(f'fine_merge cuts at {mark}', code == 0 and read(doc) == edited(text, ('one', 'ONE'), ('two', 'TWO')))
+
+    repo, doc = stopped_merge('neighbours', 'One, two\n', '1, two\n', 'One, 2\n')
     code, out, _ = fine_merge(repo, 'doc.md')
     check('fine_merge conflicts on two neighbouring clauses, since no unchanged clause sits between them',
-          code == 1 and '<<<<<<< HEAD' in read(doc))
+          code == 1 and read(doc) == '<<<<<<< ours\n1, two\n=======\nOne, 2\n>>>>>>> theirs\n')
 
-    repo, doc = stopped_merge('nested', f'{para}\n', f'{para.replace("First", "Opening")}\n',
-                              f'{para.replace("third", "other")}\n', path='docs/doc.md')
+    def clauses(count, **swaps):
+        """A paragraph of count changeable clauses, each followed by four that never change."""
+        return ', '.join(f'{swaps.get(f"c{i}", f"c{i}")}, k{i}a, k{i}b, k{i}c, k{i}d' for i in range(count)) + '.\n'
+
+    repo, doc = stopped_merge('two', clauses(2), clauses(2, c0='ours', c1='ours'), clauses(2, c0='mine', c1='mine'))
+    code, out, _ = fine_merge(repo, 'doc.md')
+    check('fine_merge counts two conflicts in one file', code == 1 and 'doc.md: 2 conflicts' in out)
+
+    many = {f'c{i}': 'ours' for i in range(128)}
+    repo, doc = stopped_merge('many', clauses(128), clauses(128, **many), clauses(128, **dict.fromkeys(many, 'mine')))
+    code, out, _ = fine_merge(repo, 'doc.md')
+    check('fine_merge writes and counts conflicts past the 127 git merge-file caps its status at',
+          code == 1 and 'doc.md: 128 conflicts' in out and read(doc).count('<<<<<<< ours\n') == 128)
+
+    both = {'a.md': apart, 'b.md': (f'{para}\n', edited(para, ('second', 'ours')), edited(para, ('second', 'mine')))}
+    for name, paths in (('ab', ('a.md', 'b.md')), ('ba', ('b.md', 'a.md'))):
+        repo = two_sides(name, both)
+        git(repo, 'merge', 'theirs')
+        code, out, _ = fine_merge(repo, *paths)
+        check(f'fine_merge merges every path and exits 1 when one conflicts, given {paths[0]} first',
+              code == 1 and 'a.md: 0 conflicts' in out and 'b.md: 1 conflicts' in out
+              and read(os.path.join(repo, 'a.md')) == joined and '<<<<<<< ours' in read(os.path.join(repo, 'b.md')))
+
+    repo = two_sides('rebase', {'doc.md': apart})
+    git(repo, 'checkout', 'theirs')
+    git(repo, 'rebase', 'main')
+    code, out, _ = fine_merge(repo, 'doc.md')
+    check('fine_merge keeps both sides at a rebase stop', code == 0 and read(os.path.join(repo, 'doc.md')) == joined)
+
+    repo, doc = stopped_merge('nested', *apart, path='docs/doc.md')
     code, out, _ = fine_merge(repo, 'doc.md', cwd=os.path.join(repo, 'docs'))
-    check('fine_merge reads a path from the current folder, not the repository root',
-          code == 0 and 'other claim' in read(doc) and 'Opening' in read(doc))
+    check('fine_merge reads a path from the current folder, not the repository root', code == 0 and read(doc) == joined)
 
-    repo, doc = stopped_merge('edits', f'{para}\n', f'{para.replace("First", "Opening")}\n', f'{para}\n')
+    repo, doc = stopped_merge('staged', *apart, also={'other.md': ('a\n\nb\n', 'A\n\nb\n', 'a\n\nB\n')})
+    other = os.path.join(repo, 'other.md')
+    code, out, _ = fine_merge(repo, 'doc.md', 'other.md')
+    check('fine_merge leaves alone a path git merged itself, and still merges the path git stopped on',
+          code == 0 and 'other.md: not conflicted, left alone' in out and read(doc) == joined
+          and read(other) == 'A\n\nB\n')
+
+    repo = two_sides('idle', {'doc.md': apart})
+    doc = os.path.join(repo, 'doc.md')
     open(doc, 'wb').write(b'an edit nobody committed\n')
-    code, _, err = fine_merge(repo, 'doc.md')
-    check('fine_merge refuses to overwrite an uncommitted edit',
-          code != 0 and 'uncommitted' in err and read(doc) == 'an edit nobody committed\n')
+    code, out, _ = fine_merge(repo, 'doc.md')
+    check('fine_merge leaves alone an uncommitted edit with no merge stopped',
+          code == 0 and 'left alone' in out and read(doc) == 'an edit nobody committed\n')
 
-    repo, doc = stopped_merge('binary', f'{para}\n', f'{para.replace("First", "Opening")}\n', 'not\0text\n')
+    repo, doc = stopped_merge('hand', f'{para}\n', edited(para, ('second', 'ours')), edited(para, ('second', 'mine')))
+    code, out, _ = fine_merge(repo, 'doc.md')
+    first = out.strip().rpartition('previous text in ')[2]
+    open(doc, 'wb').write(b'resolved by hand\n')
+    code, out, _ = fine_merge(repo, 'doc.md')
+    copy = out.strip().rpartition('previous text in ')[2]
+    check('fine_merge saves a hand resolution before writing over it, and names the copy',
+          read(os.path.join(repo, copy)) == 'resolved by hand\n'
+          and git(repo, 'status', '--short').stdout == 'UU doc.md\n')
+    check('fine_merge keeps every earlier copy', first != copy and '<<<<<<<' in read(os.path.join(repo, first)))
+
+    repo, doc = stopped_merge('binary', f'{para}\n', edited(para, ('First', 'Opening')), 'not\0text\n')
     before = read(doc)
     code, _, err = fine_merge(repo, 'doc.md')
-    check('fine_merge leaves the file alone when git merge-file fails', code != 0 and 'failed' in err
+    check('fine_merge leaves the file alone when git merge-file fails', code == 2 and 'merge-file' in err
           and read(doc) == before)
 
-    repo, doc = stopped_merge('marked', f'{para}\n', f'{para.replace("First", "Opening")}\n', 'a\x01b\n')
+    repo, doc = stopped_merge('killed', *apart)
+    before = read(doc)
+    tools = os.path.join(d, 'tools')
+    os.makedirs(tools)
+    stub = os.path.join(tools, 'git')
+    with open(stub, 'w') as f:
+        f.write(f'#!/bin/sh\ncase "$*" in *merge-file*) kill -9 $$ ;; esac\nexec "{shutil.which("git")}" "$@"\n')
+    os.chmod(stub, os.stat(stub).st_mode | stat.S_IEXEC)
+    code, _, err = fine_merge(repo, 'doc.md', env={**os.environ, 'PATH': f'{tools}{os.pathsep}{os.environ["PATH"]}'})
+    check('fine_merge leaves the file alone when a signal kills git merge-file', code == 2 and read(doc) == before)
+
+    repo, doc = stopped_merge('marked', f'{para}\n', edited(para, ('First', 'Opening')), 'a\x01b\n')
     before = read(doc)
     code, _, err = fine_merge(repo, 'doc.md')
-    check('fine_merge refuses text holding its own clause mark', code != 0 and 'marks clause breaks' in err
+    check('fine_merge refuses text holding its own clause mark', code == 2 and 'marks clause breaks' in err
           and read(doc) == before)
 
-    repo, doc = stopped_merge('partial', f'{para}\n', f'{para.replace("First", "Opening")}\n',
-                              f'{para.replace("third", "other")}\n')
+    repo, doc = stopped_merge('deleted', f'{para}\n', edited(para, ('First', 'Opening')), None,
+                              also={'other.md': apart})
+    before = read(os.path.join(repo, 'other.md'))
+    code, _, err = fine_merge(repo, 'other.md', 'doc.md')
+    check('fine_merge refuses a path one side deleted, and then writes no other path', code == 2 and 'doc.md' in err
+          and read(os.path.join(repo, 'other.md')) == before)
+
+    repo, doc = stopped_merge('linked', *apart, also={'target.md': ('t\n', 't\n', 't\n')})
+    os.remove(doc)
+    os.symlink('target.md', doc)
+    code, _, err = fine_merge(repo, 'doc.md')
+    check('fine_merge refuses a symlink, so the write cannot reach another file', code == 2
+          and read(os.path.join(repo, 'target.md')) == 't\n')
+
+    repo, doc = stopped_merge('folder', *apart, path='docs/doc.md')
+    code, _, err = fine_merge(repo, 'docs')
+    check('fine_merge refuses a folder', code == 2 and '<<<<<<<' in read(doc))
+
+    repo, doc = stopped_merge('corrupt', *apart)
     before = read(doc)
-    code, _, err = fine_merge(repo, 'doc.md', 'missing.md')
-    check('fine_merge writes no path unless every path merged', code != 0 and 'missing.md' in err
-          and read(doc) == before)
-    code, _, err = run('fine_merge.py', 'HEAD', 'theirs', cwd=repo)
-    check('fine_merge asks for at least one path', code != 0 and 'fine_merge.py' in err)
+    open(os.path.join(repo, '.git', 'index'), 'wb').write(b'broken')
+    code, _, err = fine_merge(repo, 'doc.md')
+    check('fine_merge stops when git cannot read its index', code == 2 and read(doc) == before)
+
+    code, _, err = fine_merge(repo)
+    check('fine_merge asks for at least one path', code == 2 and 'fine_merge.py' in err)
 
 print('all passed' if not failures else f'{failures} failed')
 sys.exit(1 if failures else 0)

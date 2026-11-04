@@ -41,7 +41,7 @@ python3 -I "$SKILL/scripts/overlap.py" "$RUN/book_pages.txt" "$RUN/pr.diff" "$RU
 
 ## The text format the scripts read
 
-The scripts in `scripts/` read one text file per book, cut into blocks, one per printed page or reader screen. Each block opens with a header line, `===== <source> | <label> =====`, and the label gives the citation key. The docstring of `scripts/booktext.py` is the one statement of that format, with every label form and its key. A script that writes the format follows it. The common keys are these.
+The book scripts in `scripts/` read one text file per book, cut into blocks, one per printed page or reader screen. Each block opens with a header line, `===== <source> | <label> =====`, and the label gives the citation key. The docstring of `scripts/booktext.py` is the one statement of that format, with every label form and its key. A script that writes the format follows it. The common keys are these.
 
 1. **A printed page.** `===== pdf 110 | p. 73 =====` is cited as `73`. A PDF's OCR text uses this form.
 2. **Front matter.** `===== pdf 3 | front 3 =====` is cited as `front3`, numbered by PDF page.
@@ -156,14 +156,14 @@ Each repository gets its own branch and its own pull request, and each pull requ
 
 A plugin check must hold in any repository, so word it for the property it protects and give the project's case as one example. [PR #46](https://github.com/l3a0/claude-plugins/pull/46) scoped five checks that would otherwise have fired in repositories with no such property, such as an `fsync` check against a GitHub comment.
 
-A rule sits on one long line, so merging `main` into a branch conflicts on the whole paragraph even when the two sides touched different sentences. When `git merge` stops on such a file, run `fine_merge.py` before touching the file. It merges clause by clause, leaves in conflict only the clauses both sides changed, and exits 1 when any remain. Replayed over the 11 merges in l3a0/ithildin-runtime's pull requests that stopped on a Markdown file, it cut the text in conflict from 400,221 bytes to 83,427.
+A rule sits on one long line, so merging `main` into a branch conflicts on the whole paragraph even when the two sides touched different sentences. When `git merge` stops on a Markdown file like that, run `fine_merge.py` on it. It merges clause by clause from the three versions git holds, so a conflict stays only where the two sides changed one clause or clauses close together. It exits 1 when any conflict remains, and leaves alone a path git merged itself. A replay of 11 such merges on 2026-11-04 left about a fifth of the text in conflict, and 10 of the 11 still needed a hand resolution.
 
 ```bash
 git merge origin/main
-python3 -I "$SKILL/scripts/fine_merge.py" "$(git merge-base HEAD origin/main)" origin/main docs/design.md docs/team-charter.md
+python3 -I "$SKILL/scripts/fine_merge.py" docs/design.md docs/team-charter.md
 ```
 
-It rewrites each path from the three commits, so a hand resolution made before it runs is lost, and it refuses a path with other uncommitted edits. A conflict's markers sit on lines of their own inside the paragraph, so rejoin those lines into one when resolving it. The price is a clean merge that can still read wrong, as when one side renames a term and the other uses the old name in the next clause. So read every paragraph both sides changed before committing the merge.
+A conflict's markers sit on lines of their own inside the paragraph, so rejoin those lines into one when resolving it. Run the script before any hand edits. It saves each file's previous text under the repository's git folder and prints where, so a run made by mistake loses nothing. The price is a clean merge that can still read wrong, as when one side renames a term and the other uses the old name in the next clause. So before `git add`, read what `git diff -- <path>` lists, which is every line that differs from both sides. Keep the script to prose. Run on `scripts/gen_team.py` or `scripts/gen_seats.py`, it can join two sides of a line of code into something that does not compile, so resolve those by hand and regenerate the agent files.
 
 ### 6. Run the review round
 
@@ -175,6 +175,8 @@ Review all three pull requests in one round, by the procedure in the `/l3a0:ask-
 4. **Every citation, rechecked.** The round's fix step rechecks citations with the brief's helper. For a book that is `pg.py` over every citation in all three diffs, whether or not a lens flagged it, and `overlap.py` over each diff, each body and each comment before it is posted. The comment's "Citations corrected" section lists each miss.
 
 On the book rounds, verifiers ran a model of the rules as written, an attack on a claimed type guard, and a copy of the repository with a limit inverted. A companion that misses a fix carries the stale rule into a second repository, as [PR #74](https://github.com/l3a0/repo-template/pull/74) did with a fencing claim the other two had already withdrawn. Seven lenses ran on the *Code Complete* and *Rapid Development* rounds. The *Rapid Development* round ran no verifiers, and the main thread checked each must-fix by running the commands itself.
+
+When `main` moves during the round, merge it the way step 5 says.
 
 ### 7. Price the loop
 
