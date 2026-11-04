@@ -5,9 +5,9 @@ description: Turn a book into rules for an engineering team and design principle
 
 # Book to rules
 
-Six books went through this pipeline in three days, ending on 2026-11-04. The first four, *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*, each worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them. The fifth, *Building Microservices*, ran with this skill and still took eight review rounds, which step 7 prices. Step 4's list of what other work owns is the lesson of that run. The sixth, *Trading in the Zone*, took fourteen, most of them on mechanics a rule stated rather than pointed to.
+Seven books went through this pipeline in three days, ending on 2026-11-04. The first four, *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*, each worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them. The fifth, *Building Microservices*, ran with this skill and still took eight review rounds, which step 7 prices. Step 4's list of what other work owns is the lesson of that run. The sixth, *Trading in the Zone*, took fourteen, most of them on mechanics a rule stated rather than pointed to.
 
-The worked examples are the six sets of pull requests. The first four ran before any rule on rounds and stopped after one or two. Two later runs under the rule that a review goes on until nothing significant is left, [l3a0/ithildin-runtime PR #29](https://github.com/l3a0/ithildin-runtime/pull/29) and [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31), had reached seven and six rounds on 2026-11-04 UTC with more to follow, so the jump to eight is not all the cost of skipping step 4's list.
+The worked examples are the seven sets of pull requests. The first four ran before any rule on rounds and stopped after one or two. Two later runs under the rule that a review goes on until nothing significant is left, [l3a0/ithildin-runtime PR #29](https://github.com/l3a0/ithildin-runtime/pull/29) and [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31), had reached seven and six rounds on 2026-11-04 UTC with more to follow, so the jump to eight is not all the cost of skipping step 4's list.
 
 | Book | l3a0/ithildin-runtime | l3a0/claude-plugins | l3a0/repo-template | Review rounds |
 | --- | --- | --- | --- | --- |
@@ -17,6 +17,7 @@ The worked examples are the six sets of pull requests. The first four ran before
 | *Rapid Development* | [PR #27](https://github.com/l3a0/ithildin-runtime/pull/27) | [PR #48](https://github.com/l3a0/claude-plugins/pull/48) | [PR #76](https://github.com/l3a0/repo-template/pull/76) | 1 |
 | *Building Microservices* | [PR #28](https://github.com/l3a0/ithildin-runtime/pull/28) | [PR #56](https://github.com/l3a0/claude-plugins/pull/56) | [PR #77](https://github.com/l3a0/repo-template/pull/77) | 8 |
 | *Trading in the Zone* | [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31) | [PR #59](https://github.com/l3a0/claude-plugins/pull/59) | none | 14 |
+| *Fooled by Randomness* | [PR #45](https://github.com/l3a0/ithildin-runtime/pull/45) | [PR #72](https://github.com/l3a0/claude-plugins/pull/72) | none | ROUNDS |
 
 Read the review comment on the *Code Complete* project pull request first. Its round is the one the `ask-team` skill's review round and comment template were drawn from.
 
@@ -79,13 +80,13 @@ The text comes from one of two places.
 1. **A PDF the owner supplies.** The `book-text` skill in this plugin, added by [PR #51](https://github.com/l3a0/claude-plugins/pull/51), turns it into `book_pages.txt`, one block per printed page, with margin text after `[margin]` and front matter numbered by PDF page.
 2. **The Kindle book alone.** The `kindle-highlights` skill extracts the owner's highlights into `<ASIN>_highlights.json`, and its full-book path sweeps the Cloud Reader into `book.txt`, one block per screen, headed by the reader's footer.
 
-Before a Cloud Reader sweep, set the reader's footer to show locations. The footer shows whatever the reader is set to, and the *Designing Data-Intensive Applications* sweep came back headed by Kindle page numbers alone. For such a sweep, the `kindle-highlights` skill's `locmap.py` pins each screen to the locations of the highlights found on it, interpolates the rest, and writes `book_loc.txt` with `Location N` and `Location ~N` headers. The scripts read all three forms, but only a location the reader printed is exact.
+Before a Cloud Reader sweep, set the reader's footer to show locations. The footer shows whatever the reader is set to, and the *Designing Data-Intensive Applications* sweep came back headed by Kindle page numbers alone. Some books offer no location at all: the *Incerto* bundle's settings list only page and time, and writing `locationInBook` into the reader's settings blanked its footer. For such a sweep, the `kindle-highlights` skill's `locmap.py` pins each screen to the locations of the highlights found on it, interpolates the rest, and writes `book_loc.txt` with `Location N` and `Location ~N` headers. The scripts read all three forms, but only a location the reader printed is exact.
 
 Get the highlights either way. They are how the owner says which points matter, and a reader marks a highlighted point `[H]`. Printed pages are the better citation where a PDF exists, because a reader of the repository can find them in a paper copy and an OCR location is good only to about one screen. In a repository, write an estimated location with an escaped tilde, as `L\~6930`, the form [PR #25](https://github.com/l3a0/ithildin-runtime/pull/25) used.
 
 ### 2. Split the text into parts and map the highlights
 
-Pick part boundaries at chapter starts, from the table of contents, so no reader starts mid-argument. The six runs used five to seven parts of about 11,600 to 69,000 words each.
+Pick part boundaries at chapter starts, from the table of contents, so no reader starts mid-argument. The seven runs used five to seven parts of about 11,600 to 69,000 words each.
 
 ```bash
 python3 -I "$SKILL/scripts/split_parts.py" "$RUN/book_pages.txt" "$RUN/parts" \
