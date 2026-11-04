@@ -17,7 +17,7 @@ The worked examples are the seven sets of pull requests. The first four ran befo
 | *Rapid Development* | [PR #27](https://github.com/l3a0/ithildin-runtime/pull/27) | [PR #48](https://github.com/l3a0/claude-plugins/pull/48) | [PR #76](https://github.com/l3a0/repo-template/pull/76) | 1 |
 | *Building Microservices* | [PR #28](https://github.com/l3a0/ithildin-runtime/pull/28) | [PR #56](https://github.com/l3a0/claude-plugins/pull/56) | [PR #77](https://github.com/l3a0/repo-template/pull/77) | 8 |
 | *Trading in the Zone* | [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31) | [PR #59](https://github.com/l3a0/claude-plugins/pull/59) | none | 14 |
-| *Fooled by Randomness* | [PR #45](https://github.com/l3a0/ithildin-runtime/pull/45) | [PR #72](https://github.com/l3a0/claude-plugins/pull/72) | none | ROUNDS |
+| *Fooled by Randomness* | [PR #45](https://github.com/l3a0/ithildin-runtime/pull/45) | [PR #72](https://github.com/l3a0/claude-plugins/pull/72) | none | 3 |
 
 Read the review comment on the *Code Complete* project pull request first. Its round is the one the `ask-team` skill's review round and comment template were drawn from.
 
