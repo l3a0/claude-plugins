@@ -2,25 +2,30 @@
 """Post a review round's comments and edit a pull request's Revision section.
 
 Usage:
-    review_post.py revision OWNER/REPO#N --scratch DIR --line TEXT [--replace ITEM] [--dry-run]
-    review_post.py comment --round R --heading TEXT OWNER/REPO#N=HEAD=ANCHOR=FILE [...] [--dry-run]
+    review_post.py revision OWNER/REPO#N --scratch DIR --file PATH [--replace ITEM] [--dry-run]
+    review_post.py comment --round R OWNER/REPO#N=HEAD=ANCHOR=FILE [...] [--dry-run]
 
-`revision` adds one numbered line to the body's `## Revision` section, or
-replaces item ITEM, and adds the section before the closing lines and footer
+`revision` adds the one line in PATH to the body's `## Revision` section as a
+numbered item, or replaces item ITEM, and adds the section before the closing lines and footer
 of a body that has none. The section runs from its heading to its last
 numbered item. Each run saves the body as read to a file of its own. It sends
 only when every changed line sits inside the section and a second run would
 change nothing, and it reads the body back. A line already in the section is
-not added twice, so a retry changes nothing.
+not added twice, so a retry changes nothing. It sends nothing on a body with
+two Revision headings, a heading written any other way, or two items with one
+number, and says to edit by hand.
 
-`comment` refuses a file that does not itself carry the heading, the round, its
-anchor and the head, because a retry could not recognise that post. It then
-checks every pull request's head, and every earlier comment by the same login,
-since anyone can comment on a public pull request, and posts on none of them if
-a head differs or an earlier comment has the same key with other text or twice
-over. It skips a pull request that already carries this comment, so a retry
+`comment` takes each comment's heading from its file's first line. It refuses a
+file that does not start with a heading and name the round, its anchor and the
+head, because a retry could not recognise that post, and a pull request named
+twice. It then checks every pull request's head, and every earlier comment by
+the same login, since anyone can comment on a public pull request, and posts on
+none of them if a head differs or an earlier comment has the same key with other
+text. It skips a pull request that already carries this comment, so a retry
 posts only what is missing. GitHub takes no key on a comment, so this narrows
-the window for a double post rather than closing it.
+the window for a double post rather than closing it. So it counts the copies
+after posting, and exits non-zero naming any pull request that does not hold
+exactly one.
 
 A write that fails says the outcome is unknown, since the request may have
 landed. Rerun the same command, which looks before it writes. The tests run
@@ -133,7 +138,6 @@ def insertion_point(lines):
 def splice(body, text, replace):
     """Return the new body, or None when there is nothing to do."""
     lines = body.split("\n")
-    eol = "\r" if lines and lines[0].endswith("\r") else ""
     found = find_section(lines)
     if found is None:
         if replace is not None:
@@ -142,7 +146,7 @@ def splice(body, text, replace):
         added = ["", SECTION, "", f"1. {text}"]
         if at == len(lines) or lines[at].strip():
             added.append("")
-        return "\n".join(lines[:at] + [s + eol for s in added] + lines[at:])
+        return "\n".join(lines[:at] + added + lines[at:])
     start, end = found
     current = items(lines, start, end)
     if replace is not None:
@@ -152,14 +156,14 @@ def splice(body, text, replace):
         stop = i + 1
         while stop < end and not ITEM.match(lines[stop].rstrip("\r")):
             stop += 1
-        if lines[i:stop] == [f"{replace}. {text}{eol}"]:
+        if [line.rstrip("\r") for line in lines[i:stop]] == [f"{replace}. {text}"]:
             return None
-        return "\n".join(lines[:i] + [f"{replace}. {text}{eol}"] + lines[stop:])
+        return "\n".join(lines[:i] + [f"{replace}. {text}"] + lines[stop:])
     if any(existing == text for _, existing in current.values()):
         return None
-    added = [f"{max(current, default=0) + 1}. {text}{eol}"]
+    added = [f"{max(current, default=0) + 1}. {text}"]
     if not current:
-        added.insert(0, eol)
+        added.insert(0, "")
     return "\n".join(lines[:end] + added + lines[end:])
 
 
@@ -192,7 +196,8 @@ def revision(args):
     if not m:
         sys.exit(f"not OWNER/REPO#N: {args.pull}")
     repo, num = m["repo"], m["num"]
-    text = args.line.strip()
+    with open(args.file, encoding="utf-8") as f:
+        text = f.read().strip()
     if not text or "\n" in text or "\r" in text:
         sys.exit("a revision entry is one non-empty line")
     body = view(repo, num, "body")
@@ -214,16 +219,29 @@ def revision(args):
         return
     sent = keep("sent-" + name, args.scratch, new)
     write("gh", "pr", "edit", num, "-R", repo, "--body-file", sent, where=f"As read: {saved}. As sent: {sent}. ")
-    if view(repo, num, "body") != new:
+    try:
+        back = view(repo, num, "body")
+    except SystemExit as failed:
+        sys.exit(f"{failed} The edit may have landed, so the outcome is unknown. Rerun this command, which "
+                 f"looks before it writes. As read: {saved}. As sent: {sent}")
+    if back != new:
         sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
                  f"As read before the edit: {saved}. As sent: {sent}")
     print(f"{repo}#{num}: {SECTION} updated and read back")
 
 
+def first_line(text):
+    return text.split("\n", 1)[0].strip()
+
+
 def carries(comment, heading, round_no, anchor):
-    lines = comment.splitlines()
-    return bool(lines) and lines[0].strip() == heading and anchor[:7] in comment \
+    return first_line(comment) == heading and anchor[:7] in comment \
         and re.search(rf"\bround {round_no}\b", comment, re.IGNORECASE) is not None
+
+
+def copies(m, heading, round_no, login):
+    return [c["body"] for c in view(m["repo"], m["num"], "comments")
+            if (c.get("author") or {}).get("login") == login and carries(c["body"], heading, round_no, m["anchor"])]
 
 
 def comment(args):
@@ -236,44 +254,47 @@ def comment(args):
             sys.exit(f"no comment file at {m['file']}")
         with open(m["file"], encoding="utf-8") as f:
             text = f.read()
-        if not carries(text, args.heading, args.round, m["anchor"]):
-            sys.exit(f"posting nothing, because {m['file']} does not start with {args.heading!r} and name "
+        heading = first_line(text)
+        if not HEADING.match(heading) or not carries(text, heading, args.round, m["anchor"]):
+            sys.exit(f"posting nothing, because {m['file']} does not start with a heading and name "
                      f"round {args.round} and {m['anchor'][:7]}, so a retry could not recognise it")
         if m["head"][:7] not in text:
             sys.exit(f"posting nothing, because {m['file']} does not name the head {m['head'][:7]}")
-        pull = f"{m['repo']}#{m['num']}"
+        pull = (m["repo"].lower(), int(m["num"]))
         if pull in seen:
-            sys.exit(f"posting nothing, because {pull} is named twice")
+            sys.exit(f"posting nothing, because {m['repo']}#{m['num']} is named twice")
         seen.add(pull)
-        targets.append((m, text))
+        targets.append((m, text, heading))
     wrong = []
-    for m, _ in targets:
+    for m, _, _ in targets:
         head = view(m["repo"], m["num"], "headRefOid")
         if not head.startswith(m["head"]):
             wrong.append(f"{m['repo']}#{m['num']} is at {head[:7]}, not {m['head'][:7]}")
     if wrong:
         sys.exit("posting nothing, because a head does not match: " + "; ".join(wrong))
     login = run("gh", "api", "user", "--jq", ".login").strip()
-    pending = []
-    for m, text in targets:
+    pending, doubled = [], []
+    for m, text, heading in targets:
         name = f"{m['repo']}#{m['num']}"
-        mine = [c["body"] for c in view(m["repo"], m["num"], "comments")
-                if (c.get("author") or {}).get("login") == login
-                and carries(c["body"], args.heading, args.round, m["anchor"])]
+        mine = copies(m, heading, args.round, login)
         if any(body.strip() != text.strip() for body in mine):
             sys.exit(f"posting nothing, because {name} already carries this heading, round and anchor with "
                      "different text. Report it, and post by hand once it is settled")
         if len(mine) > 1:
-            sys.exit(f"posting nothing, because {name} already carries this comment {len(mine)} times. Report it")
-        if mine:
+            doubled.append(name)
+        elif mine:
             print(f"{name}: already carries this comment, so skipped")
         else:
-            pending.append((name, m))
-    for name, m in pending:
+            pending.append((name, m, heading))
+    for name, m, heading in pending:
         if args.dry_run:
             print(f"{name}: would post {m['file']}")
-        else:
-            print(f"{name}: posted {write('gh', 'pr', 'comment', m['num'], '-R', m['repo'], '--body-file', m['file'])}")
+            continue
+        print(f"{name}: posted {write('gh', 'pr', 'comment', m['num'], '-R', m['repo'], '--body-file', m['file'])}")
+        if len(copies(m, heading, args.round, login)) != 1:
+            doubled.append(name)
+    if doubled:
+        sys.exit(f"{', '.join(doubled)} should hold this comment once and does not. Delete any extra copy, and report it")
 
 
 def main():
@@ -283,7 +304,7 @@ def main():
     edit = commands.add_parser("revision")
     edit.add_argument("pull")
     edit.add_argument("--scratch", required=True)
-    edit.add_argument("--line", required=True)
+    edit.add_argument("--file", required=True)
     edit.add_argument("--replace", type=int)
     edit.add_argument("--dry-run", action="store_true")
     edit.set_defaults(handler=revision)
@@ -291,7 +312,6 @@ def main():
     post = commands.add_parser("comment")
     post.add_argument("targets", nargs="+")
     post.add_argument("--round", type=int, required=True)
-    post.add_argument("--heading", required=True)
     post.add_argument("--dry-run", action="store_true")
     post.set_defaults(handler=comment)
 

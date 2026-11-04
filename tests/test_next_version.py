@@ -74,10 +74,28 @@ with tempfile.TemporaryDirectory() as BIN:
     check('prints each claim', 'PR 8 claims 0.6.25' in out and 'PR 9 claims 0.6.26' in out)
 
     code, out = run([pull(8, 'a'), pull(9, 'b')], {'main': '0.6.24', 'a': '0.6.25', 'b': '0.6.25'}, '--pr', '9')
-    check('two claims on one number move', 'PR 9 shares 0.6.25 with PR 8' in out and 'takes 0.6.26' in out)
+    check('the higher number of two claims moves', 'PR 9 shares 0.6.25 with PR 8' in out and 'takes 0.6.26' in out)
+
+    code, out = run([pull(8, 'a'), pull(9, 'b')], {'main': '0.6.24', 'a': '0.6.25', 'b': '0.6.25'}, '--pr', '8')
+    check('the lower number of two claims keeps it', 'PR 8 keeps 0.6.25' in out)
 
     code, out = run([pull(10, 'c'), pull(9, 'b'), pull(8, 'a')], {'main': '0.6.24', 'a': '0.6.25', 'b': '0.6.25', 'c': '0.6.25'}, '--pr', '10')
-    check('a third claim on one number names the first', 'PR 10 shares 0.6.25 with PR 8' in out)
+    check('a third claim on one number names the lowest', 'PR 10 shares 0.6.25 with PR 8' in out)
+
+    code, out = run([pull(8, 'a'), pull(9, 'b')], {'main': '0.6.24', 'a': '0.6.30', 'b': '0.6.26'})
+    check('the highest claim wins when numbers arrive out of order', 'next free version is 0.6.31' in out)
+
+    code, out = run([pull(8, 'a')], {'main': '0.6.24', 'a': '1.0.0'})
+    check('a major bump moves the next free version', 'next free version is 1.0.1' in out)
+
+    code, out = run([pull(8, 'a')], {'main': '1.0.0', 'a': '0.9.9'})
+    check('a claim below a major main claims nothing', 'PR 8 claims' not in out and 'next free version is 1.0.1' in out)
+
+    code, out = run([pull(8, 'f', fork=True), pull(9, 'b')], {'main': '0.6.24', 'f': '0.6.99', 'b': '0.6.30'}, '--pr', '9')
+    check('a fork below a real claim leaves that claim', 'PR 9 keeps 0.6.30' in out and 'next free version is 0.6.31' in out)
+
+    code, out = run([pull(n, 'a') for n in range(1, 1001)], {'main': '0.6.24', 'a': '0.6.25'})
+    check('stops when the list reaches its limit', code != 0 and 'reached its limit' in out and 'next free version' not in out)
 
     code, out = run([pull(8, 'a', 'feat: x (v0.6.25)')], {'main': '0.6.24', 'a': '0.6.26'})
     check('flags a title that names another version', "PR 8's title says 0.6.25, not 0.6.26" in out)

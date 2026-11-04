@@ -21,6 +21,8 @@ args = sys.argv[1:]
 login = os.environ.get('STUB_LOGIN', 'me')
 def fail(): sys.exit('stand-in gh: unexpected call: ' + ' '.join(args))
 if os.environ.get('STUB_READ_FAIL') == ' '.join(args[:2]): sys.exit('stand-in gh: 401 bad credentials')
+if os.environ.get('STUB_READ_FAIL') == 'after edit' and args[1] == 'view' and json.load(open(os.path.join(state, 'o-r-5.json'))).get('edits'):
+    sys.exit('stand-in gh: 502')
 if args[:2] == ['api', 'user']:
     if args[2:4] != ['--jq', '.login']: fail()
     print(login)
@@ -40,6 +42,9 @@ elif args[1] == 'comment' and args[5] == '--body-file':
     if os.environ.get('STUB_COMMENT_FAIL') == args[2]: sys.exit('stand-in gh: comment refused')
     pr['comments'].append({'author': {'login': login}, 'body': open(args[6]).read()})
     json.dump(pr, open(path, 'w'))
+    if os.environ.get('STUB_DOUBLE') == args[2]:
+        pr['comments'].append({'author': {'login': login}, 'body': open(args[6]).read()})
+        json.dump(pr, open(path, 'w'))
     if os.environ.get('STUB_LOST') == 'comment': sys.exit('stand-in gh: connection lost')
     print('https://github.com/' + args[4] + '/pull/' + args[2] + '#issuecomment-1')
 else:
@@ -122,6 +127,12 @@ with tempfile.TemporaryDirectory() as ROOT:
         return done.returncode, done.stdout + done.stderr
 
     def revise(*extra, pull='o/r#5', **env):
+        extra, line = list(extra), os.path.join(ROOT, 'line.txt')
+        if '--line' in extra:
+            at = extra.index('--line')
+            with open(line, 'w', newline='') as f:
+                f.write(extra[at + 1])
+            extra[at:at + 2] = ['--file', line]
         return run('revision', pull, '--scratch', SCRATCH, *extra, **env)
 
     def result(body, *extra):
@@ -169,6 +180,16 @@ with tempfile.TemporaryDirectory() as ROOT:
 
     code, out, pr = result('## Revision\n\n1. a\n   1. nested\n2. c\n', '--line', 'x', '--replace', '1')
     check('a nested number is part of its item', pr['body'] == '## Revision\n\n1. x\n2. c\n')
+
+    code, out, pr = result('## Revision\n\n1. a\n   wrapped\n2. b\n', '--line', 'a', '--replace', '1')
+    check('a replacement matching only the first line still drops the wrapped line', pr['body'] == '## Revision\n\n1. a\n2. b\n')
+
+    code, out, pr = result('## Revision\n1. a\n2. b\n', '--line', 'a')
+    check('a retry finds an item touching the heading', pr.get('edits') is None and 'nothing changed' in out)
+    code, out, pr = result('3. third\n## Revision\n\n1. one\n', '--line', 'r2')
+    check('a list above the heading does not count', '\n1. one\n2. r2\n' in pr['body'])
+    code, out, pr = result('  ## Revision\n\n1. one\n', '--line', 'r2')
+    check('refuses an indented heading', code != 0 and 'Edit it by hand' in out and pr.get('edits') is None)
 
     code, out, pr = result('## Revision\n\n1. a\n1. b\n', '--line', 'a')
     check('refuses two items with one number', code != 0 and 'Edit it by hand' in out and pr.get('edits') is None)
@@ -249,11 +270,14 @@ with tempfile.TemporaryDirectory() as ROOT:
 
     seed(8, BODY.replace('\n', '\r\n'))
     code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#8')
-    check('keeps a body written with CRLF line endings', '3. `ccccccc` answers round 3.\r\n\r\nCloses' in state(8)['body'] and code == 0)
+    check('adds to a body written with CRLF line endings', '2. `bbbbbbb` answers round 2.\r\n3. `ccccccc` answers round 3.\n\r\nCloses' in state(8)['body'] and code == 0)
     code, out = revise('--line', 'x', '--replace', '1', pull='o/r#8')
-    check('a CRLF replacement keeps its line ending', '1. x\r\n2. `bbbbbbb`' in state(8)['body'])
+    check('replaces an item in a CRLF body', '1. x\n2. `bbbbbbb`' in state(8)['body'])
+    code, out = revise('--line', 'x', '--replace', '2', pull='o/r#8')
+    code, out = revise('--line', 'x', '--replace', '2', pull='o/r#8')
+    check('a retried CRLF replacement sends nothing', state(8)['edits'] == 3 and 'nothing changed' in out)
     code, out, pr = result(BARE.replace('\n', '\r\n'), '--line', 'r1')
-    check('a CRLF section keeps its line endings', '\r\n## Revision\r\n\r\n1. r1\r\n' in pr['body'])
+    check('adds a section to a CRLF body', '\n## Revision\n\n1. r1\n' in pr['body'] and code == 0)
 
     seed(9, BODY.replace('## What', '```\n## Revision\n1. example\n```\n\n## What'))
     code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#9')
@@ -302,6 +326,10 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('the retry after a lost reply edits nothing', code == 0 and state(5)['edits'] == 1 and 'nothing changed' in out)
 
     seed(5)
+    code, out = revise('--line', '`ccccccc` answers round 3.', STUB_READ_FAIL='after edit')
+    check('a failed read-back says the edit may have landed', code != 0 and 'may have landed' in out and 'As sent' in out)
+
+    seed(5)
     code, out = revise('--line', '`ccccccc` answers round 3.', '--dry-run')
     check('a dry run sends nothing', state(5).get('edits') is None and '+3. `ccccccc`' in out)
 
@@ -336,6 +364,13 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('the second check finds a bare body changed elsewhere',
           module.changed_outside(BARE, BARE.replace('Because.', 'Why not.')))
 
+    check('the second check finds a last line changed with no final newline',
+          module.changed_outside('## Revision\n\n1. a\n\nCloses #1', '## Revision\n\n1. a\n\nCloses #2'))
+    check('the second check finds a first line changed',
+          module.changed_outside('## Why\n\n## Revision\n\n1. a\n', '## Who\n\n## Revision\n\n1. a\n'))
+    check('the second check finds a closing line touching the last item changed',
+          module.changed_outside('## Revision\n\n1. a\nCloses #1\n', '## Revision\n\n1. a\nCloses #2\n'))
+
     done = BODY.split('\n')
     start, end = module.find_section(done)
     check('the section ends at its last item', done[start] == '## Revision' and done[end - 1].startswith('2. `bbbbbbb`'))
@@ -343,7 +378,10 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5)
     bad = module.splice
     module.splice = lambda body, text, replace: body.replace('2. Adds the second thing.', '2. Overwritten.')
-    args = argparse.Namespace(pull='o/r#5', scratch=SCRATCH, line='x', replace=None, dry_run=False)
+    stub_line = os.path.join(ROOT, 'stub-line.txt')
+    with open(stub_line, 'w') as f:
+        f.write('x')
+    args = argparse.Namespace(pull='o/r#5', scratch=SCRATCH, file=stub_line, replace=None, dry_run=False)
     old_path, os.environ['PATH'] = os.environ['PATH'], BIN + os.pathsep + os.environ['PATH']
     os.environ['STUB_STATE'] = STATE
     try:
@@ -366,8 +404,8 @@ with tempfile.TemporaryDirectory() as ROOT:
         f.write(f'## Review, round 3\n\nRound 3, of `{B}`, on the companion, fixed in `{"d" * 7}`.\n')
     head5, head6 = 'a' * 40, 'd' * 40
 
-    def post(*targets, heading='## Review, round 3', round_no='3', **env):
-        return run('comment', '--round', round_no, '--heading', heading, *targets, **env)
+    def post(*targets, round_no='3', **env):
+        return run('comment', '--round', round_no, *targets, **env)
 
     MAIN, COMP = f'o/r#5={head5}={A}={note}', f'o/s#6={head6}={B}={other}'
 
@@ -403,14 +441,14 @@ with tempfile.TemporaryDirectory() as ROOT:
     with open(closing, 'w') as f:
         f.write(f'## Review complete\n\nCloses round 3, of `{A}`, at `{"a" * 7}`.\n')
     seed(5, head=head5, comments=[f'## Review complete\n\nCloses round 2, of `{A}`.\n'])
-    code, out = post(f'o/r#5={head5}={A}={closing}', heading='## Review complete')
+    code, out = post(f'o/r#5={head5}={A}={closing}')
     check('a comment on another round does not block the post', len(state(5)['comments']) == 2)
 
     round13 = os.path.join(ROOT, 'round13.md')
     with open(round13, 'w') as f:
         f.write(f'## Review complete\n\nRound 1, of `{A}`, at `{"a" * 7}`.\n')
     seed(5, head=head5, comments=[f'## Review complete\n\nRound 13, of `{A}`.\n'])
-    code, out = post(f'o/r#5={head5}={A}={round13}', heading='## Review complete', round_no='1')
+    code, out = post(f'o/r#5={head5}={A}={round13}', round_no='1')
     check('round 1 does not match a comment on round 13', code == 0 and len(state(5)['comments']) == 2)
 
     seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 3, of `{A}`.\n'])
@@ -418,8 +456,8 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('a comment under another heading does not block the post', len(state(5)['comments']) == 2)
 
     seed(5, head=head5)
-    code, out = post(f'o/r#5={head5}={A}={closing}', heading='## Review complete')
-    code, out = post(f'o/r#5={head5}={A}={closing}', heading='## Review complete')
+    code, out = post(f'o/r#5={head5}={A}={closing}')
+    code, out = post(f'o/r#5={head5}={A}={closing}')
     check('a retry under the final heading posts once, with the round capitalised or not', len(state(5)['comments']) == 1 and 'skipped' in out)
 
     long_anchor = os.path.join(ROOT, 'long.md')
@@ -443,8 +481,10 @@ with tempfile.TemporaryDirectory() as ROOT:
     with open(wrong_head, 'w') as f:
         f.write(f'## Review complete\n\nRound 3, of `{A}`, at `{"a" * 7}`.\n')
     seed(5, head=head5), seed(6, head=head6, repo='o-s')
+    with open(wrong_head, 'w') as f:
+        f.write(f'Round 3, of `{A}`, at `{"a" * 7}`.\n')
     code, out = post(COMP, f'o/r#5={head5}={A}={wrong_head}')
-    check('refuses a file whose first line is not the heading', code != 0 and 'does not start with' in out and state(6, 'o-s')['comments'] == [])
+    check('refuses a file that does not open with a heading', code != 0 and 'does not start with' in out and state(6, 'o-s')['comments'] == [])
     blank = os.path.join(ROOT, 'blank.md')
     with open(blank, 'w') as f:
         f.write(f'\n## Review, round 3\n\nRound 3, of `{A}`, at `{"a" * 7}`.\n')
@@ -452,7 +492,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('refuses a file with a leading blank line', code != 0 and state(5)['comments'] == [])
     code, out = post(f'o/r#5={head5}={B}={note}')
     check('refuses a file that names another anchor', code != 0 and state(5)['comments'] == [])
-    code, out = post(MAIN, round_no='4', heading='## Review, round 3')
+    code, out = post(MAIN, round_no='4')
     check('refuses a file that names another round', code != 0 and state(5)['comments'] == [])
 
     seed(5, head=head5), seed(6, head=head6, repo='o-s')
@@ -484,10 +524,18 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5)
     code, out = post(MAIN, MAIN)
     check('refuses one pull request named twice', code != 0 and 'named twice' in out and state(5)['comments'] == [])
+    code, out = post(MAIN, f'O/R#05={head5}={A}={note}')
+    check('refuses one pull request written two ways', code != 0 and 'named twice' in out and state(5)['comments'] == [])
     copy = f'## Review, round 3\n\nRound 3, of `{A}`, fixed in `{"a" * 7}`.\n'
     seed(5, head=head5, comments=[copy, copy])
     code, out = post(MAIN)
-    check('reports a double post already there', code != 0 and '2 times' in out and len(state(5)['comments']) == 2)
+    check('reports a double post already there', code != 0 and 'should hold this comment once' in out and len(state(5)['comments']) == 2)
+    seed(5, head=head5, comments=[copy, copy]), seed(6, head=head6, repo='o-s')
+    code, out = post(MAIN, COMP)
+    check('a double post on one companion does not stop the other', code != 0 and 'o/r#5' in out and len(state(6, 'o-s')['comments']) == 1 and len(state(5)['comments']) == 2)
+    seed(5, head=head5)
+    code, out = post(MAIN, STUB_DOUBLE='5')
+    check('a post that landed twice is reported', code != 0 and 'should hold this comment once' in out and 'posted' in out)
     seed(5, head=head5, comments=[copy])
     pr5 = state(5)
     pr5['comments'][0]['author'] = None

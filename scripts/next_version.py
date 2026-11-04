@@ -22,6 +22,7 @@ import subprocess
 import sys
 
 MANIFEST = ".claude-plugin/plugin.json"
+LIMIT = 1000
 VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 TITLE_VERSION = re.compile(r"\(v(\d+\.\d+\.\d+)\)\s*$")
 
@@ -55,8 +56,10 @@ def main():
     args = parser.parse_args()
 
     main_version = version_at(args.repo, "main")
-    pulls = json.loads(gh("pr", "list", "-R", args.repo, "--state", "open", "--limit", "1000",
+    pulls = json.loads(gh("pr", "list", "-R", args.repo, "--state", "open", "--limit", str(LIMIT),
                           "--json", "number,title,headRefOid,isCrossRepository"))
+    if len(pulls) >= LIMIT:
+        sys.exit(f"the list reached its limit of {LIMIT}, so it may be short")
     claims = {}
     for pull in sorted(pulls, key=lambda p: p["number"]):
         if pull["isCrossRepository"]:
@@ -84,9 +87,9 @@ def main():
         if mine is None:
             print(f"PR {args.pr} claims nothing above main. If it bumps the plugin, it takes {free}, "
                   f"in {MANIFEST} and in its title")
-        elif shared:
-            print(f"PR {args.pr} shares {mine} with PR {shared[0]}, so the later one to arrive takes {free}, "
-                  f"in {MANIFEST} and in its title")
+        elif any(n < args.pr for n in shared):
+            print(f"PR {args.pr} shares {mine} with PR {min(shared)}, and the higher number moves, so it takes "
+                  f"{free}, in {MANIFEST} and in its title")
         else:
             print(f"PR {args.pr} keeps {mine}")
 

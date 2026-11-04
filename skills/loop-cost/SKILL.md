@@ -197,9 +197,8 @@ handover, after the loop's last agent has reported.
 
    > ### Skill proposal
    >
-   > Each round of this review read an issue's comments by hand before posting
-   > its `## Cost` comment. Extend `ask-team`'s `review_post.py` to take an issue
-   > target, so the next round does not work it out.
+   > Each of the four book runs wrote the same citation check by hand. Add it to
+   > `book-to-rules`' `scripts/` folder, so the next run does not work it out.
 
    Name the skill, what it would hold, the scripts for its `scripts/` folder and
    what the next run would no longer work out, and copy any scratchpad script
