@@ -62,7 +62,7 @@ The subject is one of five things, and each needs its anchor.
 4. **A technical question that crosses modules.** The question, the options, and the files each option would change.
 5. **A blog post or other prose that quotes results.** The file and the commit, and the tests or log entries its numbers come from.
 
-Write down what is out of scope, so a role does not review the whole repository. For a plan, a design, or a pull request that writes rules, that includes the mechanics other work owns, each with its link and its kind. The paragraphs under `## Out of scope` in `templates/review-brief.md` are the one definition of what counts as owning work and what a role does with it, and listing other work or a waiting question takes nothing a role protects out of review. A review run without that brief, such as a plan audit or a caller in lens mode, pastes those paragraphs whole, with the owner's GitHub login, into every role's and verifier's prompt, unless the template's last line lets them be dropped, because no agent file carries them. An agent with no agent file also gets the template's `## Limits for every agent in the round`, as `review-round.md`'s step 3 says. Check whether the repository has a `docs/team-charter.md`, and note its commit, because every role prompt names it.
+Write down what is out of scope, so a role does not review the whole repository. For a plan, a design or a pull request, where it writes rules, that includes the mechanics other work owns, each with its link and its kind. The paragraphs under `## Out of scope` in `templates/review-brief.md` are the one definition of what counts as owning work and what a role does with it, and listing other work or a waiting question takes nothing a role protects out of review. A review run without that brief, such as a plan audit or a caller in lens mode, pastes those paragraphs whole, with the owner's GitHub login, into every role's, lens's and verifier's prompt, unless the template's last line lets them be dropped, because no agent file carries them. An agent with no agent file also gets the template's `## Limits for every agent in the round`, as `review-round.md`'s step 3 says. Check whether the repository has a `docs/team-charter.md`, and note its commit, because every role prompt names it.
 
 ### 2. Seat the roles
 
@@ -146,7 +146,7 @@ Post one comment on the pull request or issue whose first line is the review hea
 3. What was refuted or left alone, with the reason.
 4. `### For the owner`, listing any question only the owner can rule on, including one for the board, or saying there is none.
 
-Price the review with the plugin's `l3a0:loop-cost` skill, counting every role, lens and verifier transcript. Put the figure at the end of the comment, and post it as a separate comment starting with the line `## Cost` on the issue the subject tracks, in the form the `l3a0:loop-cost` skill shows, because the status round's cost-total sweep reads only `## Cost` comments on issues.
+Price the review with the plugin's `l3a0:loop-cost` skill, counting every role, lens and verifier transcript. Put the figure at the end of the comment, and post it as a separate comment starting with the line `## Cost` on the issue the subject tracks, in the form the `l3a0:loop-cost` skill shows, because the status round's cost-total sweep reads only `## Cost` comments on issues. Every post follows `review-round.md`'s step 7 on a refused or unanswered post.
 
 ## Lens mode, inside another review
 
