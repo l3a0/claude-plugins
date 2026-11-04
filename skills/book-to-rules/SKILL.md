@@ -58,9 +58,9 @@ Text the OCR read from a page's margin column follows the body after a `[margin]
 4. **`hlmap.py`** finds the page of each of the owner's highlights. Where the text occurs on more than one page, it picks the copy that fits the highlights' Kindle locations, and it flags any highlight whose page still breaks location order.
 5. **`overlap.py`** finds runs of six or more words a draft shares with the book.
 
-`fine_merge.py` reads no book text and uses none of these. It merges `main` into a branch clause by clause, as step 5 says.
-
 Matching folds case, curly quotes, dashes, ligatures and soft hyphens, and joins a word hyphenated across a line end or a page break. Run the scripts with `python3 -I`, which keeps Python from loading a module out of the run directory. `tests/test_book_to_rules.py` runs them on a synthetic book in CI.
+
+`fine_merge.py` reads no book text and uses none of this. It merges `main` into a branch clause by clause, as step 5 says.
 
 ## The pipeline, in seven steps
 
@@ -156,14 +156,15 @@ Each repository gets its own branch and its own pull request, and each pull requ
 
 A plugin check must hold in any repository, so word it for the property it protects and give the project's case as one example. [PR #46](https://github.com/l3a0/claude-plugins/pull/46) scoped five checks that would otherwise have fired in repositories with no such property, such as an `fsync` check against a GitHub comment.
 
-A rule sits on one long line, so merging `main` into a branch conflicts on the whole paragraph even when the two sides touched different sentences. When `git merge` stops on a Markdown file like that, run `fine_merge.py` on it. It merges clause by clause from the three versions git holds, so a conflict stays only where the two sides changed one clause or clauses close together. It exits 1 when any conflict remains, and leaves alone a path git merged itself. A replay of 11 such merges on 2026-11-04 left about a fifth of the text in conflict, and 10 of the 11 still needed a hand resolution.
+A rule sits on one long line, so merging `main` into a branch conflicts on the whole paragraph even when the two sides touched different sentences. When `git merge` stops on a Markdown file like that, run `fine_merge.py` on what it stopped on, before any hand edits. Expect most merges to still need some hand resolution. The script's docstring says what it refuses, what it saves and what each exit status means.
 
 ```bash
+git fetch origin main
 git merge origin/main
-python3 -I "$SKILL/scripts/fine_merge.py" docs/design.md docs/team-charter.md
+python3 -I "$SKILL/scripts/fine_merge.py" $(git diff --name-only --diff-filter=U -- '*.md')
 ```
 
-A conflict's markers sit on lines of their own inside the paragraph, so rejoin those lines into one when resolving it. Run the script before any hand edits. It saves each file's previous text under the repository's git folder and prints where, so a run made by mistake loses nothing. The price is a clean merge that can still read wrong, as when one side renames a term and the other uses the old name in the next clause. So before `git add`, read what `git diff -- <path>` lists, which is every line that differs from both sides. Keep the script to prose. Run on `scripts/gen_team.py` or `scripts/gen_seats.py`, it can join two sides of a line of code into something that does not compile, so resolve those by hand and regenerate the agent files.
+Before `git add`, read what `git diff -- <path>` lists, which is every line that differs from both sides, because a clean clause merge can still read wrong. Resolve `scripts/gen_team.py` and `scripts/gen_seats.py` by hand and regenerate the agent files.
 
 ### 6. Run the review round
 
