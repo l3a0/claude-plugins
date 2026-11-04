@@ -11,11 +11,12 @@ clauses close together, and git folds conflicts within about three clauses of ea
 stop that leaves a path conflicted, such as a merge, a rebase or a cherry-pick.
 
 A conflict keeps its markers at the start of their own lines, inside the paragraph, so rejoin those lines when
-resolving it. Each file's previous text is saved first and the copy printed, because a hand resolution looks the same
-to git as a fresh stop. The copies sit in the worktree's git folder, so they go when the worktree does. A symlink, a
-path git converts with a clean filter or a working-tree encoding, and a path git does not hold as conflicted with a
-base, ours and theirs are refused, and then no path is written. The exit status is 0 when no conflict remains, 1 when
-one does and 2 when no path was given, a path was refused, or a read, a write or a tool failed.
+resolving it. Each file's previous text is saved first and the copy printed, because a hand resolution, or one rerere
+replayed, looks the same to git as a fresh stop. The copies sit in the worktree's git folder, so they go when the
+worktree does. Line ends and ident come out in the stored form until the next checkout. A symlink, a path git converts
+with a clean filter or a working-tree encoding, and a path git does not hold as conflicted with a base, ours and theirs
+are refused, and then no path is written. The exit status is 0 when no conflict remains, 1 when one does and 2 when no
+path was given, a path was refused, or a read, a write or a tool failed.
 
 The price of merging clauses is a clean result that can still read wrong, as when one side renames a term and the
 other uses the old name in the next clause. So keep this to prose, since it can also join two sides of a line of code
