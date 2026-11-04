@@ -12,9 +12,10 @@ stop that leaves a path conflicted, such as a merge, a rebase or a cherry-pick.
 
 A conflict keeps its markers at the start of their own lines, inside the paragraph, so rejoin those lines when
 resolving it. Each file's previous text is saved first and the copy printed, because a hand resolution looks the same
-to git as a fresh stop. The copies sit in the worktree's git folder, so they go when the worktree does. A symlink, or a
-path git does not hold as conflicted with a base, ours and theirs, is refused, and then no path is written. The exit
-status is 0 when no conflict remains, 1 when one does and 2 when a path was refused or a read, a write or a tool failed.
+to git as a fresh stop. The copies sit in the worktree's git folder, so they go when the worktree does. A path git does
+not hold as conflicted with a base, ours and theirs is refused, which covers a symlink, and then no path is written.
+The exit status is 0 when no conflict remains, 1 when one does and 2 when a path was refused or a read, a write or a
+tool failed.
 
 The price of merging clauses is a clean result that can still read wrong, as when one side renames a term and the
 other uses the old name in the next clause. So read what `git diff -- <path>` lists before `git add`, and keep this to
@@ -58,8 +59,7 @@ def stages(path):
     """Ours, base and theirs from the index."""
     if not git('ls-files', '-u', '--', path):
         fail(f'{path}: is not conflicted')
-    if os.path.islink(path):
-        fail(f'{path}: is a symlink, so writing it would reach another file')
+    # The real path also refuses a symlink, since the index holds no conflict at the file it names.
     sides = [git('show', f':{n}:./{os.path.relpath(os.path.realpath(path))}') for n in (2, 1, 3)]
     if any(MARK in side for side in sides):
         fail(f'{path}: holds the byte this script marks clause breaks with')
