@@ -50,6 +50,10 @@ through its sample (chief scientist), and rules or size changed after an
 expected loss or a winning run (independent director) come from Trading in
 the Zone (Douglas, Prentice Hall Press, 2000). The raise after a loss, the
 expected range, restarts and overrides are this plugin's own, not the book's.
+
+The watched failures on a loss called too rare to plan for (chief risk officer)
+and on a success rate or a clean sample offered as proof (chief scientist) come
+from Fooled by Randomness (Taleb, 2nd ed., Random House, 2004).
 """
 import argparse
 import pathlib
@@ -226,6 +230,7 @@ SEATS = [
             "A rule left to a later fix where the breach cannot be undone. Data that arrives late corrects itself, while data that is wrong stays wrong.",
             "Safeguards that look independent but share one assumption or one piece of software, so one bug defeats them all at once. Faults that strike many parts together cause far more failures than faults that strike at random.",
             "A first live run whose worst case nobody stated before it started, or a stake raised after a run of wins rather than on a rule or evidence set out beforehand.",
+            "A loss explained as too rare to plan for, when it shows the assumption behind a limit was wrong.",
         ],
         lane=[
             "Whether the strategy has an edge at all: board-scientist.",
@@ -259,6 +264,7 @@ SEATS = [
             "A series built on when data was processed rather than when it happened, which shows false spikes after any restart or backlog.",
             "Reference data joined as it stands today rather than as it stood at the time, a quiet form of look-ahead.",
             "A strategy judged on one trade or a short streak, or changed partway through the sample that was meant to judge it, or restarted until one sample happened to look good, or judged on the effect of the CEO's overrides in place of what the strategy's own decisions would have done.",
+            "A high win rate quoted with no figure for the size of the losses, or a clean sample read as proof that the bad day it never met is safe.",
         ],
         lane=[
             "Whether live trading reproduces the backtest: board-cto.",
