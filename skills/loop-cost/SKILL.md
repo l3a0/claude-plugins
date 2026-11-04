@@ -1,6 +1,6 @@
 ---
 name: loop-cost
-description: Price a finished plan, build or review loop in tokens and dollars from the transcripts of the agents it ran. Use when a decompose loop exits, when a build hands its pull request over, when a review's lenses and verifiers have reported, or whenever asked what a piece of agent work cost.
+description: Price a finished plan, build or review loop in tokens and dollars from the transcripts of the agents it ran, and name what a skill could save. Use when a decompose loop exits, when a build hands its pull request over, when a review's lenses and verifiers have reported, or whenever asked what a piece of agent work cost.
 ---
 
 # Price a loop
@@ -159,6 +159,50 @@ gh issue view <n> --repo <owner>/<repo> --json comments --jq '.comments[] | sele
 
 A pull request on its own, closing no issue, still reports its cost in chat,
 and the pull request's own review comment can carry it.
+
+## Name what a skill could save
+
+The owner's global `CLAUDE.md` asks a session to turn a procedure worth keeping
+into a skill, so the next session does not pay to work it out again (owner
+directive, 2026-11-03). Nothing in a loop's own steps asked for that, so a
+session finished, priced its work and named nothing. Run these steps once, at
+handover, after the loop's last agent has reported.
+
+1. **Price the loop by step.** Use `--group`, with a group per reading part, per
+   build stage or per review round, such as
+   `--group 'r3=match:^review 31 r3 '`. Where the session worked a procedure out
+   itself, pass its own transcript as a group too, because the agents' figures
+   leave out the main thread.
+2. **Name the costliest group** in the report, with its share of the total.
+3. **Ask what that cost bought.** A skill saves the turns spent working out what
+   to do. It does not save a lens's judgment or a reader's reading. So a costly
+   group of agents doing the same judged work qualifies only for the parts they
+   each worked out by hand, such as a script they all wrote or a search they
+   all ran. The fourteen review rounds of *Trading in the Zone* cost at least
+   146.87 US dollars with `review-round.md` already written, because the cost
+   lay in the number of rounds rather than in working out the steps.
+4. **Apply the rule's test.** A procedure qualifies once it has run twice in the
+   same shape, or once when working it out cost more than about 10 US dollars.
+5. **Read the skills that exist first.** Search the plugin's `skills/` folder,
+   its templates and its scripts for the procedure, and extend what covers
+   part of it. On 2026-11-04 a report proposed writing down a review brief that
+   `ask-team`'s `templates/review-brief.md` already held.
+6. **Write the outcome where the cost goes.** Add it to the `## Cost` comment,
+   or to the review comment when no issue is tracked.
+
+   > ### Skill proposal
+   >
+   > Each round of this review edited the pull request's `## Revision` section
+   > by hand. Extend `ask-team` with a script that holds the edit, so the next
+   > round does not work it out.
+
+   Name the skill, what it would hold, the scripts for its `scripts/` folder and
+   what the next run would no longer work out, and copy any scratchpad script
+   somewhere that outlives the session. Where nothing qualifies, write one line
+   saying so and why, so the check is seen to have run.
+
+Build it in the same change when it is small and inside the work the session was
+given. Otherwise it stays a proposal for the owner.
 
 ## What the number cannot say
 

@@ -21,6 +21,10 @@ jobs:
         run: python3 tests/test_stitch.py
       - name: ask-team brief_anchors tests
         run: python3 tests/test_brief_anchors.py
+      - name: ask-team review_post tests
+        run: python3 tests/test_review_post.py
+      - name: next_version tests
+        run: python3 tests/test_next_version.py
       - name: loop-cost agent-cost tests
         run: python3 tests/test_agent_cost.py
       - name: book-to-rules script tests
