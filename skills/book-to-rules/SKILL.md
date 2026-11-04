@@ -41,7 +41,7 @@ python3 -I "$SKILL/scripts/overlap.py" "$RUN/book_pages.txt" "$RUN/pr.diff" "$RU
 
 ## The text format the scripts read
 
-The scripts in `scripts/` read one text file per book, cut into blocks, one per printed page or reader screen. Each block opens with a header line, `===== <source> | <label> =====`, and the label gives the citation key. The docstring of `scripts/booktext.py` is the one statement of that format, with every label form and its key. A script that writes the format follows it. The common keys are these.
+The book scripts in `scripts/` read one text file per book, cut into blocks, one per printed page or reader screen. Each block opens with a header line, `===== <source> | <label> =====`, and the label gives the citation key. The docstring of `scripts/booktext.py` is the one statement of that format, with every label form and its key. A script that writes the format follows it. The common keys are these.
 
 1. **A printed page.** `===== pdf 110 | p. 73 =====` is cited as `73`. A PDF's OCR text uses this form.
 2. **Front matter.** `===== pdf 3 | front 3 =====` is cited as `front3`, numbered by PDF page.
@@ -154,6 +154,16 @@ Each repository gets its own branch and its own pull request, and each pull requ
 
 A plugin check must hold in any repository, so word it for the property it protects and give the project's case as one example. [PR #46](https://github.com/l3a0/claude-plugins/pull/46) scoped five checks that would otherwise have fired in repositories with no such property, such as an `fsync` check against a GitHub comment.
 
+A rule sits on one long line, so merging `main` into a branch conflicts on the whole paragraph even when the two sides touched different sentences. When `git merge` stops on a Markdown file like that, run `fine_merge.py` on what it stopped on, from the repository root and before any hand edits. Expect most merges to still need some hand resolution. The script's docstring says what it refuses, what it saves and what each exit status means.
+
+```bash
+git fetch origin main
+git merge origin/main
+python3 -I "$SKILL/scripts/fine_merge.py" $(git diff --name-only --diff-filter=U -- '*.md')
+```
+
+Before `git add`, read what `git diff -- <path>` lists, which is every line that differs from both sides, because a clean clause merge can still read wrong. A paragraph that came out equal to one side can be missing there, and `git diff --theirs -- <path>` and `git diff --ours -- <path>` show those. Resolve `scripts/gen_team.py` and `scripts/gen_seats.py` by hand and regenerate the agent files.
+
 ### 6. Run the review round
 
 Review all three pull requests in one round, by the procedure in the `/l3a0:ask-team` skill's `review-round.md`. It covers one brief for every lens, the completeness and over-reach lenses beside the roles, verifiers that refute by executing, fixes on every companion, pricing, the review comment on each pull request, the body's `## Revision` section and the owner's rulings. Its templates are the brief and the comment. Follow it as written, and add four things a book needs.
@@ -164,6 +174,8 @@ Review all three pull requests in one round, by the procedure in the `/l3a0:ask-
 4. **Every citation, rechecked.** The round's fix step rechecks citations with the brief's helper. For a book that is `pg.py` over every citation in all three diffs, whether or not a lens flagged it, and `overlap.py` over each diff, each body and each comment before it is posted. The comment's "Citations corrected" section lists each miss.
 
 On the book rounds, verifiers ran a model of the rules as written, an attack on a claimed type guard, and a copy of the repository with a limit inverted. A companion that misses a fix carries the stale rule into a second repository, as [PR #74](https://github.com/l3a0/repo-template/pull/74) did with a fencing claim the other two had already withdrawn. Seven lenses ran on the *Code Complete* and *Rapid Development* rounds. The *Rapid Development* round ran no verifiers, and the main thread checked each must-fix by running the commands itself.
+
+When `main` moves during the round, merge it the way step 5 says.
 
 ### 7. Price the loop
 
