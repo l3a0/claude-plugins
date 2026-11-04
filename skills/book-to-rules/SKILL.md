@@ -162,7 +162,7 @@ git merge origin/main
 python3 -I "$SKILL/scripts/fine_merge.py" $(git diff --name-only --diff-filter=U -- '*.md')
 ```
 
-Before `git add`, read what `git diff -- <path>` lists, which is every line that differs from both sides, because a clean clause merge can still read wrong. A paragraph that came out equal to one side is not listed there, and `git diff --theirs -- <path>` and `git diff --ours -- <path>` show those. Resolve `scripts/gen_team.py` and `scripts/gen_seats.py` by hand and regenerate the agent files.
+Before `git add`, read what `git diff -- <path>` lists, which is every line that differs from both sides, because a clean clause merge can still read wrong. A paragraph that came out equal to one side can be missing there, and `git diff --theirs -- <path>` and `git diff --ours -- <path>` show those. Resolve `scripts/gen_team.py` and `scripts/gen_seats.py` by hand and regenerate the agent files.
 
 ### 6. Run the review round
 

@@ -298,9 +298,11 @@ with tempfile.TemporaryDirectory() as d:
         code, _, _ = fine_merge(repo, 'doc.md')
         check(f'fine_merge cuts at {mark}', code == 0 and read(doc) == edited(text, ('one', 'ONE'), ('two', 'TWO')))
 
-    repo, doc = stopped_merge('no-mark', 'one) keep) two\n', 'ONE) keep) two\n', 'one) keep) TWO\n')
-    code, _, _ = fine_merge(repo, 'doc.md')
-    check('fine_merge cuts at no other character', code == 1)
+    for n, mark in enumerate(')]"\'-'):
+        text = f'one{mark} keep{mark} two'
+        repo, doc = stopped_merge(f'no-mark{n}', f'{text}\n', edited(text, ('one', 'ONE')), edited(text, ('two', 'TWO')))
+        code, out, _ = fine_merge(repo, 'doc.md')
+        check(f'fine_merge does not cut at {mark}', code == 1 and 'doc.md: 1 conflicts' in out)
 
     repo, doc = stopped_merge('neighbours', 'One, two\n', '1, two\n', 'One, 2\n')
     code, out, _ = fine_merge(repo, 'doc.md')
@@ -439,7 +441,8 @@ with tempfile.TemporaryDirectory() as d:
         os.chmod(stub, os.stat(stub).st_mode | stat.S_IEXEC)
         path = f'{tools}{os.pathsep}{os.environ["PATH"]}'
         code, _, err = fine_merge(repo, 'doc.md', env={**os.environ, 'PATH': path})
-        check(f'fine_merge leaves the file alone when git merge-file runs {step}', code == 2 and read(doc) == before)
+        check(f'fine_merge leaves the file alone when git merge-file runs {step}', code == 2 and 'merge-file' in err
+              and read(doc) == before)
 
     for side in range(3):
         texts = [f'{para}\n', edited(para, ('First', 'Opening')), edited(para, ('third', 'other'))]
@@ -492,12 +495,18 @@ with tempfile.TemporaryDirectory() as d:
     check('fine_merge refuses a path with no base, and then writes no other path', code == 2 and 'doc.md' in err
           and (read(os.path.join(repo, 'z.md')), read(doc)) == before)
 
-    for name, attribute in (('filter', 'filter=up'), ('encoding', 'working-tree-encoding=ISO-8859-1')):
-        repo, doc = stopped_merge(name, *apart, also={'.gitattributes': (f'*.md {attribute}\n',) * 3})
+    for name, attribute in (('filter', 'filter=up'), ('a filter named like unset', 'filter=unsetter'),
+                            ('encoding', 'working-tree-encoding=ISO-8859-1')):
+        repo, doc = stopped_merge(name.replace(' ', '-'), *apart,
+                                  also={'.gitattributes': (f'*.md {attribute}\n',) * 3})
         before = read(doc)
         code, _, err = fine_merge(repo, 'doc.md')
         check(f'fine_merge refuses a path git converts on checkout, by {name}', code == 2 and 'converts' in err
               and read(doc) == before)
+
+    repo, doc = stopped_merge('unfiltered', *apart, also={'.gitattributes': ('*.md -filter\n',) * 3})
+    code, _, _ = fine_merge(repo, 'doc.md')
+    check('fine_merge merges a path that turns the filter off', code == 0 and read(doc) == joined)
 
     repo, doc = stopped_merge('toolless', *apart)
     before = read(doc)

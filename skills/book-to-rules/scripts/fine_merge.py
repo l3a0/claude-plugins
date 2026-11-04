@@ -61,8 +61,8 @@ def stages(path):
         fail(f'{path}: is not conflicted')
     if os.path.islink(path):
         fail(f'{path}: is a symlink, so writing it would reach another file')
-    if re.search(rb': (filter|working-tree-encoding): (?!unspecified|unset)', git('check-attr', 'filter',
-                                                                                 'working-tree-encoding', '--', path)):
+    attributes = git('check-attr', 'filter', 'working-tree-encoding', '--', path)
+    if re.search(rb': (filter|working-tree-encoding): (?!(unspecified|unset)$)', attributes, re.M):
         fail(f'{path}: git converts this path on checkout, so the form git stores cannot be written back')
     # The real path lets an absolute path through a linked folder, such as macOS's /var, match the index.
     sides = [git('show', f':{n}:./{os.path.relpath(os.path.realpath(path))}') for n in (2, 1, 3)]
