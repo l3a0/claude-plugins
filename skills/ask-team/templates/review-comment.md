@@ -56,6 +56,8 @@ Round <N>, of `<anchor sha>`, at list prices, with output a lower bound:
 
 The figures cover <every companion pull request, linked>. <What dominated, if one kind of token did.> <The main thread's checks in step 4 ran in its own context and are not counted.> Earlier rounds' figures are in their own comments and are not repeated here.
 
+<On the last round, with no issue tracked, the outcome of the `l3a0:loop-cost` skill's `## Name what a skill could save`.>
+
 <Where the pull requests track issues, the `## Cost` comment on the main pull request's issue repeats these lines under the line `Review round <N>, of <anchor sha>, on <pull request link>`.>
 
 <On a companion pull request, the whole section is one line: "Posted once, on <link to the main pull request>: at least <dollars> US dollars for <what it covers> across all <count> pull requests.">

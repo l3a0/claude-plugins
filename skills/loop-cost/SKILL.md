@@ -174,15 +174,17 @@ handover, after the loop's last agent has reported.
    itself, pass its own transcript as a group too, because the agents' figures
    leave out the main thread.
 2. **Name the costliest group** in the report, with its share of the total.
-3. **Ask what that cost bought.** A skill saves the turns spent working out what
-   to do. It does not save a lens's judgment or a reader's reading. So a costly
-   group of agents doing the same judged work qualifies only for the parts they
-   each worked out by hand, such as a script they all wrote or a search they
-   all ran. The fourteen review rounds of *Trading in the Zone* cost at least
-   146.87 US dollars with `review-round.md` already written, because the cost
-   lay in the number of rounds rather than in working out the steps.
-4. **Apply the rule's test.** A procedure qualifies once it has run twice in the
-   same shape, or once when working it out cost more than about 10 US dollars.
+3. **Weigh what a skill can save.** A skill saves the turns spent working out
+   what to do, and it does not save a lens's judgment or a reader's reading. So
+   look at what agents each worked out by hand, such as a script they all wrote
+   or a search they all ran, as well as at the size of the group. The fourteen
+   review rounds of *Trading in the Zone* cost at least 146.87 US dollars with
+   `review-round.md` already written, which suggests the cost lay in the number
+   of rounds rather than in working out the steps.
+4. **Apply the rule's test to every procedure the session worked out that is
+   likely to recur,** in the costliest group or not. A procedure qualifies once
+   it has run twice in the same shape, or once when working it out cost more
+   than about 10 US dollars.
 5. **Read the skills that exist first.** Search the plugin's `skills/` folder,
    its templates and its scripts for the procedure, and extend what covers
    part of it. On 2026-11-04 a report proposed writing down a review brief that

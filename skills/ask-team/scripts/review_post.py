@@ -2,24 +2,32 @@
 """Post a review round's comments and edit a pull request's Revision section.
 
 Usage:
-    review_post.py revision OWNER/REPO#N --scratch DIR (--line TEXT | --file PATH) [--replace ITEM] [--dry-run]
-    review_post.py comment --round R --anchor SHA --heading TEXT OWNER/REPO#N=HEAD=FILE [...] [--dry-run]
+    review_post.py revision OWNER/REPO#N --scratch DIR --line TEXT [--replace ITEM] [--dry-run]
+    review_post.py comment --round R --heading TEXT OWNER/REPO#N=HEAD=ANCHOR=FILE [...] [--dry-run]
 
 `revision` adds one numbered line to the body's `## Revision` section, or
-replaces item ITEM. It adds the section before the closing line and footer of
-a body that has none. It saves the body as read, sends only when every changed
-line sits inside the section, and reads the body back. A line already in the
-section is not added twice, so a retry changes nothing.
+replaces item ITEM, and adds the section before the closing lines and footer
+of a body that has none. The section runs from its heading to its last
+numbered item. Each run saves the body as read to a file of its own. It sends
+only when every changed line sits inside the section and a second run would
+change nothing, and it reads the body back. A line already in the section is
+not added twice, so a retry changes nothing.
 
-`comment` checks every pull request's head first, and posts on none of them if
-any differs. It then skips a pull request that already carries this heading,
-round and anchor, so a retry posts only what is missing.
+`comment` refuses a file that does not itself carry the heading, the round and
+its anchor, because a retry could not recognise that post. It then checks every
+pull request's head, and every earlier comment by the same login, and posts on
+none of them if a head differs or an earlier comment has the same key and other
+text. It skips a pull request that already carries this comment, so a retry
+posts only what is missing. GitHub takes no key on a comment, so this narrows
+the window for a double post rather than closing it.
 
+A write that fails says the outcome is unknown, since the request may have
+landed. Rerun the same command, which looks before it writes. The tests run
+against a stand-in `gh`, so no test covers what the real one prints.
 review-round.md's steps 7 and 8 say why each check is here.
 """
 
 import argparse
-import difflib
 import json
 import os
 import re
@@ -28,13 +36,13 @@ import sys
 import tempfile
 
 SPEC = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)#(?P<num>\d+)$")
-TARGET = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)#(?P<num>\d+)=(?P<head>[0-9a-f]{7,40})=(?P<file>.+)$")
-HEADING = re.compile(r"^#{1,6} ")
-FENCE = re.compile(r"^ {0,3}(```|~~~)")
+TARGET = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)#(?P<num>\d+)=(?P<head>[0-9a-f]{7,40})=(?P<anchor>[0-9a-f]{7,40})=(?P<file>.+)$")
+HEADING = re.compile(r"^ {0,3}#{1,6}(\s|$)")
+REVISION = re.compile(r"^ {0,3}#{1,6}\s+Revision\s*$")
+FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 ITEM = re.compile(r"^(\d+)\. (.*)$")
-CLOSING = re.compile(r"^(closes|fixes|resolves|part of)\b", re.IGNORECASE)
+CLOSING = re.compile(r"^(close[sd]?|fix(es|ed)?|resolve[sd]?|part of)\s+(no issue|([\w.-]+/[\w.-]+)?#\d+)", re.IGNORECASE)
 SECTION = "## Revision"
-SECTION_END = "The review comments list each finding and what was refuted."
 
 
 def run(*args):
@@ -44,38 +52,56 @@ def run(*args):
     return done.stdout
 
 
+def write(*args, where=""):
+    done = subprocess.run(args, capture_output=True, text=True)
+    if done.returncode:
+        sys.exit(f"{' '.join(args[:3])} exited {done.returncode}, so the outcome is unknown. "
+                 f"Rerun this command, which looks before it writes. {where}{done.stderr.strip()}")
+    return done.stdout.strip()
+
+
 def view(repo, num, field):
     # --jq would print one newline more than the string holds, so parse the JSON.
     return json.loads(run("gh", "pr", "view", num, "-R", repo, "--json", field))[field]
 
 
 def outside_fences(lines):
-    fenced = False
+    fence = None
     for i, line in enumerate(lines):
-        if FENCE.match(line):
-            fenced = not fenced
-        elif not fenced:
-            yield i, line
+        m = FENCE.match(line.rstrip("\r"))
+        if fence is None:
+            if m and not (m[1][0] == "`" and "`" in m[2]):
+                fence = m[1]
+            else:
+                yield i, line
+        elif m and m[1][0] == fence[0] and len(m[1]) >= len(fence) and not m[2].strip():
+            fence = None
 
 
 def find_section(lines):
     """Return (heading index, one past the section's last item), or None."""
     visible = list(outside_fences(lines))
-    starts = [i for i, line in visible if line.rstrip("\r") == SECTION]
+    starts = [i for i, line in visible if REVISION.match(line.rstrip("\r"))]
     if len(starts) > 1:
-        sys.exit(f"the body has {len(starts)} {SECTION} headings, so the section is ambiguous")
+        sys.exit(f"the body has {len(starts)} Revision headings, so the section is ambiguous. Edit it by hand")
     if not starts:
         return None
+    if lines[starts[0]].rstrip() != SECTION:
+        sys.exit(f"the Revision heading is not written {SECTION!r}. Edit it by hand")
     end = starts[0] + 1
+    seen = False
     for i, line in visible:
         if i <= starts[0]:
             continue
-        if HEADING.match(line):
+        plain = line.rstrip("\r")
+        if HEADING.match(plain):
             break
-        if ITEM.match(line.rstrip("\r")):
+        if ITEM.match(plain):
+            end, seen = i + 1, True
+        elif plain.strip():
+            if not seen or not (i == end or plain.startswith((" ", "\t"))):
+                break
             end = i + 1
-            while end < len(lines) and lines[end].startswith((" ", "\t")) and lines[end].strip():
-                end += 1
     return starts[0], end
 
 
@@ -89,22 +115,21 @@ def items(lines, start, end):
 
 
 def insertion_point(lines):
-    end = len(lines)
-    while end and not lines[end - 1].strip():
-        end -= 1
-    if end and lines[end - 1].startswith("🤖"):
-        end -= 1
+    def trim(end):
         while end and not lines[end - 1].strip():
             end -= 1
-        if end and CLOSING.match(lines[end - 1]):
-            end -= 1
-            while end and not lines[end - 1].strip():
-                end -= 1
+        return end
+
+    end = trim(len(lines))
+    if end and lines[end - 1].startswith("🤖"):
+        end = trim(end - 1)
+    while end and CLOSING.match(lines[end - 1].rstrip("\r")):
+        end = trim(end - 1)
     return end
 
 
 def splice(body, text, replace):
-    """Return (new body, first changed line, one past the last), or None when there is nothing to do."""
+    """Return the new body, or None when there is nothing to do."""
     lines = body.split("\n")
     eol = "\r" if lines and lines[0].endswith("\r") else ""
     found = find_section(lines)
@@ -112,10 +137,10 @@ def splice(body, text, replace):
         if replace is not None:
             sys.exit(f"the body has no {SECTION} section, so item {replace} does not exist")
         at = insertion_point(lines)
-        added = ["", SECTION, "", f"1. {text}", "", SECTION_END]
+        added = ["", SECTION, "", f"1. {text}"]
         if at == len(lines):
             added.append("")
-        return "\n".join(lines[:at] + [s + eol for s in added] + lines[at:]), at, at
+        return "\n".join(lines[:at] + [s + eol for s in added] + lines[at:])
     start, end = found
     current = items(lines, start, end)
     if replace is not None:
@@ -127,24 +152,37 @@ def splice(body, text, replace):
             stop += 1
         if lines[i:stop] == [f"{replace}. {text}{eol}"]:
             return None
-        return "\n".join(lines[:i] + [f"{replace}. {text}{eol}"] + lines[stop:]), i, stop
+        return "\n".join(lines[:i] + [f"{replace}. {text}{eol}"] + lines[stop:])
     if any(existing == text for _, existing in current.values()):
         return None
-    number = max(current, default=0) + 1
-    added = [f"{number}. {text}{eol}"]
+    added = [f"{max(current, default=0) + 1}. {text}{eol}"]
     if not current:
         added.insert(0, eol)
-    return "\n".join(lines[:end] + added + lines[end:]), end, end
+    return "\n".join(lines[:end] + added + lines[end:])
 
 
-def changed_outside(old, new, first, last):
-    """Lines of the old body a diff changed outside [first, last]. Runs apart from splice, as a second check."""
+def changed_outside(old, new):
+    """True when new differs from old outside the section. Reads the bounds from old, apart from splice."""
     a, b = old.split("\n"), new.split("\n")
-    matcher = difflib.SequenceMatcher(None, a, b, autojunk=False)
-    # An inserted block starts or ends with a blank line, and a diff may place it either side of the blank beside it.
-    return [(i1, i2) for tag, i1, i2, _, _ in matcher.get_opcodes()
-            if tag != "equal" and not (tag == "insert" and first - 1 <= i1 <= last + 1)
-            and (i1 < first or i2 > last)]
+    found = find_section(a)
+    first, last = (found[0] + 1, found[1]) if found else (insertion_point(a),) * 2
+    if last < len(a) and not a[last].strip():
+        last += 1
+    shared = min(len(a), len(b))
+    head = 0
+    while head < shared and a[head] == b[head]:
+        head += 1
+    tail = 0
+    while tail < shared - head and a[-1 - tail] == b[-1 - tail]:
+        tail += 1
+    return head < first or len(a) - tail > last
+
+
+def keep(prefix, folder, text):
+    fd, path = tempfile.mkstemp(prefix=prefix, suffix=".md", dir=folder)
+    with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+        f.write(text)
+    return path
 
 
 def revision(args):
@@ -152,35 +190,29 @@ def revision(args):
     if not m:
         sys.exit(f"not OWNER/REPO#N: {args.pull}")
     repo, num = m["repo"], m["num"]
-    if args.file:
-        with open(args.file, encoding="utf-8") as f:
-            text = f.read().strip()
-    else:
-        text = args.line.strip()
+    text = args.line.strip()
     if not text or "\n" in text:
         sys.exit("a revision entry is one non-empty line")
     body = view(repo, num, "body")
     os.makedirs(args.scratch, exist_ok=True)
-    saved = os.path.join(args.scratch, f"body-{repo.replace('/', '-')}-{num}.md")
-    with open(saved, "w", encoding="utf-8", newline="") as f:
-        f.write(body)
-    done = splice(body, text, args.replace)
-    if done is None:
+    name = f"body-{repo.replace('/', '-')}-{num}-"
+    saved = keep(name, args.scratch, body)
+    new = splice(body, text, args.replace)
+    if new is None:
         print(f"{repo}#{num}: the section already holds this line, so nothing changed")
         return
-    new, first, last = done
-    outside = changed_outside(body, new, first, last)
-    if outside:
-        sys.exit(f"{repo}#{num}: refusing to send, lines {outside} changed outside {SECTION}. The body as read is at {saved}")
+    if changed_outside(body, new):
+        sys.exit(f"{repo}#{num}: refusing to send, a line changed outside {SECTION}. The body as read is at {saved}")
+    if splice(new, text, args.replace) is not None:
+        sys.exit(f"{repo}#{num}: refusing to send, a second run would change the body again, so {SECTION} "
+                 f"was not found as written. Edit it by hand. The body as read is at {saved}")
     if args.dry_run:
-        print("".join(difflib.unified_diff(body.splitlines(True), new.splitlines(True), "as read", "to send")))
+        old = set(body.split("\n"))
+        print("".join(f"+{line}\n" for line in new.split("\n") if line not in old))
         return
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="", suffix=".md", dir=args.scratch, delete=False) as f:
-        f.write(new)
-        sent = f.name
-    run("gh", "pr", "edit", num, "-R", repo, "--body-file", sent)
-    back = view(repo, num, "body")
-    if back != new:
+    sent = keep("sent-" + name, args.scratch, new)
+    write("gh", "pr", "edit", num, "-R", repo, "--body-file", sent, where=f"As read: {saved}. As sent: {sent}. ")
+    if view(repo, num, "body") != new:
         sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
                  f"As read before the edit: {saved}. As sent: {sent}")
     print(f"{repo}#{num}: {SECTION} updated and read back")
@@ -197,26 +229,41 @@ def comment(args):
     for spec in args.targets:
         m = TARGET.match(spec)
         if not m:
-            sys.exit(f"not OWNER/REPO#N=HEAD=FILE: {spec}")
+            sys.exit(f"not OWNER/REPO#N=HEAD=ANCHOR=FILE: {spec}")
         if not os.path.isfile(m["file"]):
             sys.exit(f"no comment file at {m['file']}")
-        targets.append(m)
+        with open(m["file"], encoding="utf-8") as f:
+            text = f.read()
+        if not carries(text, args.heading, args.round, m["anchor"]):
+            sys.exit(f"posting nothing, because {m['file']} does not start with {args.heading!r} and name "
+                     f"round {args.round} and {m['anchor'][:7]}, so a retry could not recognise it")
+        targets.append((m, text))
     wrong = []
-    for m in targets:
+    for m, _ in targets:
         head = view(m["repo"], m["num"], "headRefOid")
         if not head.startswith(m["head"]):
             wrong.append(f"{m['repo']}#{m['num']} is at {head[:7]}, not {m['head'][:7]}")
     if wrong:
         sys.exit("posting nothing, because a head does not match: " + "; ".join(wrong))
-    for m in targets:
+    login = run("gh", "api", "user", "--jq", ".login").strip()
+    pending = []
+    for m, text in targets:
         name = f"{m['repo']}#{m['num']}"
-        if any(carries(c["body"], args.heading, args.round, args.anchor) for c in view(m["repo"], m["num"], "comments")):
-            print(f"{name}: already carries this heading, round and anchor, so skipped")
-        elif args.dry_run:
+        mine = [c["body"] for c in view(m["repo"], m["num"], "comments")
+                if (c.get("author") or {}).get("login") == login
+                and carries(c["body"], args.heading, args.round, m["anchor"])]
+        if any(body.strip() != text.strip() for body in mine):
+            sys.exit(f"posting nothing, because {name} already carries this heading, round and anchor with "
+                     "different text. Report it, and post by hand once it is settled")
+        if mine:
+            print(f"{name}: already carries this comment, so skipped")
+        else:
+            pending.append((name, m))
+    for name, m in pending:
+        if args.dry_run:
             print(f"{name}: would post {m['file']}")
         else:
-            run("gh", "pr", "comment", m["num"], "-R", m["repo"], "--body-file", m["file"])
-            print(f"{name}: posted")
+            print(f"{name}: posted {write('gh', 'pr', 'comment', m['num'], '-R', m['repo'], '--body-file', m['file'])}")
 
 
 def main():
@@ -226,9 +273,7 @@ def main():
     edit = commands.add_parser("revision")
     edit.add_argument("pull")
     edit.add_argument("--scratch", required=True)
-    entry = edit.add_mutually_exclusive_group(required=True)
-    entry.add_argument("--line")
-    entry.add_argument("--file")
+    edit.add_argument("--line", required=True)
     edit.add_argument("--replace", type=int)
     edit.add_argument("--dry-run", action="store_true")
     edit.set_defaults(handler=revision)
@@ -236,7 +281,6 @@ def main():
     post = commands.add_parser("comment")
     post.add_argument("targets", nargs="+")
     post.add_argument("--round", type=int, required=True)
-    post.add_argument("--anchor", required=True)
     post.add_argument("--heading", required=True)
     post.add_argument("--dry-run", action="store_true")
     post.set_defaults(handler=comment)
