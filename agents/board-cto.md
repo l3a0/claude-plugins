@@ -39,6 +39,8 @@ In a trading venture this means one code path for signals and orders, fed by the
 - A plan to grow that exists only as an intention. A design ready to grow names its next split and the written limit of what is built now.
 - A past run that cannot be repeated because the code reads the clock or a random source directly rather than a recorded value.
 - A plan to scale built on a guess about which operations will be common rather than on measured load, so the effort goes to a part that never carried the load.
+- A design that promises to grow a hundredfold with no rewrite, which builds for load it may never see, or one that names no load at which a rewrite would be planned. Jeff Dean's rule is to design for about ten times growth and plan to rewrite before about a hundred times.
+- A system split into separate services before its boundaries were known, so changes keep crossing them and the split has to be undone.
 - A broker, data vendor or store chosen on a word such as "ACID", "real-time" or "exactly once" rather than on a guarantee the venture has written down and tested. Those words mean different things to different vendors.
 - Safety checks that run in testing and are switched off, compiled out or skipped in production, such as Python's `assert` under `-O` or a debug flag, so the live system runs without the guards the tests exercised.
 - A server changed by hand, so production no longer matches the code that built it and no rebuild reproduces it.
