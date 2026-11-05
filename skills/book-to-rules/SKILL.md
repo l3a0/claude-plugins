@@ -5,9 +5,9 @@ description: Turn a book into rules for an engineering team and design principle
 
 # Book to rules
 
-Seven books went through this pipeline in three days, ending on 2026-11-04. The first four, *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*, each worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them. The fifth, *Building Microservices*, ran with this skill and still took eight review rounds, which step 7 prices. Step 4's list of what other work owns is the lesson of that run. The sixth, *Trading in the Zone*, took fourteen, most of them on mechanics a rule stated rather than pointed to.
+Eight books went through this pipeline in four days, ending on 2026-11-05. The first four, *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*, each worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them. The fifth, *Building Microservices*, ran with this skill and still took eight review rounds, which step 7 prices. Step 4's list of what other work owns is the lesson of that run. The sixth, *Trading in the Zone*, took fourteen, most of them on mechanics a rule stated rather than pointed to.
 
-The worked examples are the seven sets of pull requests. The first four ran before any rule on rounds and stopped after one or two. Two later runs under the rule that a review goes on until nothing significant is left, [l3a0/ithildin-runtime PR #29](https://github.com/l3a0/ithildin-runtime/pull/29) and [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31), had reached seven and six rounds on 2026-11-04 UTC with more to follow, so the jump to eight is not all the cost of skipping step 4's list.
+The worked examples are the eight sets of pull requests. The first four ran before any rule on rounds and stopped after one or two. Two later runs under the rule that a review goes on until nothing significant is left, [l3a0/ithildin-runtime PR #29](https://github.com/l3a0/ithildin-runtime/pull/29) and [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31), had reached seven and six rounds on 2026-11-04 UTC with more to follow, so the jump to eight is not all the cost of skipping step 4's list.
 
 | Book | l3a0/ithildin-runtime | l3a0/claude-plugins | l3a0/repo-template | Review rounds |
 | --- | --- | --- | --- | --- |
@@ -18,6 +18,7 @@ The worked examples are the seven sets of pull requests. The first four ran befo
 | *Building Microservices* | [PR #28](https://github.com/l3a0/ithildin-runtime/pull/28) | [PR #56](https://github.com/l3a0/claude-plugins/pull/56) | [PR #77](https://github.com/l3a0/repo-template/pull/77) | 8 |
 | *Trading in the Zone* | [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31) | [PR #59](https://github.com/l3a0/claude-plugins/pull/59) | none | 14 |
 | *Fooled by Randomness* | [PR #45](https://github.com/l3a0/ithildin-runtime/pull/45) | [PR #72](https://github.com/l3a0/claude-plugins/pull/72) | none | 3 |
+| *Inside the Black Box* | [PR #47](https://github.com/l3a0/ithildin-runtime/pull/47) | [PR #74](https://github.com/l3a0/claude-plugins/pull/74) | none | 7 |
 
 Read the review comment on the *Code Complete* project pull request first. Its round is the one the `ask-team` skill's review round and comment template were drawn from.
 
@@ -86,7 +87,7 @@ Get the highlights either way. They are how the owner says which points matter, 
 
 ### 2. Split the text into parts and map the highlights
 
-Pick part boundaries at chapter starts, from the table of contents, so no reader starts mid-argument. The seven runs used five to seven parts of about 11,600 to 69,000 words each.
+Pick part boundaries at chapter starts, from the table of contents, so no reader starts mid-argument. The eight runs used five to seven parts of about 8,800 to 69,000 words each.
 
 ```bash
 python3 -I "$SKILL/scripts/split_parts.py" "$RUN/book_pages.txt" "$RUN/parts" \
@@ -180,11 +181,11 @@ When `main` moves during the round, merge it the way step 5 says.
 
 ### 7. Price the loop
 
-The round's pricing step prices its lenses and verifiers, and asks for any other loop that served the round on its own line. For a book that line is the readers, so run the `l3a0:loop-cost` skill on the reader agents' transcripts too, and add their line under `### Cost` in the project pull request's comment, after the round's sum, where the template places other loops. The *Code Complete* round cost at least 24.34 US dollars: 9.32 for seven readers, 10.30 for seven lenses and 4.72 for three verifiers. The *Rapid Development* round cost at least 16.13: 7.33 for seven readers and 8.79 for seven lenses. The *Building Microservices* loop cost at least 74.80: 5.26 for five readers and 69.54 for the lenses and verifiers of eight review rounds. The *Trading in the Zone* loop cost at least 151.36: 4.49 for six readers and 146.87 for the lenses and verifiers of fourteen review rounds. The *Fooled by Randomness* loop cost at least 24.78: 4.26 for six readers and 20.52 for the lenses and verifiers of three review rounds, after step 4's list kept its rules to guarantees and pointers. In the plugin pull request, add the book's row and its round count to the table above, and move the intro's count, step 2's range, this step's prices and the README's count.
+The round's pricing step prices its lenses and verifiers, and asks for any other loop that served the round on its own line. For a book that line is the readers, so run the `l3a0:loop-cost` skill on the reader agents' transcripts too, and add their line under `### Cost` in the project pull request's comment, after the round's sum, where the template places other loops. The *Code Complete* round cost at least 24.34 US dollars: 9.32 for seven readers, 10.30 for seven lenses and 4.72 for three verifiers. The *Rapid Development* round cost at least 16.13: 7.33 for seven readers and 8.79 for seven lenses. The *Building Microservices* loop cost at least 74.80: 5.26 for five readers and 69.54 for the lenses and verifiers of eight review rounds. The *Trading in the Zone* loop cost at least 151.36: 4.49 for six readers and 146.87 for the lenses and verifiers of fourteen review rounds. The *Fooled by Randomness* loop cost at least 24.78: 4.26 for six readers and 20.52 for the lenses and verifiers of three review rounds, after step 4's list kept its rules to guarantees and pointers. The *Inside the Black Box* loop cost at least 80.98: 3.63 for seven readers and 77.35 for the lenses and verifiers of seven review rounds, most of them on two rules that named new stops, as check 27 says. In the plugin pull request, add the book's row and its round count to the table above, and move the intro's count, step 2's range, this step's prices and the README's count.
 
 ## Checks to run before opening the pull requests
 
-Checks 1 to 23 are findings the reviews of the first four books made, after the pull requests were open. Checks 24 and 25 came from building this skill, whose own review found that a test against the highlights alone misses copied text, and whose version clashed with another open pull request's. Check 26 came from the eight rounds on *Building Microservices*. Run them on the drafts, and a review round has less to find.
+Checks 1 to 23 are findings the reviews of the first four books made, after the pull requests were open. Checks 24 and 25 came from building this skill, whose own review found that a test against the highlights alone misses copied text, and whose version clashed with another open pull request's. Check 26 came from the eight rounds on *Building Microservices*, and check 27 from the seven on *Inside the Black Box*. Run them on the drafts, and a review round has less to find.
 
 ### Citations
 
@@ -192,7 +193,7 @@ Checks 1 to 23 are findings the reviews of the first four books made, after the 
 2. **No rule claims more than its page.** Read each rule's passage with `ctx.py`. Reviews caught a rule that turned the book's "not so easy" into "needs a rewrite", an unsupported "most often skipped", and a rule that said "two different methods" where the page says any two ([PR #24](https://github.com/l3a0/ithildin-runtime/pull/24), [PR #26](https://github.com/l3a0/ithildin-runtime/pull/26)).
 3. **A rule that goes past the book says so.** When the repository's rule is stricter than the page, or applies the book to agents where the book wrote about people, the citation paragraph says which part is the book's and which is the repository's.
 4. **A figure names its source and stays in its scope.** *Rapid Development*'s survey of 300 projects supports recalibrating an estimate and nothing wider, and nobody has tested whether it fits agent loops ([PR #27](https://github.com/l3a0/ithildin-runtime/pull/27)).
-5. **A claim about the book's silence is checked.** "The book never names fsync" was false, and a grep of the text would have shown it ([PR #25](https://github.com/l3a0/ithildin-runtime/pull/25)).
+5. **A claim about the book's silence is checked.** "The book never names fsync" was false, and a grep of the text would have shown it ([PR #25](https://github.com/l3a0/ithildin-runtime/pull/25)). Join line breaks first, because a plain `grep` misses a phrase split across two lines. On [PR #47](https://github.com/l3a0/ithildin-runtime/pull/47) a search found no "order management", and the book has it once.
 
 ### Conflicts with what is already there
 
@@ -229,3 +230,4 @@ Checks 1 to 23 are findings the reviews of the first four books made, after the 
 ### What other work owns
 
 26. **A rule that reaches another issue's mechanics states a guarantee and points to that issue.** Check 8 covers a rule that contradicts other work. This check covers the form. Read `$RUN/owners.md`, built in step 4, and stop if it is missing or empty. Read it against every rule that touches mechanics or a question it lists, and write each such rule as step 4 says, with what step 4 keeps in full. Step 4 gives the [PR #28](https://github.com/l3a0/ithildin-runtime/pull/28) rounds this cost.
+27. **A rule that names a new stop states only what reaches it, and leaves the rest to the issue that builds it.** A stop draws questions about which orders it keeps, who clears it, what store it reads and what test feeds it, and each answer draws more. On [PR #47](https://github.com/l3a0/ithildin-runtime/pull/47), rules 5 and 6 drew must-fixes in rounds 2 to 5, each on the last round's fix, until the mechanics moved to the issue. Where a rule needs a stop, leave the stop to the rule or issue that owns it, and say in the section's opening what each rule adds to what reaches one.
