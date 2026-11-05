@@ -13,7 +13,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DELIMITER = re.compile(r"^\s*\|(\s*:?-+:?\s*\|)+\s*$")
 TITLE = re.compile(r"^\s*\*\*Table:\*\* \S")
-FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+FENCE = re.compile(r"^ {0,3}(`{3,}(?=[^`]*$)|~{3,})(.*)$")
 
 
 def untitled(text):
@@ -60,6 +60,11 @@ assert untitled("See **Table:** One\n\n| A |\n| --- |\n") == [3]
 assert untitled("Prose.\n\n| A | B |\n| :--- | ---: |\n") == [3]
 assert untitled("~~~\ntext\n~~~\n\n| A |\n| --- |\n") == [5]
 assert untitled("````\n```\n| A |\n| --- |\n````\n") == []
+assert untitled("~~~\n| A |\n| --- |\n~~~\n") == []
+assert untitled("```\n~~~\n| A |\n| --- |\n```\n") == []
+assert untitled("```\n``` x\n| A |\n| --- |\n```\n") == []
+assert untitled("    ```\n\n| A |\n| --- |\n") == [3]
+assert untitled("```a``` is prose\n\n| A |\n| --- |\n") == [3]
 
 files = subprocess.check_output(["git", "ls-files", "*.md"], cwd=ROOT, text=True).split()
 assert files
