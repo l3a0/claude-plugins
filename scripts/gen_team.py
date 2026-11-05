@@ -91,6 +91,12 @@ ithildin-runtime's docs/design.md adopts it with Kindle locations. The check on 
 cap read from the same value it caps, the delay figure's reading, how a range is
 built and where each check applies are this plugin's own, not the book's.
 
+The checks on trying what already exists, a neighbour's contract, a machine
+that holds no state and the workload a product is heading for (architect), and
+on one convention per kind of value (data engineer) come from the owner's
+corrections during l3a0/ithildin-runtime's architecture review on PR 15, as the
+owner's global CLAUDE.md states them on 2026-11-05.
+
 Run from anywhere:
 
     python3 scripts/gen_team.py           # write the eight files
@@ -170,6 +176,10 @@ ROLES = [
             "Where the change splits a component further than the repository's design already does, such as one module across several processes or services, check that it names the reason, such as a measured load, an isolation need or a credential to keep apart, and shows how often the component's interface changed. Splitting before the boundaries are known is costly, and one team had to merge its early services back before splitting again along boundaries that held. A split the repository's design or its owner has already ruled on is not a finding, and neither are clones of a component or a split by key, which follow the scale rules.",
             "Where the repository builds something that runs in more than one environment, check that one artifact is built once and is what every environment runs, with the hash of the artifact its checks passed on recorded where a deploy, a startup and a running process can compare it, a mismatch halting, and that configuration may differ by environment only in a committed list of keys: adapter selection and parameters, references to where each credential is read from and never its value. A limit that configuration must never raise sits outside the configuration. A behaviour setting outside the list that differs between environments means production runs code paths no test ran.",
             "Where a design states how far it scales, check that it holds about ten times its first load with configuration and more infrastructure alone, and that for growth beyond that it names the load at which planning a rewrite starts, what the rewrite would replace, and what must carry over unchanged, such as recorded data, its formats and its partition layout. Check too that two alarms exist from the first load: one as load nears the first version's limit, and one when it reaches the rewrite-planning level.",
+            "Where the change proposes a new store, key, credential, account or process, check that it first tried what already exists: data the system holds, a narrower permission on a role that already exists, and a managed default or a rule that needs no new credential. A proposal that does not say why each of those fails is a finding, because every mechanism costs building, drilling and reading.",
+            "Where the change touches a neighbouring system or another repository, check that it depends only on what that system publishes and names no step of how the system produces or removes it, that the system owning a step runs it alone with no other system waiting on it, and that the design says what happens when the input is absent, with any fallback written down rather than assumed.",
+            "Where a design places a component on a machine, check that a replacement machine loses nothing: inputs and outputs live in durable storage, a record points at them, and a process resumes by reading what storage holds and retrying. Check too that each component deploys on its own, such as in its own container.",
+            "Where a design picks a host, a messaging path or a schedule, check it against the workload the product states it is heading for, as well as the first slice's. An argument that rests only on the first slice's few runs a day is a finding, even though the build itself stays at the first load.",
         ],
     },
     {
@@ -221,6 +231,7 @@ ROLES = [
             "Check that data from outside which cannot be fetched again is stored as it arrived, before any parsing or cleaning, so a bug in the parser is fixed by reading the data again. Check too that a record keeps the sender's timestamp beside the receiver's, because the sender's clock can be wrong, and that a rate or a window is computed on the time an event happened rather than the time it was processed, which spikes after any restart or backlog.",
             "Where the change backs up a store, check that the copy comes from a consistent snapshot or from closed files that no longer change, rather than from a copy taken while writes continue. Restoring such a copy makes its inconsistency permanent.",
             "Where a stored series can change because of an event that is not a move in its value, such as a split in a price series or a change of units, and its source has not already adjusted for it and said so, check that the event is a record of its own, that one place applies it and the stored series stays unchanged, and that a test shows nothing which acts on the series reads it as a change in value. Check that a test also feeds a wrong record and an event with no record, and that each is flagged, or that the repository names the case as a known gap with the size below which it passes, rather than reading as no change. An event store that cannot be read or does not reach the dates read is missing input, never no event. Where an outside party holds the position, check that its record and the event record agree.",
+            "Where the change stores or compares values of one kind, such as times, units or prices, check that one convention holds across every record and format, such as every stored time in UTC, and that a value that follows another is stated relative to it, such as minutes before a market's close rather than a time of day.",
         ],
     },
     {

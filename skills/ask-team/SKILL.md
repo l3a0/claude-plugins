@@ -90,6 +90,15 @@ A repository whose charter names a required reviewer for some path, as l3a0/ithi
 
 A pull request also gets the two lenses the owner's rules give every pull request: completeness, which asks whether the class was fixed rather than one instance, and over-reach, which asks whether the change stayed inside its class. They are not roles, so run them as two more blind agents with those two prompts, using a general-purpose agent.
 
+A design doc or a design pull request, subject 2 in step 1, also gets a reader lens, a general-purpose agent with no context beyond the document. It asks four things.
+
+1. Can a reader with none of the conversation follow each section on one read? A wall of text, a mechanism with several actors and no diagram, or a data type with no class diagram is a finding.
+2. Does each section state what is true, with every decision in the document's one decisions section where the repository keeps one?
+3. Do the body, every diagram and every table agree, and does each value stated twice agree with its source, such as an issue's latest comment?
+4. Does each source the text leans on carry a link?
+
+The reader lens's findings go through step 4 like any other. It runs on a design with no pull request too, and lens mode leaves it to the caller, as it does the other two.
+
 State in one line the subject, its anchor and the roles seated, then launch.
 
 ### 3. Blind round
@@ -144,7 +153,7 @@ Post one comment on the pull request or issue whose first line is the review hea
 1. The roles and lenses seated, the anchor commit, and the charter's commit or its absence.
 2. What was found and fixed, one numbered line each.
 3. What was refuted or left alone, with the reason.
-4. `### For the owner`, listing any question only the owner can rule on, including one for the board, or saying there is none.
+4. `### For the owner`, listing any question only the owner can rule on, including one for the board, or saying there is none. Each question stands alone in plain words, and carries one recommendation, the metric that decides between the options, and the price of each. Anything a vendor's page, a connected account or the code can settle is looked up, and is no question for the owner.
 
 Price the review with the plugin's `l3a0:loop-cost` skill, counting every role, lens and verifier transcript. Put the figure at the end of the comment, and post it as a separate comment starting with the line `## Cost` on the issue the subject tracks, in the form the `l3a0:loop-cost` skill shows, because the status round's cost-total sweep reads only `## Cost` comments on issues.
 
