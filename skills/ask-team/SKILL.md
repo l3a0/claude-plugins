@@ -92,7 +92,7 @@ A pull request also gets the two lenses the owner's rules give every pull reques
 
 A design or architecture doc, or a design pull request, subject 2 in step 1, also gets a reader lens, a general-purpose agent that has read none of the conversation. It reads the sections the subject covers, which on a pull request are the ones it changes, and the sources those sections cite. It asks five things.
 
-1. Can a reader with none of the conversation follow each section on one read? A wall of text, a paragraph holding several steps, a question with no subheading, a mechanism with several actors and no diagram, or a data type with no class diagram is a finding.
+1. Can a reader with none of the conversation follow each section on one read? A wall of text, a paragraph holding several steps, a question with no subheading, a mechanism with several actors and no diagram, a data type with no class diagram, or a table with no title is a finding.
 2. Does each section state what is true, with every decision in the document's one decisions section where the repository keeps one? Body text that says who decided, when, or on which issue is a finding.
 3. Do the body and every diagram, table and figure agree, does each value stated twice agree with its source, such as an issue's latest comment, and does each diagram render, shown by running a renderer on it rather than by reading its source?
 4. Does each source the text leans on carry a link?
