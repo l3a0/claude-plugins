@@ -12,7 +12,7 @@ The owner's rules ask that every pull request is reviewed by blind lenses before
 
 A review that a session cannot finish can go to a new session on `templates/handoff-brief.md`. Around 2026-11-04 UTC three sessions were started the same way to finish reviews, each brief written from nothing.
 
-The session that owns the branches runs the round, as the pull request review that lens mode names as its first caller. It runs `SKILL.md`'s steps 2 to 4 itself, in the same session, as lens mode allows, and launches the roles beside the completeness and over-reach lenses in one blind round.
+The session that owns the branches runs the round, as the pull request review that lens mode names as its first caller. It runs `SKILL.md`'s steps 2 to 4 itself, in the same session, as lens mode allows, and launches the roles beside the completeness and over-reach lenses, and on a design the reader lens, in one blind round.
 
 A round can cover several pull requests at once. A rule adopted from one source often lands in three repositories, such as l3a0/ithildin-runtime, this plugin and l3a0/repo-template. One brief covers all of them, every lens reads all of them, and a finding that one copy contradicts another surfaces in the same round. The worked examples are the review comments on [l3a0/ithildin-runtime PR #25](https://github.com/l3a0/ithildin-runtime/pull/25), [PR #26](https://github.com/l3a0/ithildin-runtime/pull/26) and [PR #27](https://github.com/l3a0/ithildin-runtime/pull/27), with their companions [l3a0/claude-plugins PR #46](https://github.com/l3a0/claude-plugins/pull/46), [PR #47](https://github.com/l3a0/claude-plugins/pull/47) and [PR #48](https://github.com/l3a0/claude-plugins/pull/48), and [l3a0/repo-template PR #74](https://github.com/l3a0/repo-template/pull/74), [PR #75](https://github.com/l3a0/repo-template/pull/75) and [PR #76](https://github.com/l3a0/repo-template/pull/76).
 
@@ -43,15 +43,15 @@ A later round's brief anchors at the fixing commit and lists the owner's rulings
 
 ## 2. Choose the lenses
 
-Run the completeness and over-reach lenses `SKILL.md`'s step 2 names, and on a design doc its reader lens, as general-purpose agents, and seat the roles and the required seats by the same step. Each role runs as its own agent, with `subagent_type` set to `l3a0:team-<role>`. The 2026-11-03 rounds ran between five and eight lenses.
+Run the completeness and over-reach lenses `SKILL.md`'s step 2 names, and on a design or architecture doc or a design pull request its reader lens, as general-purpose agents, and seat the roles and the required seats by the same step. Each role runs as its own agent, with `subagent_type` set to `l3a0:team-<role>`. The 2026-11-03 rounds ran between five and eight lenses.
 
-A round run this way follows lens mode's run limit, as `SKILL.md`'s lens mode says: the roles and the verifiers stay under ten runs in each round, and the two lenses are the caller's own.
+A round run this way follows lens mode's run limit, as `SKILL.md`'s lens mode says: the roles and the verifiers stay under ten runs in each round, and the completeness, over-reach and reader lenses are the caller's own.
 
 ## 3. Run the blind round
 
 Launch the lenses as `SKILL.md`'s step 3 says. Give each spawn a description starting with `review <tag> r<N> `, where the tag is the main pull request's number, such as `review 49 r1 risk-engineer`. The `l3a0:loop-cost` skill finds transcripts by that description once their paths are gone, and the tag keeps two subjects reviewed in one session apart.
 
-A role's prompt carries the six things `SKILL.md`'s step 3 lists. The brief holds the subject, the charter, the files to read and what is out of scope, so the prompt names the brief's absolute path for those and adds the role's scratch folder, `<scratchpad>/review-r<N>/<role>/`. A completeness or over-reach prompt carries the same and its question. It also carries the finding format block from `SKILL.md`'s step 3 in full, and the limits in the brief written out, because a general-purpose agent has no agent file to supply them and holds every tool and the session's GitHub login. Every prompt asks for a reply under 1,500 words, with the evidence for each finding cut to the command and the line that shows it.
+A role's prompt carries the six things `SKILL.md`'s step 3 lists. The brief holds the subject, the charter, the files to read and what is out of scope, so the prompt names the brief's absolute path for those and adds the role's scratch folder, `<scratchpad>/review-r<N>/<role>/`. A completeness, over-reach or reader lens prompt carries the same and its question. It also carries the finding format block from `SKILL.md`'s step 3 in full, and the limits in the brief written out, because a general-purpose agent has no agent file to supply them and holds every tool and the session's GitHub login. Every prompt asks for a reply under 1,500 words, with the evidence for each finding cut to the command and the line that shows it.
 
 ## 4. Verify
 

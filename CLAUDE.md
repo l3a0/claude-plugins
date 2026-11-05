@@ -68,6 +68,7 @@ A repo drifts when two surfaces describe the same thing and only one gets update
   1. The opening paragraph of this file.
   2. The scope list in [SECURITY.md](SECURITY.md).
   3. The receiver gotcha under Step 2 of `skills/kindle-highlights/SKILL.md`.
+- **The form of a question for the owner** sits in step 6 of `skills/ask-team/SKILL.md` and in `skills/ask-team/templates/review-comment.md`, and `review-round.md` points at the first. `tests/test_ask_team_links.py` holds the links between them.
 - **The blog post** in `blog/how-to-take-back-your-kindle-highlights.md` is also published on Substack, and nothing syncs the two copies.
 
 Before reporting a change done, sweep the prose surfaces for what the change could have invalidated, and end the response with a short **Consistency sweep** note listing what was checked, what was updated, and what is still stale. For a pure-internal refactor that changes no observable behavior, say "no prose-facing surfaces affected" so it is clear the check was considered rather than forgotten.

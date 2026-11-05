@@ -57,7 +57,7 @@ When a finding turns on one of these, the skill does not decide it. It lists the
 The subject is one of five things, and each needs its anchor.
 
 1. **An issue's plan, before a build starts.** The issue number, and the commit of `main` the plan is read against. Where the repository's `CLAUDE.md` asks for a plan audit before work starts, this is that audit, run once per relevant role.
-2. **A design doc or a design pull request.** The file, the branch and the commit.
+2. **A design or architecture doc, or a design pull request.** The file, the branch and the commit.
 3. **A pull request.** The number and its head commit.
 4. **A technical question that crosses modules.** The question, the options, and the files each option would change.
 5. **A blog post or other prose that quotes results.** The file and the commit, and the tests or log entries its numbers come from.
@@ -70,9 +70,9 @@ Seat the roles whose objective the subject can hurt, between three and six. Seat
 
 | The subject touches | Seat |
 | --- | --- |
-| Module interfaces, shared types, a new dependency, the import rule | Architect |
+| Module interfaces, shared types, a new dependency, the import rule, a new store, encryption key, credential, account or long-running service, a neighbouring system, where a component runs | Architect |
 | A research claim, a backtest, a benchmark, a pinned number | Quant researcher |
-| A fetch, a capture, a vintage, a snapshot, anything that writes recorded data | Data engineer |
+| A fetch, a capture, a vintage, a snapshot, anything that writes recorded data or compares values across records | Data engineer |
 | A write to an outside system through an API, such as an order, a sent message or a GitHub comment, its record, retries, reconciliation | Trading systems engineer |
 | An irreversible action, such as an order, a delete, a publish or a deploy, its gate, a limit, the kill switch, a halt | Risk engineer |
 | Any code or test change | Test engineer |
@@ -90,14 +90,15 @@ A repository whose charter names a required reviewer for some path, as l3a0/ithi
 
 A pull request also gets the two lenses the owner's rules give every pull request: completeness, which asks whether the class was fixed rather than one instance, and over-reach, which asks whether the change stayed inside its class. They are not roles, so run them as two more blind agents with those two prompts, using a general-purpose agent.
 
-A design doc or a design pull request, subject 2 in step 1, also gets a reader lens, a general-purpose agent with no context beyond the document. It asks four things.
+A design or architecture doc, or a design pull request, subject 2 in step 1, also gets a reader lens, a general-purpose agent that has read none of the conversation. It reads the sections the subject covers, which on a pull request are the ones it changes, and the sources those sections cite. It asks five things.
 
-1. Can a reader with none of the conversation follow each section on one read? A wall of text, a mechanism with several actors and no diagram, or a data type with no class diagram is a finding.
-2. Does each section state what is true, with every decision in the document's one decisions section where the repository keeps one?
-3. Do the body, every diagram and every table agree, and does each value stated twice agree with its source, such as an issue's latest comment?
+1. Can a reader with none of the conversation follow each section on one read? A wall of text, a paragraph holding several steps, a question with no subheading, a mechanism with several actors and no diagram, or a data type with no class diagram is a finding.
+2. Does each section state what is true, with every decision in the document's one decisions section where the repository keeps one? Body text that says who decided, when, or on which issue is a finding.
+3. Do the body and every diagram, table and figure agree, does each value stated twice agree with its source, such as an issue's latest comment, and does each diagram render, shown by running a renderer on it rather than by reading its source?
 4. Does each source the text leans on carry a link?
+5. Does the document still agree with every rule merged to `main` since its branch started?
 
-The reader lens's findings go through step 4 like any other. It runs on a design with no pull request too, and lens mode leaves it to the caller, as it does the other two.
+The reader lens's findings go through step 4 like any other, and it counts as one more of the caller's lenses. It also runs on a design with no pull request.
 
 State in one line the subject, its anchor and the roles seated, then launch.
 
@@ -138,7 +139,7 @@ A finding is a claim until something executes it. For every veto and every must-
 
 A must-fix that rests on a fact one command shows, such as a line in a file, a phrase in a source or a comment on an issue, may be confirmed by the delivery lead running that command instead. The lead only confirms this way. A veto, and any finding the lead's command would refute or lower, goes to a verifier, because the lead wrote or owns the change and cannot refute a finding against it. `review-round.md`'s step 4 adds a question where a session weighs cutting text an earlier round added, or moving or cutting a passage. The review comment says which findings the lead confirmed and that the cost figure leaves those checks out, because they ran in the lead's own context.
 
-Group findings that rest on the same fact under one verifier. Keep each round of a review under ten agent runs where the subject allows, counting the roles, the two lenses and the verifiers.
+Group findings that rest on the same fact under one verifier. Keep each round of a review under ten agent runs where the subject allows, counting the roles, the completeness, over-reach and reader lenses, and the verifiers.
 
 ### 5. Apply what survives
 
@@ -153,24 +154,24 @@ Post one comment on the pull request or issue whose first line is the review hea
 1. The roles and lenses seated, the anchor commit, and the charter's commit or its absence.
 2. What was found and fixed, one numbered line each.
 3. What was refuted or left alone, with the reason.
-4. `### For the owner`, listing any question only the owner can rule on, including one for the board, or saying there is none. Each question stands alone in plain words, and carries one recommendation, the metric that decides between the options, and the price of each. Anything a vendor's page, a connected account or the code can settle is looked up, and is no question for the owner.
+4. `### For the owner`, listing any question only the owner can rule on, including one for the board, or saying there is none. Each question stands alone in plain words. A question for the board names what is decided and the metric, and carries no recommendation, because the team has no standing to answer it. Any other carries one recommendation, the metric that decides between the options, and the price of each. A fact that a vendor's page, a connected account or the code can settle is looked up, and is no question for the owner, and no figure from a personal account enters the comment.
 
 Price the review with the plugin's `l3a0:loop-cost` skill, counting every role, lens and verifier transcript. Put the figure at the end of the comment, and post it as a separate comment starting with the line `## Cost` on the issue the subject tracks, in the form the `l3a0:loop-cost` skill shows, because the status round's cost-total sweep reads only `## Cost` comments on issues.
 
 ## Lens mode, inside another review
 
-Another review can call this skill for the team's lenses beside its own, on the owner's ruling of 2026-10-29 UTC that the pull request and blog review skills consult the team for their feedback. The caller owns the branch and the review comment, so in this mode the skill runs steps 1 to 4 and returns, and skips steps 5 and 6. It also skips step 2's two pull request lenses, which the caller runs. A caller in the same session may run steps 2 to 4 itself rather than through a nested call, launching the roles beside its own two lenses in one blind round and verifying every lens's findings in one step 4. These are the same steps, and `review-round.md` runs them this way. The run limit is still item 6's: the roles and the verifiers stay under ten runs in each round, and the caller's two lenses fall outside it.
+Another review can call this skill for the team's lenses beside its own, on the owner's ruling of 2026-10-29 UTC that the pull request and blog review skills consult the team for their feedback. The caller owns the branch and the review comment, so in this mode the skill runs steps 1 to 4 and returns, and skips steps 5 and 6. It also skips step 2's pull request lenses and its reader lens, which the caller runs. A caller in the same session may run steps 2 to 4 itself rather than through a nested call, launching the roles beside its own two lenses in one blind round and verifying every lens's findings in one step 4. These are the same steps, and `review-round.md` runs them this way. The run limit is still item 6's: the roles and the verifiers stay under ten runs in each round, and the caller's lenses fall outside it.
 
 1. **The caller names the subject and its anchor**, as step 1 lists them, and what is out of scope. The skill adds nothing to that scope, apart from step 1's paragraphs, under step 1's condition.
 2. **The skill seats the roles the subject touches**, by the table in step 2, and runs them blind, as step 3 says. The caller's own lenses are not shown to the roles, and the roles' findings are not shown to the caller's lenses until both have reported, so neither side anchors on the other.
 3. **The skill verifies by executing**, as step 4 says, and drops what is refuted.
-4. **It returns the surviving findings to the caller**, in the finding format of step 3, followed by one line per refuted finding with the reason, and any question for the owner under `### For the owner`.
+4. **It returns the surviving findings to the caller**, in the finding format of step 3, followed by one line per refuted finding with the reason, and any question for the owner under `### For the owner`, in the form step 6 gives.
 5. **It posts no comment and applies no fix.** The caller applies what it accepts on its own branch and folds the findings into its own review comment, under its own heading, so a board reads one review per round.
 6. **Its runs count toward the caller's cost.** The return lists each role and verifier run's `output_file` path or spawn description, so the caller's `l3a0:loop-cost` run finds their transcripts and its `## Cost` figure covers them. The ten-run bound of step 4 applies to the team's runs alone.
 
 Two callers are meant to use this mode.
 
-1. **A pull request review**, under the owner's rule that every pull request is reviewed by blind lenses before the owner reads it, and under a repository's `## Pull requests` section that carries that rule. The team's roles join the completeness and over-reach lenses there, and the caller runs those two itself rather than asking this skill to. `review-round.md` beside this file is that caller's procedure.
+1. **A pull request review**, under the owner's rule that every pull request is reviewed by blind lenses before the owner reads it, and under a repository's `## Pull requests` section that carries that rule. The team's roles join the completeness and over-reach lenses there, and on a design the reader lens, and the caller runs those itself rather than asking this skill to. `review-round.md` beside this file is that caller's procedure.
 2. **A review of a blog post before the owner reads it**, such as l3a0/quantitative-trading's `review-post` skill. The subject is the post, seated by the blog-post row of step 2's table.
 
 A caller's own skill should name this mode where it lists its lenses, so a reader of that skill finds it. l3a0/quantitative-trading's `review-post` and `sketch-notes` skills name it, since [l3a0/quantitative-trading PR #783](https://github.com/l3a0/quantitative-trading/pull/783).
