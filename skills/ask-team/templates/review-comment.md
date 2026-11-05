@@ -41,7 +41,7 @@ Surviving vetoes and must-fixes, by the lens that raised them: <lens> <count>, <
 
 ### For the owner
 
-1. **<A question only the owner can rule on, as `review-round.md` step 4 lists them. Work outside this pull request's scope is filed as an issue under `### Left alone` instead.>** <Plain words that stand alone: what is being decided, the metric that decides, the price of each option where it is known, and, unless it goes to the board, one recommendation.> <What the revision does meanwhile. For a finding only the owner's ruling can settle: "This waits for the ruling, and the review stays open."> A dated line on <link> settles it, and a veto the ruling leaves unsatisfied lifts as the ask-team skill's step 5 says.
+1. **<A question only the owner can rule on, as `review-round.md` step 4 lists them. Work outside this pull request's scope is filed as an issue under `### Left alone` instead.>** <Plain words that stand alone: what is being decided, the metric that decides, and then, for a question that goes to the board, any price a role measured, and for any other question, one recommendation and the price of each option.> <What the revision does meanwhile. For a finding only the owner's ruling can settle: "This waits for the ruling, and the review stays open."> A dated line on <link> settles it, and a veto the ruling leaves unsatisfied lifts as the ask-team skill's step 5 says.
 
 <Or: "Nothing here." On a companion pull request, point to where the questions sit.>
 
