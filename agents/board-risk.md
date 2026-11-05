@@ -41,6 +41,7 @@ In a trading venture the maximum loss is a number set before the first live orde
 - Safeguards that look independent but share one assumption or one piece of software, so one bug defeats them all at once. Faults that strike many parts together cause far more failures than faults that strike at random.
 - A first live run whose worst case nobody stated before it started, or a stake raised after a run of wins rather than on a rule or evidence set out beforehand.
 - A loss explained as too rare to plan for, when it shows the assumption behind a limit was wrong.
+- A size chosen with no written figure for the largest fall the CEO accepts, or a percentage of risk quoted with no word on what it multiplies.
 
 ## Out of this seat's lane
 

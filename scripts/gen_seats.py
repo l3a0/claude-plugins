@@ -51,6 +51,11 @@ expected loss or a winning run (independent director) come from Trading in
 the Zone (Douglas, Prentice Hall Press, 2000). The raise after a loss, the
 expected range, restarts and overrides are this plugin's own, not the book's.
 
+The watched failures on a size set with no written fall (chief risk officer)
+and an entry claimed with no comparison against random entries (chief
+scientist) come from Trade Your Way to Financial Freedom (Tharp, 2nd ed.,
+McGraw-Hill, 2007).
+
 The watched failures on a loss called too rare to plan for (chief risk officer)
 and on a success rate or a clean sample offered as proof (chief scientist) come
 from Fooled by Randomness (Taleb, 2nd ed., Random House, 2004).
@@ -231,6 +236,7 @@ SEATS = [
             "Safeguards that look independent but share one assumption or one piece of software, so one bug defeats them all at once. Faults that strike many parts together cause far more failures than faults that strike at random.",
             "A first live run whose worst case nobody stated before it started, or a stake raised after a run of wins rather than on a rule or evidence set out beforehand.",
             "A loss explained as too rare to plan for, when it shows the assumption behind a limit was wrong.",
+            "A size chosen with no written figure for the largest fall the CEO accepts, or a percentage of risk quoted with no word on what it multiplies.",
         ],
         lane=[
             "Whether the strategy has an edge at all: board-scientist.",
@@ -265,6 +271,7 @@ SEATS = [
             "Reference data joined as it stands today rather than as it stood at the time, a quiet form of look-ahead.",
             "A strategy judged on one trade or a short streak, or changed partway through the sample that was meant to judge it, or restarted until one sample happened to look good, or judged on the effect of the CEO's overrides in place of what the strategy's own decisions would have done.",
             "A high win rate quoted with no figure for the size of the losses, or a clean sample read as proof that the bad day it never met is safe.",
+            "An entry credited with a profit that random entries earn just as well through the same exits, size and costs.",
         ],
         lane=[
             "Whether live trading reproduces the backtest: board-cto.",

@@ -91,6 +91,15 @@ ithildin-runtime's docs/design.md adopts it with Kindle locations. The check on 
 cap read from the same value it caps, the delay figure's reading, how a range is
 built and where each check applies are this plugin's own, not the book's.
 
+The checks on results stated as multiples of the risk each took, on how a
+position ends and on random signals through the same exit (quant researcher),
+and on a size set against a written fall and the total at risk (risk engineer)
+come from Trade Your Way to Financial Freedom (Tharp, 2nd ed., McGraw-Hill,
+2007), as ithildin-runtime's docs/design.md adopts it with Kindle locations.
+Reading that risk from a record made at the time, the standard error, blocks
+in a reordering, the comparison with exposure and no timing, and where each
+check applies are this plugin's own, not the book's.
+
 The checks on trying what already exists, a neighbour's contract, a machine
 that holds no state and the workload a product is heading for (architect), and
 on one convention per kind of value (data engineer) come from the owner's
@@ -209,6 +218,9 @@ ROLES = [
             "Where a simulation fills trades against recorded prices, check, where one simulated broker or engine serves several runs, that one fill rule by order type serves them all, and check that no fill uses a price older than the decision's newest input, and that a fill a live order could not have reached is named as such. Check that a simulated result quoted as evidence, meaning offered in favour of a claimed edge, so a replication or a result that kills an idea owes none of this, on data already read and never on held-out data or data a registered test judges, also shows what its recorded quantities earn delayed one step, with the same fill rule, accounting and cost, and says whether it improved, formed from those records rather than by sending anything. An improvement with delay shows nothing on its own, because a strategy with no edge can show one too, and the figure is exploratory. Where the undelayed fill could not have been reached, a result that disappears with delay can kill the idea.",
             "Where a result registered or offered for promotion rests on a relationship holding between two or more things, such as a spread between instruments, check that the claim names why it should hold, the conditions under which it is expected to lose and the sign of return expected there, and one reading that would show it has broken, all committed before the test. Check that the reading's range, never built on held-out data or data a registered test judges and labelled exploratory, leaves out the known break periods, each named by a dated event rather than by the reading, shows the reading in each break, and says how often, on data the range was not computed from, a reading outside it came with no break, with the count of sessions behind that rate.",
             "Where a result depends on an assumed cost, check that it names the cost. Where it is quoted as evidence from data already read, never from held-out data or data a registered test judges, check that it also shows a higher cost, with the margin written before the run, and says whether its sign changed and by how much it moved. The figure is exploratory, and adopting the higher cost because of it counts as a new variant.",
+            "Where a process takes risks of different sizes, such as positions in a strategy, check that its results are quoted as multiples of the risk each one took, with that risk read from a record made when it was taken and never estimated afterwards. Check that a mean of those multiples comes with its count and its standard error, before and after cost, with the largest loss, and that open positions stand apart from closed ones.",
+            "Where a process holds a position until an exit rule fires, check that its plan says how each position ends and what bounds it if that rule never fires, or says that nothing does and why, because a mean-reverting exit can simply fail to arrive.",
+            "Where a simulated result is quoted as evidence for an entry or a signal, on data already read and never on held-out data or data a registered test judges, check that it also shows seeded random entries through the same exit, size and cost, with the count of runs, the median and the share that made money, beside what the same exposure earns with no timing. These runs are exploratory, and a result that kills an idea owes none of them.",
         ],
     },
     {
@@ -283,6 +295,9 @@ ROLES = [
             "Where an action has a size that sets what it can lose, such as an order, check that no input and no agent raises that size or its limit after a run of good results, except through a rule or on evidence a plan named before the run, such as a fixed share of the account or a sample that reached its stated result. Report a raise of a capital limit as a note for the owner rather than ruling on it. The role's veto on a change to a limit still stands. Douglas argues that a run of wins is when rules get broken and positions grow, and a larger position magnifies the next move against it.",
             "Where a limit bounds what an action can lose, check that it states the worst case it assumes and that this case is not read off the record of the process it limits, such as a strategy's backtest, because a record with no bad day shows no bad day. Check that a review of a loss past that worst case names the assumption that failed, never rarity or bad luck.",
             "Where a cap bounds a quantity computed from an outside value, such as a dollar position from a price, check that at least one cap on each action and on each position reads no such value, because a cap computed from the same wrong value passes it, and that a test feeds a wrong value past the input check, through the next step's normal interface with no switch in the code under test, and that each case meant to cross that cap shows the action formed and was refused on it. Where a limit bounds what an action can lose, check that it states what it bounds and why it sits at that level.",
+            "Where a proposal sets or changes the size of actions that can lose money, such as a strategy's position size, check that it sets its result beside the largest fall the owner has written down as acceptable, from one recorded list of results replayed at each candidate size, in order and in seeded reorderings kept in blocks where results may depend on each other. Check that each size tried counts as a try and that the run sets no limit, since it reads the process's own record. A rule names that fall as the owner's decision and sets no value. Report it as a note for the owner.",
+            "Where a share or a percentage sets a size or a limit, check that it names the quantity it multiplies, because the same percent of two bases can be very different risks.",
+            "Where several positions share one pool of capital, check that a report shows the total of their worst losses as a share of that pool, and that a cap on the total, if one is proposed, is reported as a note for the owner.",
         ],
     },
     {
