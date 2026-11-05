@@ -13,19 +13,33 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DELIMITER = re.compile(r"^\s*\|(\s*:?-+:?\s*\|)+\s*$")
 TITLE = re.compile(r"^\s*\*\*Table:\*\* \S")
-FENCE = re.compile(r"^\s*(```|~~~)")
+FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
 
 def untitled(text):
-    """Return the 1-based line of each table header with no title above it."""
+    """Return the 1-based line of each table header with no title above it.
+
+    The check reads pipe tables with outer pipes, the only form these documents
+    use. A table with no outer pipes, or one in a blockquote, goes unread.
+    """
     found = []
-    fenced = False
+    opened = None
     lines = text.split("\n")
     for index, line in enumerate(lines):
-        if FENCE.match(line):
-            fenced = not fenced
+        fence = FENCE.match(line)
+        if opened is None and fence:
+            opened = fence.group(1)
             continue
-        if fenced or index == 0 or not DELIMITER.match(line):
+        if opened is not None:
+            if (
+                fence
+                and fence.group(1)[0] == opened[0]
+                and len(fence.group(1)) >= len(opened)
+                and not fence.group(2).strip()
+            ):
+                opened = None
+            continue
+        if index == 0 or not DELIMITER.match(line):
             continue
         above = index - 2
         while above >= 0 and not lines[above].strip():
@@ -38,8 +52,17 @@ def untitled(text):
 assert untitled("Prose.\n\n| A |\n| --- |\n") == [3]
 assert untitled("**Table:** What A holds\n\n| A |\n| --- |\n") == []
 assert untitled("```\n| A |\n| --- |\n```\n") == []
+assert untitled("**Table:** One\n\n| A |\n| --- |\n\n| B |\n| --- |\n") == [6]
+assert untitled("**Table:** One\n\nProse.\n\n| A |\n| --- |\n") == [5]
+assert untitled("**Table:** One\n| A |\n| --- |\n") == []
+assert untitled("**Table:**\n\n| A |\n| --- |\n") == [3]
+assert untitled("See **Table:** One\n\n| A |\n| --- |\n") == [3]
+assert untitled("Prose.\n\n| A | B |\n| :--- | ---: |\n") == [3]
+assert untitled("~~~\ntext\n~~~\n\n| A |\n| --- |\n") == [5]
+assert untitled("````\n```\n| A |\n| --- |\n````\n") == []
 
 files = subprocess.check_output(["git", "ls-files", "*.md"], cwd=ROOT, text=True).split()
+assert files
 failures = [
     f"{name}:{line}"
     for name in files
