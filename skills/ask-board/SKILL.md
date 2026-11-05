@@ -227,6 +227,8 @@ Date: YYYY-MM-DD. Seated: <seats>.
 Count: agree N, conditional N, disagree N, by final verdict on the judged option. Or "No hypothesis: verdicts not scored."
 Draft against hypothesis: <the draft recommends the judged option, another option, or none>.
 
+**Table:** Each seat's blind and final verdict
+
 | Seat | Blind verdict | Final verdict | Change |
 | --- | --- | --- | --- |
 | <seat> | <agree, conditional or disagree> | <same or new> | <None, a new fact, a flaw in own memo, or NO REASON GIVEN> |
