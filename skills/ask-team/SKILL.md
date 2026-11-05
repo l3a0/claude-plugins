@@ -17,6 +17,8 @@ This skill was drafted for l3a0/ithildin-runtime, a trading platform whose `docs
 
 Each role is an agent in this plugin, launched with the Agent tool's `subagent_type` set to the name below. The agent file carries the role's default definition and adds the checks that role runs. The defaults are this plugin's own. They generalise ithildin-runtime's charter, whose definitions survive as each role's trading case. When the repository under review has a `docs/team-charter.md`, its section for a role overrides that role's default, and the agent reads it first. That is how ithildin-runtime keeps its trading definitions. `scripts/gen_team.py` generates the eight agent files, so their shared sections are edited there and nowhere else.
 
+**Table:** The eight roles, with what each protects and always asks
+
 | Role | `subagent_type` | Protects | Always asks |
 | --- | --- | --- | --- |
 | Architect | `l3a0:team-architect` | One implementation of each behaviour, so what is tested is what runs | Does any module behave differently by environment, or exist twice? |
@@ -67,6 +69,8 @@ Write down what is out of scope, so a role does not review the whole repository.
 ### 2. Seat the roles
 
 Seat the roles whose objective the subject can hurt, between three and six. Seat a role when the subject touches the thing in its row.
+
+**Table:** Which role each subject seats
 
 | The subject touches | Seat |
 | --- | --- |

@@ -5,6 +5,8 @@
 Only the latest release of the `l3a0` plugin is supported. Update with
 `claude plugin update l3a0@l3a0` before reporting an issue.
 
+**Table:** Supported versions
+
 | Version | Supported |
 | ------- | --------- |
 | 0.6.x (latest) | ✅ |

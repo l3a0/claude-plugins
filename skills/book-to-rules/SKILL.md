@@ -9,6 +9,8 @@ Eight books went through this pipeline in four days, ending on 2026-11-05. The f
 
 The worked examples are the eight sets of pull requests. The first four ran before any rule on rounds and stopped after one or two. Two later runs under the rule that a review goes on until nothing significant is left, [l3a0/ithildin-runtime PR #29](https://github.com/l3a0/ithildin-runtime/pull/29) and [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31), had reached seven and six rounds on 2026-11-04 UTC with more to follow, so the jump to eight is not all the cost of skipping step 4's list.
 
+**Table:** The books run so far, and their pull requests
+
 | Book | l3a0/ithildin-runtime | l3a0/claude-plugins | l3a0/repo-template | Review rounds |
 | --- | --- | --- | --- | --- |
 | *The Art of Scalability* | [PR #24](https://github.com/l3a0/ithildin-runtime/pull/24) | [PR #42](https://github.com/l3a0/claude-plugins/pull/42) | none | 1 |

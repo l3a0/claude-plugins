@@ -32,6 +32,8 @@ Under the `milestone-default` input the page also draws a milestone selector und
 
 The page's constants live in its code rather than in the data.
 
+**Table:** The page's constants
+
 | Constant | Holds |
 | --- | --- |
 | `FLOW` | the five in-flight stages and the test that assigns a card to one |
