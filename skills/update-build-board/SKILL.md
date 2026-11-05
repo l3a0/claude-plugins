@@ -28,6 +28,8 @@ Three files beside this one hold what a session needs only some of the time.
 
 Every repository with a board runs one setup. A short caller, `.github/workflows/board.yml` in the repository, calls the reusable workflow `.github/workflows/build-board.yml` in l3a0/repo-template. That workflow runs the generator `scripts/build_board.py` and publishes the page `.claude/skills/update-build-board/board.html`, both read from l3a0/repo-template at the ref the caller pins. What differs between repositories is that pin and the inputs the caller passes. An input changes which labels and lines the generator reads, so find both before setting anything.
 
+**Table:** What each repository pins, and its inputs
+
 | Repository | Pin | Inputs |
 | --- | --- | --- |
 | l3a0/repo-template | `main` | none |
@@ -56,6 +58,8 @@ Only l3a0/repo-template keeps the generator, the page, the page's test stub `dom
 
 Every input is a string that defaults to empty, and an empty one leaves the board as it was before the input existed. An on-or-off input takes empty or `"true"`, quoted because a bare `true` in YAML is a boolean while the inputs are strings. Any other value of an on-or-off input fails the run, and so does a `ranking` other than `order`. A failed run leaves the last board up and says why in its job summary.
 
+**Table:** What each input changes, and how a caller writes it
+
 | Input | What it changes | Written in the caller as |
 | --- | --- | --- |
 | `title` | the page's heading and tab, `<name> build board` when empty | `with: title: Marketlake Build Board` |
@@ -79,6 +83,8 @@ The formats here were checked against the generator at `bde82a9e674432f6db928701
 
 A caller passing an input the called workflow does not declare fails, so each input needs a pin at or after the commit that first declared it. `git log -S` on `.github/workflows/build-board.yml` measured these.
 
+**Table:** Where each input was first declared
+
 | Input | First declared at |
 | --- | --- |
 | `title` | `4bb3f7f`, the first shared workflow |
@@ -92,6 +98,8 @@ A caller passing an input the called workflow does not declare fails, so each in
 | `ranking` | `14656aa` |
 
 From `14656aa` on, every input the workflow declares carries a type. `bde82a9` changed only a test after it, and `fd8317e` only the page and a test. Never pin `4c546fc`. At that commit the `default-branch-head` input carries no type, GitHub refuses the reusable workflow, and every run ends with no jobs. So `owner-body-lines` is first usable at `14656aa`, which fixed the declaration, and `bde82a9` added the test that catches it.
+
+**Table:** What each repository's pin reads
 
 | Repository | Pinned at | Formats that pin reads | Caller read at |
 | --- | --- | --- | --- |
@@ -132,6 +140,8 @@ One repository has tests that read this skill's text. They pin these strings, so
 13. They remove this list from the skill before reading it. The list starts with the sentence "One repository has tests that read this skill's text." and ends at its last numbered item. A paragraph indented under an item is fine, but any other text between the list and the next `## ` heading fails them.
 
 ## Where the board lives
+
+**Table:** Where each part of the board lives
 
 | What | Where |
 | --- | --- |
@@ -274,6 +284,8 @@ Three kinds of marker carry a session's judgement, besides the review heading of
 
 The labels, as the owner or the template's setup script creates them:
 
+**Table:** The labels, with their colours and who reads them
+
 | Label | Colour | Description | Read by |
 | --- | --- | --- | --- |
 | `working:build` | `fbca04` | A build session holds this card until it hands its pull request over | the generator |
@@ -313,6 +325,8 @@ Three rules decide what a line that is read counts for.
 The page loads each section of `board.json` into the variable of the same name in capitals, so `prs` becomes `PRS`, and the rest of this section uses those names. The generator writes each section other than `state` as `{"schema": 1, "items": [...]}`, so a reader takes a section's list from its `items`, such as `.working.items`. `prs` also keeps merged and closed entries, so a reader asking for open pull requests filters on `state == "open"`. Change what GitHub holds. Never hand-write a sentence in the page stating a number the data already carries, because that sentence outlives the number.
 
 ### The sections and their fields
+
+**Table:** Where each field of each section comes from
 
 | Section | Field | Comes from |
 | --- | --- | --- |

@@ -9,6 +9,8 @@ Eight books went through this pipeline in four days, ending on 2026-11-05. The f
 
 The worked examples are the eight sets of pull requests. The first four ran before any rule on rounds and stopped after one or two. Two later runs under the rule that a review goes on until nothing significant is left, [l3a0/ithildin-runtime PR #29](https://github.com/l3a0/ithildin-runtime/pull/29) and [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31), had reached seven and six rounds on 2026-11-04 UTC with more to follow, so the jump to eight is not all the cost of skipping step 4's list.
 
+**Table:** The books run so far, and their pull requests
+
 | Book | l3a0/ithildin-runtime | l3a0/claude-plugins | l3a0/repo-template | Review rounds |
 | --- | --- | --- | --- | --- |
 | *The Art of Scalability* | [PR #24](https://github.com/l3a0/ithildin-runtime/pull/24) | [PR #42](https://github.com/l3a0/claude-plugins/pull/42) | none | 1 |
@@ -168,7 +170,7 @@ Before `git add`, read what `git diff -- <path>` lists, which is every line that
 
 ### 6. Run the review round
 
-Review all three pull requests in one round, by the procedure in the `/l3a0:ask-team` skill's `review-round.md`. It covers one brief for every lens, the completeness and over-reach lenses beside the roles, verifiers that refute by executing, fixes on every companion, pricing, the review comment on each pull request, the body's `## Revision` section and the owner's rulings. Its templates are the brief and the comment. Follow it as written, and add four things a book needs.
+Review all three pull requests in one round, by the procedure in the `/l3a0:ask-team` skill's `review-round.md`. It covers one brief for every lens, the completeness and over-reach lenses and a design's reader lens beside the roles, verifiers that refute by executing, fixes on every companion, pricing, the review comment on each pull request, the body's `## Revision` section and the owner's rulings. Its templates are the brief and the comment. Follow it as written, and add four things a book needs.
 
 1. **The brief's sources section.** The round's brief template leaves "Sources for checking a claim" for the source to supply. Fill `templates/review-sources.md` from this skill and paste it there. It names the book's text file and gives the `pg.py`, `ctx.py` and `overlap.py` commands, so every lens and verifier can check a citation without reading the book. The brief lives in the session's scratchpad, as the round says, and never in a repository.
 2. **The facts not to re-derive.** List the books the design doc and charter already carry, and the owner's dated rulings, by the test of a ruling step 4 points to. A rule that contradicts or restates one of them is a finding, and checks 6 to 8 below say why.

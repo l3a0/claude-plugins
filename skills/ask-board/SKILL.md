@@ -15,6 +15,8 @@ Invoke it as `/l3a0:ask-board`, or let it start on its own when a request matche
 
 Each seat is a plugin agent, launched with the Agent tool's `subagent_type` set to the name below. All ten run on the same model, so each seat's charter names what it optimizes, what it will sacrifice, and the question it always asks. A charter that named only a domain would produce ten copies of one answer.
 
+**Table:** The ten seats, with what each optimizes and always asks
+
 | Seat | `subagent_type` | Optimizes | Always asks |
 | --- | --- | --- | --- |
 | Chief Financial Officer | `l3a0:board-cfo` | Return on capital and on the CEO's hours | Does this beat an index fund after costs and the CEO's time? |
@@ -224,6 +226,8 @@ Date: YYYY-MM-DD. Seated: <seats>.
 
 Count: agree N, conditional N, disagree N, by final verdict on the judged option. Or "No hypothesis: verdicts not scored."
 Draft against hypothesis: <the draft recommends the judged option, another option, or none>.
+
+**Table:** Each seat's blind and final verdict
 
 | Seat | Blind verdict | Final verdict | Change |
 | --- | --- | --- | --- |
