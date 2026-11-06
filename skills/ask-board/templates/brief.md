@@ -55,7 +55,7 @@ What the CEO knows or can do that most people in the same market cannot.
 
 ## Risk rules already in force
 
-Loss limits, kill switches and who or what enforces them, and the largest fall in the account's value the CEO accepts, as a share with its base.
+Loss limits, kill switches and who or what enforces them. For a trading account, also the largest fall the CEO accepts as an input to size, as a share with its base, which is no limit.
 
 -
 
