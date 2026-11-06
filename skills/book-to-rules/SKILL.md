@@ -22,7 +22,7 @@ The worked examples are the ten sets of pull requests. The first four ran before
 | *Fooled by Randomness* | [PR #45](https://github.com/l3a0/ithildin-runtime/pull/45) | [PR #72](https://github.com/l3a0/claude-plugins/pull/72) | none | 3 |
 | *Inside the Black Box* | [PR #47](https://github.com/l3a0/ithildin-runtime/pull/47) | [PR #74](https://github.com/l3a0/claude-plugins/pull/74) | none | 7 |
 | *Trade Your Way to Financial Freedom* | [PR #49](https://github.com/l3a0/ithildin-runtime/pull/49) | [PR #76](https://github.com/l3a0/claude-plugins/pull/76) | none | 6 |
-| *Trading and Exchanges* | [PR #51](https://github.com/l3a0/ithildin-runtime/pull/51) | [PR #77](https://github.com/l3a0/claude-plugins/pull/77) | none | 4 |
+| *Trading and Exchanges* | [PR #51](https://github.com/l3a0/ithildin-runtime/pull/51) | [PR #77](https://github.com/l3a0/claude-plugins/pull/77) | none | 5 |
 
 Read the review comment on the *Code Complete* project pull request first. Its round is the one the `ask-team` skill's review round and comment template were drawn from.
 
