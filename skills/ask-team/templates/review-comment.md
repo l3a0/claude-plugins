@@ -17,7 +17,7 @@ Round <N>, of `<anchor sha>`<, run together with the review of <companion links>
 ### Should fix and notes, applied
 
 - <What changed> (<lenses>). <Add "downgraded from must fix by its verifier, since <the existing rule that already covers it>" where a verdict lowered it.> <Where the fix adds a new kind of record or stored state: which existing records it weighed and why each falls short, or the owner's ruling or request that asks for it.>
-- <A sentence removed or mechanics moved: what went, any link to it on its issue, and what that costs.>
+- <A sentence removed, mechanics moved, or a new record replaced by a read: what went, any link to it on its issue, and what that costs.>
 
 ### Citations corrected
 
