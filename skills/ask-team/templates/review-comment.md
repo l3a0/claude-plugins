@@ -4,7 +4,7 @@ Round <N>, of `<anchor sha>`<, run together with the review of <companion links>
 
 ### Veto, confirmed and fixed
 
-1. **<One-line claim> (<lens that raised it>).** <What breaks, in one or two sentences.> Verified: <what the verifier ran and what it showed>. Fixed: <what the change now says or does>.
+1. **<One-line claim> (<lens that raised it>).** <What breaks, in one or two sentences.> Verified: <what the verifier ran and what it showed>. Fixed: <what the change now says or does>. <Where the fix adds a new kind of record or stored state: which existing records it weighed and why each falls short.>
 
 ### Veto, confirmed and still blocking
 
@@ -12,11 +12,11 @@ Round <N>, of `<anchor sha>`<, run together with the review of <companion links>
 
 ### Must fix, confirmed and fixed
 
-1. **<One-line claim> (<every lens that raised it>).** <What the verifier ran and showed.> Fixed: <what changed>.
+1. **<One-line claim> (<every lens that raised it>).** <What the verifier ran and showed.> Fixed: <what changed>. <Where the fix adds a new kind of record or stored state: which existing records it weighed and why each falls short.>
 
 ### Should fix and notes, applied
 
-- <What changed> (<lenses>). <Add "downgraded from must fix by its verifier, since <the existing rule that already covers it>" where a verdict lowered it.>
+- <What changed> (<lenses>). <Add "downgraded from must fix by its verifier, since <the existing rule that already covers it>" where a verdict lowered it.> <Where the fix adds a new kind of record or stored state: which existing records it weighed and why each falls short.>
 - <A sentence removed or mechanics moved: what went, any link to it on its issue, and what that costs.>
 
 ### Citations corrected

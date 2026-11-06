@@ -30,6 +30,14 @@ for label, text in (("SKILL.md", SKILL), ("review-round.md", ROUND), ("review-co
 for label, text in (("review-round.md", ROUND), ("review-comment.md", TEMPLATE)):
     check(f"{label} names the heading for repeat findings", "### Findings in two rounds" in text)
 
+for label, text in (("SKILL.md", SKILL), ("review-round.md", ROUND), ("review-comment.md", TEMPLATE)):
+    check(f"{label} asks a fix that adds a record what it weighed", "which existing records it weighed" in text)
+
+step5 = ROUND.split("## 5. Apply")[1].split("## 6. ")[0]
+ask = step5.find("a record the design or the code already holds serves")
+check("step 5 asks whether an existing record serves", ask >= 0)
+check("that question sits above the paragraphs it calls below", 0 <= ask < step5.find("Where a passage this change adds"))
+
 subject = re.search(r"^2\. \*\*(.+?)\*\*", SKILL.split("### 1. Name the subject")[1], re.M)
 check("step 1's second subject is the design subject", bool(subject) and "design" in subject.group(1))
 check("the reader lens names subject 2 in step 1", "subject 2 in step 1" in SKILL)
