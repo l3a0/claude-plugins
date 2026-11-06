@@ -41,6 +41,8 @@ step4 = ROUND.split("## 4. Verify")[1].split("## 5. ")[0]
 step5 = ROUND.split("## 5. Apply")[1].split("## 6. ")[0]
 check("step 5 asks before the fix adds a record", "Before a fix adds a new kind of record or stored state" in step5)
 check("step 4 sends a fix changed to read a record to a verifier", "changes to read an existing record goes to a verifier" in step4)
+check("that paragraph sits above the one it calls next", 0 <= step4.find("Ask step 5's question") < step4.find("A should-fix whose fix would change"))
+check("step 5 ties serving to the roles' vetoes", "the vetoes in the role agent files or the charter" in step5)
 ask = step5.find("a record the design or the code already holds serves")
 check("step 5 asks whether an existing record serves", ask >= 0)
 check(
