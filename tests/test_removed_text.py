@@ -94,6 +94,11 @@ with tempfile.TemporaryDirectory() as root:
     code, out, _ = run(f'{design}={d7}..{d8}')
     check('kept text between two cuts splits them into two runs', '2 removed run(s)' in out)
 
+    d9 = commit(design, {'design.md': 'alpha beta gamma delta epsilon kept words stay zeta eta theta iota kappa\n'})
+    d10 = commit(design, {'design.md': 'kept words stay\n'})
+    code, out, _ = run(f'{design}={d9}..{d10}')
+    check('kept words on one line split two cuts into two runs', '2 removed run(s)' in out)
+
     upper, u1 = repo(root, 'upper', {'agent.md': 'THE INPUT CHECK REFUSES ONLY AN ORDER THAT ADDS.\n'})
     code, out, _ = run(f'{design}={d1}..{d2}', f'{upper}={u1}..{u1}')
     check('a copy in another case still matches', f'still in {upper}: agent.md:1' in out)
