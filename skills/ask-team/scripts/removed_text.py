@@ -121,8 +121,8 @@ def main(argv=None):
         specs.append(match.groupdict())
     tracked = [(spec["checkout"], index(tracked_text(spec["checkout"], spec["head"]), args.min_words)) for spec in specs]
     for spec in specs:
-        diff = git(spec["checkout"], "-c", "core.quotepath=off", "diff", "--no-color", "--no-ext-diff", "--no-renames", "--src-prefix=a/", "--dst-prefix=b/", "--word-diff=porcelain",
-                   "-U0", spec["base"], spec["head"], "--")
+        diff = git(spec["checkout"], "-c", "core.quotepath=off", "diff", "--no-color", "--no-ext-diff", "--no-renames",
+                   "--src-prefix=a/", "--dst-prefix=b/", "--word-diff=porcelain", "-U0", spec["base"], spec["head"], "--")
         runs = list(removed_runs(diff, args.min_words))
         print(f"{spec['checkout']} {spec['base']}..{spec['head']}: {len(runs)} removed run(s)")
         for path, text in runs:
