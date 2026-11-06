@@ -38,8 +38,9 @@ def repo(root, name, files):
     return path, commit(path, files)
 
 
-def run(*args):
-    done = subprocess.run([sys.executable, '-I', SCRIPT, *args], capture_output=True, text=True)
+def run(*args, env=None):
+    done = subprocess.run([sys.executable, '-I', SCRIPT, *args], capture_output=True, text=True,
+                          env={**os.environ, **(env or {})})
     return done.returncode, done.stdout, done.stderr
 
 
@@ -127,6 +128,11 @@ with tempfile.TemporaryDirectory() as root:
     n2 = commit(n, {'cut.md': 'x\n'})
     code, out, _ = run(f'{n}={n1}..{n2}')
     check('a file holding a NUL is not searched, whatever its name', 'bin.py' not in out and '- cut.md' in out)
+
+    for option in ('diff.noprefix', 'diff.mnemonicPrefix'):
+        code, out, _ = run(f'{design}={d1}..{d2}', env={'GIT_CONFIG_COUNT': '1', 'GIT_CONFIG_KEY_0': option,
+                                                        'GIT_CONFIG_VALUE_0': 'true'})
+        check(f'the file name survives {option}', f'- design.md: {CUT}' in out)
 
     git(design, 'branch', 'feature', d5)
     code, out, _ = run(f'{design}=feature..{d6}')
