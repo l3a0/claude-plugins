@@ -30,6 +30,30 @@ for label, text in (("SKILL.md", SKILL), ("review-round.md", ROUND), ("review-co
 for label, text in (("review-round.md", ROUND), ("review-comment.md", TEMPLATE)):
     check(f"{label} names the heading for repeat findings", "### Findings in two rounds" in text)
 
+for label, text in (("SKILL.md", SKILL), ("review-round.md", ROUND), ("review-comment.md", TEMPLATE)):
+    check(f"{label} asks a fix that adds a record what it weighed", "which existing records it weighed" in text)
+
+check("each fixed line in the template asks what it weighed", TEMPLATE.count("which existing records it weighed") == 3)
+for label, text in (("SKILL.md", SKILL), ("review-comment.md", TEMPLATE)):
+    check(f"{label} takes the owner's ruling in place of the weighing", "the owner's ruling or request that asks for it" in text)
+
+step4 = ROUND.split("## 4. Verify")[1].split("## 5. ")[0]
+step5 = ROUND.split("## 5. Apply")[1].split("## 6. ")[0]
+check("step 5 asks before the fix adds a record", "Before a fix adds a new kind of record or stored state" in step5)
+check("step 4 sends a fix changed to read a record to a verifier", "changes to read an existing record goes to a verifier" in step4)
+check("that paragraph sits above the one it calls next", 0 <= step4.find("Ask step 5's question") < step4.find("A should-fix whose fix would change"))
+check("step 5 ties serving to the roles' vetoes", "the vetoes in the role agent files or the charter" in step5)
+ask = step5.find("a record the design or the code already holds serves")
+check("step 5 asks whether an existing record serves", ask >= 0)
+check(
+    "that question sits above the paragraphs it calls below",
+    0 <= ask < step5.find("A refuted or lowered finding on a sentence") < step5.find("Where a passage this change adds"),
+)
+skill4 = SKILL.split("### 4. Verify")[1].split("### 5. ")[0]
+skill5 = SKILL.split("### 5. Apply what survives")[1].split("### 6. ")[0]
+check("SKILL.md's step 4 names that fix", "whose fix changed to read an existing record" in skill4)
+check("SKILL.md's step 5 sends a fix that adds a record to the round", "a fix that adds a new kind of record or stored state" in skill5)
+
 subject = re.search(r"^2\. \*\*(.+?)\*\*", SKILL.split("### 1. Name the subject")[1], re.M)
 check("step 1's second subject is the design subject", bool(subject) and "design" in subject.group(1))
 check("the reader lens names subject 2 in step 1", "subject 2 in step 1" in SKILL)

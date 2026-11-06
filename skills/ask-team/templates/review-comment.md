@@ -1,10 +1,10 @@
 ## <`## Review, round <N>` on a round that is not the last, and on the last round the final heading the ask-team skill's step 6 gives>
 
-Round <N>, of `<anchor sha>`<, run together with the review of <companion links>, which carry the same rules>. The roles followed <`docs/team-charter.md` at `<sha>`, or their agent files' defaults, since the repository has no charter>. <Count> lenses ran blind to each other: completeness, over-reach, <reader, on a design,> and through `/l3a0:ask-team`'s lens mode the <roles>. <Count> verifiers then tried to refute every veto and must-fix<, and each should-fix `review-round.md`'s step 4 names,> by executing<, and the main thread confirmed <which must-fixes> by running <command>>. <Quote commands with paths relative to the repository, never an absolute local path.> `<fix sha>` applies this round's changes<here>. <Or, where nothing survived and nothing was removed: "Nothing survived verification, so this round changes nothing."> <On the last round, where it applied should-fixes, a removal or a move: "No lens read this round's edits." Name any in the class `review-round.md`'s step 4 names, with whether a verifier read its fix, and any removal or move.>
+Round <N>, of `<anchor sha>`<, run together with the review of <companion links>, which carry the same rules>. The roles followed <`docs/team-charter.md` at `<sha>`, or their agent files' defaults, since the repository has no charter>. <Count> lenses ran blind to each other: completeness, over-reach, <reader, on a design,> and through `/l3a0:ask-team`'s lens mode the <roles>. <Count> verifiers then tried to refute every veto and must-fix<, and each should-fix `review-round.md`'s step 4 names,> by executing<, and the main thread confirmed <which must-fixes> by running <command>>. <Quote commands with paths relative to the repository, never an absolute local path.> `<fix sha>` applies this round's changes<here>. <Or, where nothing survived and nothing was removed: "Nothing survived verification, so this round changes nothing."> <On the last round, where it applied should-fixes, a removal or a move: "No lens read this round's edits." Name any in the class `review-round.md`'s step 4 names, with whether a verifier read its fix, any removal or move, and any fix changed to read an existing record.>
 
 ### Veto, confirmed and fixed
 
-1. **<One-line claim> (<lens that raised it>).** <What breaks, in one or two sentences.> Verified: <what the verifier ran and what it showed>. Fixed: <what the change now says or does>.
+1. **<One-line claim> (<lens that raised it>).** <What breaks, in one or two sentences.> Verified: <what the verifier ran and what it showed>. Fixed: <what the change now says or does>. <Where the fix adds a new kind of record or stored state: which existing records it weighed and why each falls short, or the owner's ruling or request that asks for it.>
 
 ### Veto, confirmed and still blocking
 
@@ -12,12 +12,12 @@ Round <N>, of `<anchor sha>`<, run together with the review of <companion links>
 
 ### Must fix, confirmed and fixed
 
-1. **<One-line claim> (<every lens that raised it>).** <What the verifier ran and showed.> Fixed: <what changed>.
+1. **<One-line claim> (<every lens that raised it>).** <What the verifier ran and showed.> Fixed: <what changed>. <Where the fix adds a new kind of record or stored state: which existing records it weighed and why each falls short, or the owner's ruling or request that asks for it.>
 
 ### Should fix and notes, applied
 
-- <What changed> (<lenses>). <Add "downgraded from must fix by its verifier, since <the existing rule that already covers it>" where a verdict lowered it.>
-- <A sentence removed or mechanics moved: what went, any link to it on its issue, and what that costs.>
+- <What changed> (<lenses>). <Add "downgraded from must fix by its verifier, since <the existing rule that already covers it>" where a verdict lowered it.> <Where the fix adds a new kind of record or stored state: which existing records it weighed and why each falls short, or the owner's ruling or request that asks for it.>
+- <A sentence removed, mechanics moved, or a new record replaced by a read: what went, any link to it on its issue, and what that costs.>
 
 ### Citations corrected
 
