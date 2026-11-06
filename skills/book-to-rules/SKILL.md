@@ -93,7 +93,7 @@ Get the highlights either way. They are how the owner says which points matter, 
 
 ### 2. Split the text into parts and map the highlights
 
-Pick part boundaries at chapter starts, from the table of contents, so no reader starts mid-argument. The nine runs used five to seven parts of about 8,800 to 69,000 words each.
+Pick part boundaries at chapter starts, from the table of contents, so no reader starts mid-argument. The ten runs used five to ten parts of about 8,800 to 69,000 words each.
 
 ```bash
 python3 -I "$SKILL/scripts/split_parts.py" "$RUN/book_pages.txt" "$RUN/parts" \
