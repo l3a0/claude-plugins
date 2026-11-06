@@ -1,6 +1,6 @@
 ## <`## Review, round <N>` on a round that is not the last, and on the last round the final heading the ask-team skill's step 6 gives>
 
-Round <N>, of `<anchor sha>`<, run together with the review of <companion links>, which carry the same rules>. The roles followed <`docs/team-charter.md` at `<sha>`, or their agent files' defaults, since the repository has no charter>. <Count> lenses ran blind to each other: completeness, over-reach, <reader, on a design,> and through `/l3a0:ask-team`'s lens mode the <roles>. <Count> verifiers then tried to refute every veto and must-fix by executing<, and the main thread confirmed <which must-fixes> by running <command>>. <Quote commands with paths relative to the repository, never an absolute local path.> `<fix sha>` applies this round's changes<here>. <Or, where nothing survived and nothing was removed: "Nothing survived verification, so this round changes nothing."> <On the last round, where it applied should-fixes, a removal or a move: "No lens read this round's edits." Name any that changes a limit, an order of steps, a permission or a halt condition, and any removal or move.>
+Round <N>, of `<anchor sha>`<, run together with the review of <companion links>, which carry the same rules>. The roles followed <`docs/team-charter.md` at `<sha>`, or their agent files' defaults, since the repository has no charter>. <Count> lenses ran blind to each other: completeness, over-reach, <reader, on a design,> and through `/l3a0:ask-team`'s lens mode the <roles>. <Count> verifiers then tried to refute every veto and must-fix<, and each should-fix `review-round.md`'s step 4 names,> by executing<, and the main thread confirmed <which must-fixes> by running <command>>. <Quote commands with paths relative to the repository, never an absolute local path.> `<fix sha>` applies this round's changes<here>. <Or, where nothing survived and nothing was removed: "Nothing survived verification, so this round changes nothing."> <On the last round, where it applied should-fixes, a removal or a move: "No lens read this round's edits." Name any in the class `review-round.md`'s step 4 names, with whether a verifier read its fix, and any removal or move.>
 
 ### Veto, confirmed and fixed
 
@@ -30,6 +30,10 @@ Round <N>, of `<anchor sha>`<, run together with the review of <companion links>
 ### Left alone
 
 - <A surviving finding not applied, and why, such as out of scope or filed as <issue link>.>
+
+### Findings in two rounds
+
+- <A passage that meets the second-round condition in `review-round.md`'s step 5, naming the rounds, and whether it moves, or why not. Delete this section when no passage does.>
 
 ### Checks
 

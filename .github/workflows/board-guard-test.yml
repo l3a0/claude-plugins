@@ -23,6 +23,8 @@ jobs:
         run: python3 tests/test_brief_anchors.py
       - name: ask-team review_post tests
         run: python3 tests/test_review_post.py
+      - name: Test the removed-text script
+        run: python3 tests/test_removed_text.py
       - name: next_version tests
         run: python3 tests/test_next_version.py
       - name: ask-team's cross-references hold

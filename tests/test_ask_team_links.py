@@ -27,6 +27,9 @@ def check(name, ok):
 for label, text in (("SKILL.md", SKILL), ("review-round.md", ROUND), ("review-comment.md", TEMPLATE)):
     check(f"{label} names the owner's heading", "### For the owner" in text)
 
+for label, text in (("review-round.md", ROUND), ("review-comment.md", TEMPLATE)):
+    check(f"{label} names the heading for repeat findings", "### Findings in two rounds" in text)
+
 subject = re.search(r"^2\. \*\*(.+?)\*\*", SKILL.split("### 1. Name the subject")[1], re.M)
 check("step 1's second subject is the design subject", bool(subject) and "design" in subject.group(1))
 check("the reader lens names subject 2 in step 1", "subject 2 in step 1" in SKILL)
