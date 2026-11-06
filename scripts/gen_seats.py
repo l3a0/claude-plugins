@@ -56,6 +56,10 @@ and an entry credited with what random entries earn just as well (chief
 scientist) come from Trade Your Way to Financial Freedom (Tharp, 2nd ed.,
 McGraw-Hill, 2007).
 
+The watched failures on capital left at a broker that can fail and on a worst
+loss that assumes a position can always be left (chief risk officer) come from
+Trading and Exchanges (Harris, Oxford University Press, 2003).
+
 The watched failures on a loss called too rare to plan for (chief risk officer)
 and on a success rate or a clean sample offered as proof (chief scientist) come
 from Fooled by Randomness (Taleb, 2nd ed., Random House, 2004).
@@ -237,6 +241,7 @@ SEATS = [
             "A first live run whose worst case nobody stated before it started, or a stake raised after a run of wins rather than on a rule or evidence set out beforehand.",
             "A loss explained as too rare to plan for, when it shows the assumption behind a limit was wrong.",
             "A size put on real capital with no written figure for the largest fall the CEO accepts, or a percentage of risk quoted with no word on what it multiplies.",
+            "Capital left at a broker that can fail, or a worst loss that assumes a position can always be held and left, with nothing said of what a broker or a venue can do to it.",
         ],
         lane=[
             "Whether the strategy has an edge at all: board-scientist.",

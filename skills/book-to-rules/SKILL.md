@@ -5,9 +5,9 @@ description: Turn a book into rules for an engineering team and design principle
 
 # Book to rules
 
-Nine books went through this pipeline in four days, ending on 2026-11-05. The first four, *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*, each worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them. The fifth, *Building Microservices*, ran with this skill and still took eight review rounds, which step 7 prices. Step 4's list of what other work owns is the lesson of that run. The sixth, *Trading in the Zone*, took fourteen, most of them on mechanics a rule stated rather than pointed to.
+Ten books went through this pipeline in four days, ending on 2026-11-05. The first four, *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*, each worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them. The fifth, *Building Microservices*, ran with this skill and still took eight review rounds, which step 7 prices. Step 4's list of what other work owns is the lesson of that run. The sixth, *Trading in the Zone*, took fourteen, most of them on mechanics a rule stated rather than pointed to.
 
-The worked examples are the nine sets of pull requests. The first four ran before any rule on rounds and stopped after one or two. Two later runs under the rule that a review goes on until nothing significant is left, [l3a0/ithildin-runtime PR #29](https://github.com/l3a0/ithildin-runtime/pull/29) and [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31), had reached seven and six rounds on 2026-11-04 UTC with more to follow, so the jump to eight is not all the cost of skipping step 4's list.
+The worked examples are the ten sets of pull requests. The first four ran before any rule on rounds and stopped after one or two. Two later runs under the rule that a review goes on until nothing significant is left, [l3a0/ithildin-runtime PR #29](https://github.com/l3a0/ithildin-runtime/pull/29) and [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31), had reached seven and six rounds on 2026-11-04 UTC with more to follow, so the jump to eight is not all the cost of skipping step 4's list.
 
 **Table:** The books run so far, and their pull requests
 
@@ -22,6 +22,7 @@ The worked examples are the nine sets of pull requests. The first four ran befor
 | *Fooled by Randomness* | [PR #45](https://github.com/l3a0/ithildin-runtime/pull/45) | [PR #72](https://github.com/l3a0/claude-plugins/pull/72) | none | 3 |
 | *Inside the Black Box* | [PR #47](https://github.com/l3a0/ithildin-runtime/pull/47) | [PR #74](https://github.com/l3a0/claude-plugins/pull/74) | none | 7 |
 | *Trade Your Way to Financial Freedom* | [PR #49](https://github.com/l3a0/ithildin-runtime/pull/49) | [PR #76](https://github.com/l3a0/claude-plugins/pull/76) | none | 6 |
+| *Trading and Exchanges* | [PR #51](https://github.com/l3a0/ithildin-runtime/pull/51) | [PR #77](https://github.com/l3a0/claude-plugins/pull/77) | none | 1 |
 
 Read the review comment on the *Code Complete* project pull request first. Its round is the one the `ask-team` skill's review round and comment template were drawn from.
 
@@ -85,6 +86,8 @@ The text comes from one of two places.
 2. **The Kindle book alone.** The `kindle-highlights` skill extracts the owner's highlights into `<ASIN>_highlights.json`, and its full-book path sweeps the Cloud Reader into `book.txt`, one block per screen, headed by the reader's footer.
 
 Before a Cloud Reader sweep, set the reader's footer to show locations. The footer shows whatever the reader is set to, and the *Designing Data-Intensive Applications* sweep came back headed by Kindle page numbers alone. Some books offer no location at all: the *Incerto* bundle's settings list only page and time, and writing `locationInBook` into the reader's settings blanked its footer. For such a sweep, the `kindle-highlights` skill's `locmap.py` pins each screen to the locations of the highlights found on it, interpolates the rest, and writes `book_loc.txt` with `Location N` and `Location ~N` headers. The scripts read all three forms, but only a location the reader printed is exact.
+
+Where the owner's highlights already sit recovered in Markdown, such as `### Location N` sections from an earlier `kindle-highlights` run, build `<ASIN>_highlights.json` from that file rather than scraping the notebook again, as the *Trading and Exchanges* run did for 1,211 highlights. Run `stitch.py` without `-I`, because it imports its neighbour `cutter.py`, and run it from the run directory.
 
 Get the highlights either way. They are how the owner says which points matter, and a reader marks a highlighted point `[H]`. Printed pages are the better citation where a PDF exists, because a reader of the repository can find them in a paper copy and an OCR location is good only to about one screen. In a repository, write an estimated location with an escaped tilde, as `L\~6930`, the form [PR #25](https://github.com/l3a0/ithildin-runtime/pull/25) used.
 
