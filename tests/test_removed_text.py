@@ -103,12 +103,39 @@ with tempfile.TemporaryDirectory() as root:
     code, out, _ = run(f'{design}={d1}..{d2}', f'{upper}={u1}..{u1}')
     check('a copy in another case still matches', f'still in {upper}: agent.md:1' in out)
 
+    a, a1 = repo(root, 'a', {'cut.md': 'one two three four five\n', 'near.md': 'six seven eight nine\n', 'keep.md': 'x\n'})
+    b, b1 = repo(root, 'b', {'copy.md': 'one two three four five\n', 'near.md': 'six seven eight nine\n'})
+    a2 = commit(a, {'cut.md': 'x\n', 'near.md': 'x\n'})
+    code, out, _ = run(f'{a}={a1}..{a2}', f'{b}={b1}..{b1}')
+    check('a run of exactly the minimum is listed and found', '- cut.md: one two three four five' in out
+          and f'still in {b}: copy.md:1' in out)
+    check('a run one word short of the minimum is not listed', '- near.md' not in out)
+
+    r, r1 = repo(root, 'r', {'old.md': 'alpha beta gamma delta epsilon zeta\n'})
+    git(r, 'mv', 'old.md', 'new.md')
+    r2 = commit(r, {})
+    code, out, _ = run(f'{r}={r1}..{r2}')
+    check('a renamed file shows as removed and still in its new name', '- old.md: alpha beta' in out
+          and f'still in {r}: new.md:1' in out)
+
+    u, u1 = repo(root, 'u', {'ü file.md': 'alpha beta gamma delta epsilon zeta\n'})
+    u2 = commit(u, {'ü file.md': 'x\n'})
+    code, out, _ = run(f'{u}={u1}..{u2}')
+    check('a path with a space and a non-ASCII letter prints as it is', '- ü file.md: alpha beta' in out)
+
+    n, n1 = repo(root, 'n', {'bin.py': 'x\0y alpha beta gamma delta epsilon\n', 'cut.md': 'alpha beta gamma delta epsilon\n'})
+    n2 = commit(n, {'cut.md': 'x\n'})
+    code, out, _ = run(f'{n}={n1}..{n2}')
+    check('a file holding a NUL is not searched, whatever its name', 'bin.py' not in out and '- cut.md' in out)
+
     git(design, 'branch', 'feature', d5)
     code, out, _ = run(f'{design}=feature..{d6}')
     check('takes a branch name as a commit', code == 0 and 'feature..' in out)
 
     code, _, err = run(f'{design}={d1}')
     check('refuses an argument with no range', code != 0 and 'CHECKOUT=FROM..TO' in err)
+    code, _, err = run(f'{design}={d1}...{d2}')
+    check('refuses a three-dot range', code != 0 and 'CHECKOUT=FROM..TO' in err)
     code, _, err = run('--min-words', '0', f'{design}={d1}..{d2}')
     check('refuses a minimum of zero', code != 0 and 'at least 1' in err)
     code, _, err = run(f'{design}={d1}..nosuchcommit')

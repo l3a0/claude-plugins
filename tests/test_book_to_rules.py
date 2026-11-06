@@ -162,6 +162,10 @@ with tempfile.TemporaryDirectory() as d:
     check('ctx --grep also searches the next block', '1 block(s)' in out and 'p. 4' in out)
     code, out, _ = run('ctx.py', '--grep', pages, '3:nothing in this book says this')
     check('ctx --grep says when no block matches', code == 0 and '0 block(s)' in out)
+    code, out, _ = run('ctx.py', '--grep', pages, '4:(', '4:ESTIMATES THAT')
+    check('ctx --grep names a bad pattern and goes on to the next', 'BADREGEX' in out and '1 block(s)' in out)
+    code, out, _ = run('ctx.py', '--grep', pages, '4:', '4')
+    check('ctx --grep refuses an empty pattern rather than match every block', out.count('EMPTY') == 2)
     code, out, _ = run('ctx.py', '--grep', pages, '999:estimates')
     check('ctx --grep says when the key names nothing', 'NOKEY' in out)
 

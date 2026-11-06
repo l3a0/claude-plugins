@@ -11,7 +11,7 @@ the run in a row. So a sentence cut from one pull request and left in its compan
 of runs is what the round's comment has to describe. A run also shows as `still in` where the fix moved it or kept
 its words, so each hit needs reading. It changes nothing, and exits 0 either way.
 
-Matching folds case and joins words across line breaks, so a sentence wrapped differently in each repository still
+A file holding a NUL byte counts as binary and is not searched, whatever its name. Matching folds case and joins words across line breaks, so a sentence wrapped differently in each repository still
 matches. Only the removed words are searched, so a sentence reworded in a companion does not show.
 """
 
@@ -78,8 +78,10 @@ def tracked_text(checkout, commit):
     for path in git(checkout, "ls-tree", "-r", "--name-only", commit).splitlines():
         if not TEXT_FILE.search(path):
             continue
-        tokens = []
-        for number, line in enumerate(git(checkout, "show", f"{commit}:{path}").splitlines(), 1):
+        text, tokens = git(checkout, "show", f"{commit}:{path}"), []
+        if "\0" in text:
+            continue
+        for number, line in enumerate(text.splitlines(), 1):
             tokens.extend((number, word) for word in words(line))
         files[path] = tokens
     return files
@@ -114,7 +116,7 @@ def main(argv=None):
     specs = []
     for spec in args.specs:
         match = SPEC.match(spec)
-        if not match:
+        if not match or "..." in spec.rpartition("=")[2]:
             parser.error(f"{spec!r} is not CHECKOUT=FROM..TO")
         specs.append(match.groupdict())
     tracked = [(spec["checkout"], index(tracked_text(spec["checkout"], spec["head"]), args.min_words)) for spec in specs]

@@ -47,7 +47,14 @@ def main(argv):
     if use_grep:
         for arg in argv[1:]:
             key, _, pattern = arg.partition(':')
-            hits = grep(blocks, key, pattern)
+            if not pattern:
+                print(f'--- {key} [] EMPTY: give a pattern after the colon')
+                continue
+            try:
+                hits = grep(blocks, key, pattern)
+            except re.error as err:
+                print(f'--- {key} [{pattern}] BADREGEX: {err}')
+                continue
             print(f'--- {key} [{pattern}] ' + ('NOKEY' if hits is None else f'{len(hits)} block(s)'))
             for block, passage in hits or []:
                 print(f'[{block.label}] {passage}')
