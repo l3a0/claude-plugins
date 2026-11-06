@@ -13,7 +13,7 @@ Three helpers check a claim against the book. Each takes a key, which is a print
     python3 -I {{SKILL_DIR}}/scripts/overlap.py {{RUN_DIR}}/{{TEXT_FILE}} <diff or draft>
 
 1. `pg.py` says whether the phrase is on the cited page and, when it is not, where it is.
-2. `ctx.py` prints the passage around it, to judge whether a rule claims more than the page says.
+2. `ctx.py` prints the passage around it, to judge whether a rule claims more than the page says. With `--grep`, it takes a regular expression instead of a phrase and searches the cited block and the next one.
 3. `overlap.py` reports any run of six or more words a diff or a draft shares with the book.
 
 A rule that points to another issue or pull request leaves its mechanics to that work, as the brief's `## Out of scope` says. Its guarantee and any citation are still checked against the book.
