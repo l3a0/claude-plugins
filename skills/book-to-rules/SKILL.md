@@ -5,7 +5,7 @@ description: Turn a book into rules for an engineering team and design principle
 
 # Book to rules
 
-Ten books went through this pipeline in four days, ending on 2026-11-05. The first four, *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*, each worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them. The fifth, *Building Microservices*, ran with this skill and still took eight review rounds, which step 7 prices. Step 4's list of what other work owns is the lesson of that run. The sixth, *Trading in the Zone*, took fourteen, most of them on mechanics a rule stated rather than pointed to.
+Ten books went through this pipeline in five days, ending on 2026-11-06 UTC. The first four, *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*, each worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them. The fifth, *Building Microservices*, ran with this skill and still took eight review rounds, which step 7 prices. Step 4's list of what other work owns is the lesson of that run. The sixth, *Trading in the Zone*, took fourteen, most of them on mechanics a rule stated rather than pointed to.
 
 The worked examples are the ten sets of pull requests. The first four ran before any rule on rounds and stopped after one or two. Two later runs under the rule that a review goes on until nothing significant is left, [l3a0/ithildin-runtime PR #29](https://github.com/l3a0/ithildin-runtime/pull/29) and [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31), had reached seven and six rounds on 2026-11-04 UTC with more to follow, so the jump to eight is not all the cost of skipping step 4's list.
 
@@ -22,7 +22,7 @@ The worked examples are the ten sets of pull requests. The first four ran before
 | *Fooled by Randomness* | [PR #45](https://github.com/l3a0/ithildin-runtime/pull/45) | [PR #72](https://github.com/l3a0/claude-plugins/pull/72) | none | 3 |
 | *Inside the Black Box* | [PR #47](https://github.com/l3a0/ithildin-runtime/pull/47) | [PR #74](https://github.com/l3a0/claude-plugins/pull/74) | none | 7 |
 | *Trade Your Way to Financial Freedom* | [PR #49](https://github.com/l3a0/ithildin-runtime/pull/49) | [PR #76](https://github.com/l3a0/claude-plugins/pull/76) | none | 6 |
-| *Trading and Exchanges* | [PR #51](https://github.com/l3a0/ithildin-runtime/pull/51) | [PR #77](https://github.com/l3a0/claude-plugins/pull/77) | none | 7 |
+| *Trading and Exchanges* | [PR #51](https://github.com/l3a0/ithildin-runtime/pull/51) | [PR #77](https://github.com/l3a0/claude-plugins/pull/77) | none | 8 |
 
 Read the review comment on the *Code Complete* project pull request first. Its round is the one the `ask-team` skill's review round and comment template were drawn from.
 
