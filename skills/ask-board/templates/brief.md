@@ -55,7 +55,7 @@ What the CEO knows or can do that most people in the same market cannot.
 
 ## Risk rules already in force
 
-Loss limits, kill switches and who or what enforces them.
+Loss limits, kill switches and who or what enforces them, and the largest fall in the account's value the CEO accepts, as a share with its base.
 
 -
 
