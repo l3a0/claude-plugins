@@ -183,7 +183,7 @@ Prices a finished plan, build or review loop in tokens and dollars, measured fro
 
 ### book-to-rules
 
-Eight books became rules for an engineering team in four days. The first four runs each worked out the same pipeline again at about 15 to 32 US dollars a book. This skill holds that pipeline in seven steps.
+Nine books became rules for an engineering team in four days. The first four runs each worked out the same pipeline again at about 15 to 32 US dollars a book. This skill holds that pipeline in seven steps.
 
 1. Get the full text, through `kindle-highlights` for a Kindle book or `book-text` for a PDF.
 2. Split it into reading parts at chapter starts, and find the page of each of the owner's highlights.
