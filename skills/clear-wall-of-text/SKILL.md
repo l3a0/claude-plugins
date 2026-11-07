@@ -71,12 +71,13 @@ Change only the shape. New words appear only in the opening, headings, table cel
 
 ### 6. Render it and look
 
-A diagram that renders can still be wrong, so read the picture. Two faults pass a render check, and `ask-team`'s `scripts/diagram_words.py` looks for both.
+A diagram that renders can still be wrong, so read what it drew. Three faults pass a render check, and `ask-team`'s `scripts/diagram_words.py` looks for all three.
 
 1. A flowchart, state or class label that starts like a Markdown block, such as "1. Refit" or "- Refit". Mermaid 11.4.1 draws "Unsupported markdown: list" in the box. Start the label with a word, such as "Step 1:".
 2. Two statements joined on one line, which still parse because a sequence message runs to the end of its line. The arrow disappears into a label. In a scripted edit, match leading spaces with `[ \t]+`, never `\s+`, which also matches a newline and pulls the next statement onto the line.
+3. A hash or a semicolon that ends a label early. A sequence label such as "order #4 is filled" draws "order". Write the entity, `#35;` for a hash or `#59;` for a semicolon.
 
-Run `python3 <this plugin>/skills/ask-team/scripts/diagram_words.py page <repo> <new folder>/out.html`, which prints each fault it finds, serve that folder with `python3 -m http.server <port> --bind 127.0.0.1 --directory <new folder>`, open the page in a browser and read every box. The page needs a connection to the CDN that serves Mermaid. It draws with Mermaid 12.2.0, the version GitHub's viewer held on 2026-11-06, which draws the first fault's words, so the printed list rather than the picture names that fault. Where the rewrite rewords an existing diagram, `diagram_words.py compare <repo> <base commit>` checks that its structure did not change. Run the repository's lint and tests too.
+Run `python3 <this plugin>/skills/ask-team/scripts/diagram_words.py page <repo> <new folder>/out.html`, which prints each fault it finds, serve that folder with `python3 -m http.server <port> --bind 127.0.0.1 --directory <new folder>`, open the page in a browser and read each diagram's listed words. The page needs a connection to the CDN that serves Mermaid. It draws with Mermaid 12.2.0, the version GitHub's viewer held on 2026-11-06, which draws the first fault's words, so the printed list rather than the words names that fault. Where the rewrite rewords an existing diagram, `diagram_words.py compare <repo> <base commit>` checks that its structure did not change. Run the repository's lint and tests too.
 
 ### 7. Have a fresh reader check the meaning
 
