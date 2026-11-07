@@ -428,10 +428,10 @@ with tempfile.TemporaryDirectory() as root:
             done = subprocess.run([chrome, '--headless=new', '--no-sandbox', '--disable-gpu', '--timeout=30000',
                                    '--virtual-time-budget=25000', f'--user-data-dir={os.path.join(root, "chrome" + version)}',
                                    '--dump-dom', 'file://' + page], capture_output=True, text=True, timeout=120)
-            return done.stdout
+            return re.sub(r'<script.*?</script>', '', done.stdout, flags=re.S)
         with open(os.path.join(repo, 'doc.md'), 'a') as f:
             f.write('\n```mermaid\nflowchart TD\n    a[ --> \n```\n')
-            f.write('\n```mermaid\nmindmap\n    root\n```\n')
+            f.write('\n```mermaid\nflowchart TD\n    %% nothing to draw\n```\n')
         dom = drawn('12.2.0')
         check('a drawn page reports the two faults and the block that cannot draw', re.search(r'10 of 11 drew, in Mermaid 12\.2\.0, 4 failed', dom))
         check('a drawn page lists the words, with a line break shown', 'Refit the hedge / over 20 days' in dom)
