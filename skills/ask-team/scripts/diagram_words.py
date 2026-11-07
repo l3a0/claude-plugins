@@ -3,52 +3,60 @@
 
 Usage:
     diagram_words.py compare <repo> <base commit> [--terms-file FILE] [--prose-may-change]
-    diagram_words.py page <repo> <out.html> [--mermaid VERSION]
+    diagram_words.py page <repo> <new folder>/out.html
 
-Both commands name the two faults that pass a render check.
+Both commands name three faults that pass a render check.
 
 1. Two statements joined on one line, which Mermaid draws as one. A sequence
    diagram draws one message whose label holds the second statement. A state
    diagram can draw one arrow, or a second one with no line of its own.
 2. A flowchart, state or class label that starts like a Markdown block, such as
    "1. Refit". Mermaid 11.4.1 draws "Unsupported markdown: list" in its place,
-   and 11.12.0 and 12.2.0 draw the words, so the fault depends on the reader's
-   version. The check reads node and edge text, subgraph titles, state
-   transitions, names, descriptions and one-line notes, and class names,
-   relations and notes. A label in any other form, such as a state note over
-   several lines, reaches only a page drawn at an older version, which reports
-   what Mermaid printed there. A join with one space and no arrow or note, such
-   as "acks activate B", reads as a sentence, so only the drawn words show it.
+   and 11.12.0 and 12.2.0 draw the words, so a reader's version decides whether
+   this shows. The check reads node text, edge text with a space on each side,
+   subgraph titles, state transitions, names, descriptions and one-line notes,
+   and class names, relations and notes. A label in any other form, such as a
+   state note or node label over several lines or a class member, goes unnamed.
+3. A hash or semicolon that ends a label early. A sequence label stops at either
+   one, and a semicolon in a state label draws more states. An entity such as
+   #quot; is exempt.
+
+These are checks on what Mermaid reads, by patterns over one line at a time. They
+catch the forms a real restyle produced and do not read Mermaid's whole grammar, so
+a clean result is no proof. A one- or two-space join with no arrow or note, such as
+"acks activate B", reads as a sentence, and only the drawn words show it.
 
 compare checks that a restyle of a diagram's words changed nothing else. It takes
 every Markdown file that differs between the base commit and the working tree, so
 check out the commit under review first. It splits each line of a block into
 structure and label, and fails on:
 
-- any change of structure: a participant, an arrow, a node, an edge, a state,
-  a block keyword or the number of lines,
-- a label that moved to another line or another place on its line,
+- any change of structure: a participant, an arrow, a node, an edge, a state, a
+  block keyword, a line's indent or the number of lines,
+- two whole labels in one block that traded places,
 - on a changed label, a number or code identifier that differs in value or order.
-  An identifier is a backticked span, snake_case, camelCase or name.ext. A number
-  keeps its sign and a percent mark, and the word after it is not compared,
+  An identifier is a backticked span, snake_case, camelCase, name() or name.ext. A
+  number written in digits keeps its sign and a percent mark,
 - on a changed label, a term from --terms-file that was lost. A term is matched as
   a lowercase substring, so "journal" also holds "journaled". Build the file from
   the repository's documented vocabulary,
-- on a changed label, an em dash, a semicolon, a hash or first person that the old
-  label did not hold. A semicolon and a hash can end a label early. An entity such
-  as #quot; is exempt,
-- on a changed line in a changed block, either fault above,
+- on a changed label, a new em dash or first person,
+- on a changed line in a changed block, any fault above,
 - text outside the blocks, unless --prose-may-change makes that a note.
 
 An unchanged line in a changed block reports a fault as a note. So does a changed
 label segment longer than 58 characters, the width the first restyle wrapped at,
-and a quoted string that changed in a sequence, state, class or entity label,
-because an entry name stays exact. A label form this script cannot split is
-compared as a whole line, so a change to it fails rather than passing unread. A
-pass covers structure and those values. It says nothing about whether a new label
-means what the old one meant.
+and a quoted string that changed in a sequence, state, class or entity label. A
+label form this script cannot split is compared as a whole line, so a change to it
+fails rather than passing unread, and a comment is ignored.
 
-It exits 0 on a pass, 1 on a failure, and 2 when it could compare nothing, so a
+A pass covers structure and those values. It does not read meaning, so a lens still
+reads each new label. These pass and are the lens's to catch: a number written as a
+word, the word after a number, a state or participant named in a label, a reworded
+label that moved, a label that moved between blocks, and a diagram outside a *.md
+file or inside a blockquote.
+
+It exits 0 on a pass, 1 on a failure, and 2 when it compared no changed label, so a
 wrong base commit never reads as a pass.
 
 page prints the faults it finds, and writes one HTML file that draws every Mermaid
@@ -60,18 +68,18 @@ anyone's words:
     diagram_words.py page <repo> <new folder>/out.html
     python3 -m http.server <port> --bind 127.0.0.1 --directory <new folder>
 
-Open the page in a browser. Its heading counts what drew, then it lists every block
-that failed to draw, drew no words, printed "Unsupported markdown" or holds either
-fault, then each diagram's words. The page loads Mermaid
-from a CDN at the version --mermaid names, by default the one GitHub's viewer held
-on 2026-11-06, which carries no published advisory there. A content security policy
-stops a diagram's script from running or sending anything out at any version. At
-11.4.1 a label can still move the page to another address, which reads no file.
+Open the page in a browser. Its heading counts what drew, then it lists every fault
+and every block that failed to draw or drew no words, then each diagram's words. The
+page loads Mermaid 12.2.0 from a CDN at a pinned integrity value, the version GitHub's
+viewer held on 2026-11-06, which carries no published advisory there. A content
+security policy stops a diagram's script from running and stops the page loading or
+sending anything else. Mermaid 12.2.0 itself removes the markup that could move the
+page, which the policy cannot stop, so a new version must pass that test again. The
+page draws as 12.2.0 draws, so a clean page does not clear a label for a reader on an
+older version. CI's browser test needs that CDN, so an outage there fails the step.
 """
 import argparse
 import collections
-import difflib
-import html
 import json
 import os
 import re
@@ -81,35 +89,37 @@ import sys
 
 MERMAID = "12.2.0"
 MERMAID_SHA384 = "sha384-8xUhuLNMjW/cI2Dacg3DR4WliYznvIg0LVG1stctThKD/YVrJFI9TNCFxft5NYgp"
-CDN = "https://cdn.jsdelivr.net/npm/mermaid@{}/dist/mermaid.min.js"
+CDN = f"https://cdn.jsdelivr.net/npm/mermaid@{MERMAID}/dist/mermaid.min.js"
 WRAP = 58
 MAX_BYTES = 5_000_000
+MAX_LINE = 5_000  # Longer than any real label, and the patterns below slow down past it.
 
 # Any indent, so a fence inside a list item is read too.
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})\s*(\S*)")
+ACTOR = r"[\w-]+"
 SEQ_ARROW = r"(?:<<-->>|<<->>|-->>|->>|-->|->|--x|-x|--\)|-\))"
-SEQ_MSG = re.compile(r"^(\w+)\s*(" + SEQ_ARROW + r")\s*([+-]?)(\w+)\s*:\s*(.*)$")
-SEQ_NOTE = re.compile(r"^Note\s+(over|left of|right of)\s+([\w, ]+?)\s*:\s*(.*)$", re.I)
+SEQ_MSG = re.compile(rf"^({ACTOR}?)\s*({SEQ_ARROW})\s*([+-]?)({ACTOR})\s*:\s*(.*)$")
+SEQ_NOTE = re.compile(r"^Note\s+(over|left of|right of)\s+([\w, -]+?)\s*:\s*(.*)$", re.I)
 SEQ_KEY = re.compile(r"^(loop|alt|else|opt|par|and|critical|option|break|rect)\b\s*(.*)$")
 SEQ_JOIN = re.compile(
-    r"\S {3,}\S|[\w-]+\s*" + SEQ_ARROW + r"\s*[+-]?[\w-]+\s*:|\bNote\s+(?:over|left of|right of)\s+[\w, -]+?\s*:", re.I
+    rf"\S {{3,}}\S|{ACTOR}\s*{SEQ_ARROW}\s*[+-]?{ACTOR}\s*:|\bNote\s+(?:over|left of|right of)\s+[\w, -]+?\s*:", re.I
 )
-SEQ_STATEMENT = re.compile(r"^[\w-]+\s*" + SEQ_ARROW + r"\s*[+-]?[\w-]+\s*:")
+SEQ_STATEMENT = re.compile(rf"^{ACTOR}?\s*{SEQ_ARROW}\s*[+-]?{ACTOR}\s*:")
 STATE_EDGE = re.compile(r"^(\S+?)\s*-->\s*(\S+?)(?:\s*:\s*(.*))?$")
-STATE_NOTE = re.compile(r"^note\s+(left of|right of)\s+(\S+?)\s*:\s*(.*)$")
+STATE_NOTE = re.compile(r"^note\s+(left of|right of)\s+(\S+?)\s*:\s*(.*)$", re.I)
 STATE_NAME = re.compile(r'^state\s+"([^"]*)"')
 STATE_TEXT = re.compile(r"^([\w-]+)\s*:\s*(.*)$")
-STATE_JOIN = re.compile(r"-->\s*\S+\s*(?::.*)?$")
+STATE_JOIN = re.compile(r"-->\s*\S+\s*(?::.*)?$|\S {3,}\S|\bnote\s+(?:left of|right of)\s+\S+\s*:", re.I)
 CLASS_NAME = re.compile(r'^(class\s+\S+?)\["([^"]*)"\](.*)$')
 CLASS_RELATION = re.compile(r"^(\S.*?(?:--|\.\.)[^:]*):\s*(.*)$")
 CLASS_NOTE = re.compile(r'^(note\b[^"]*)"([^"]*)"\s*$')
 ER_REL = re.compile(r'^(\S+\s+\S+(?:--|\.\.)\S+\s+\S+)\s*:\s*(?:"(.*)"|(\S+))$')
-FLOW_EXACT = re.compile(r"^(?:%%|classDef\b|class\b|style\b|linkStyle\b|click\b|direction\b|end\b|flowchart\b|graph\b)")
+FLOW_EXACT = re.compile(r"^(?:.*@\{|%%|classDef\b|class\b|style\b|linkStyle\b|click\b|direction\b|end\b|flowchart\b|graph\b)")
 FLOW_SUBGRAPH = re.compile(r"subgraph\s+([^\[\"]*)")
 FLOW_EDGE = re.compile(r"(?<![-=.])(--|==|-\.)\s+((?:(?!--|==|\.-).)+?)\s+(-->|==>|\.->|---|===|-\.-|--x|--o)(?=\s|$)")
-MARKDOWN_BLOCK = re.compile(r"^\s*`?(?:\d+[.)]|[-+*]|#{1,6}|>)\s|^\s*-{3,}\s*$")
-IDENT = re.compile(r"`[^`]+`|\b\w+_\w+\b|\b[A-Za-z][a-z0-9]+[A-Z]\w*\b|\b[\w-]+\.[A-Za-z]\w*\b")
-NUMBER = re.compile(r"[-+−]?\d+(?:\.\d+)?%?")
+MARKDOWN_BLOCK = re.compile(r"^\s*`?(?:\d+[.)]|[-+*]|#{1,6}|>)(?:\s|$)|^\s*(?:-{3,}|\*{3,}|_{3,})\s*$")
+IDENT = re.compile(r"`[^`]+`|\b\w+\(\)|\b\w+_\w+\b|\b[a-z][a-zA-Z0-9]*[A-Z]\w*\b|\b[A-Z][a-z0-9]+[A-Z]\w*\b|\b[\w-]{2,}\.[A-Za-z]\w+\b")
+NUMBER = re.compile(r"(?:(?<!\w)-|[+−])?\d+(?:\.\d+)?%?")
 ENTITY = re.compile(r"#\w+;")
 FIRST_PERSON = re.compile(r"\b(?:I(?!/)|[Mm]y|[Mm]ine|[Ww]e|[Oo]ur)\b")
 OPENERS = {"[": "]", "(": ")", "{": "}"}
@@ -124,15 +134,18 @@ FAMILIES = (
 
 
 def git(repo, *args):
-    done = subprocess.run(
-        ("git", "-C", repo, *args), capture_output=True, text=True, encoding="utf-8", errors="replace"
-    )
-    return done.returncode, done.stdout, done.stderr.strip()
+    done = subprocess.run(("git", "-C", repo, *args), capture_output=True)
+    return done.returncode, done.stdout.decode(errors="replace"), done.stderr.decode(errors="replace").strip()
 
 
 def stop(message):
     print(message, file=sys.stderr)
     sys.exit(2)
+
+
+def plain(text):
+    """Blank control characters, so a diagram's words cannot steer a terminal."""
+    return re.sub(r"[\x00-\x09\x0b-\x1f\x7f]", "?", text)
 
 
 def split_blocks(text):
@@ -157,6 +170,8 @@ def split_blocks(text):
         if block is None:
             outside.append(line)
         elif not closes:
+            if len(line) > MAX_LINE:
+                raise ValueError(f"line {number} is over {MAX_LINE} characters")
             block.append((number, line))
         else:
             blocks.append((start, block))
@@ -322,8 +337,14 @@ def faults(family, text, labels):
             found.append(f"second statement suspected on this line: {text}")
     if family == "state":
         head, _, label = text.partition(":")
-        if head.count("-->") > 1 or STATE_JOIN.search(label):
+        named = STATE_NAME.match(text) and "-->" in text
+        if named or head.count("-->") > 1 or STATE_JOIN.search(label):
             found.append(f"second statement suspected on this line: {text}")
+    if family in ("sequence", "state"):
+        marks = "#;" if family == "sequence" else ";"
+        for label in labels:
+            if any(mark in ENTITY.sub("", label) for mark in marks):
+                found.append(f"hash or semicolon ends this label early: {label}")
     if family in ("flowchart", "state", "class"):
         for label in labels:
             if MARKDOWN_BLOCK.match(label):
@@ -342,18 +363,24 @@ def block_faults(lines):
     return found
 
 
+def markdown_files(repo, *which):
+    code, out, err = git(repo, "ls-files", "-z", *which, "--exclude-standard", "--", "*.md")
+    if code:
+        stop(f"git ls-files failed: {err}")
+    return set(out.split("\0")) - {""}
+
+
 def changed_files(repo, base):
     code, out, err = git(repo, "diff", "-z", "--name-only", "--no-renames", base, "--", "*.md")
     if code:
         stop(f"git diff {base} failed: {err}")
-    code, more, err = git(repo, "ls-files", "-z", "--others", "--exclude-standard", "--", "*.md")
-    if code:
-        stop(f"git ls-files failed: {err}")
-    return sorted(set(out.split("\0") + more.split("\0")) - {""})
+    return sorted((set(out.split("\0")) - {""}) | markdown_files(repo, "--others"))
 
 
 def read_base(repo, base, path):
     code, out, _ = git(repo, "show", f"{base}:{path}")
+    if len(out) > MAX_BYTES:
+        raise ValueError(f"over {MAX_BYTES} bytes at the base commit")
     return out if code == 0 else ""
 
 
@@ -371,9 +398,8 @@ def read_file(repo, path):
         return handle.read()
 
 
-def rose(old, new, pattern):
-    """Say whether a label holds more of a mark than it did, leaving out entities."""
-    return len(re.findall(pattern, ENTITY.sub("", new))) > len(re.findall(pattern, ENTITY.sub("", old)))
+def per_label(pattern, labels):
+    return [pattern.findall(label) for label in labels]
 
 
 def compare_line(path, family, old, new, terms, block_changed, report, notes):
@@ -381,6 +407,8 @@ def compare_line(path, family, old, new, terms, block_changed, report, notes):
     old_line, new_number, new_line = old[1], new[0], new[1]
     skeleton = SKELETONS.get(family, skel_exact)
     old_text, new_text = old_line.strip(), new_line.strip()
+    if old_text.startswith("%%") and new_text.startswith("%%"):
+        return [], []
     old_skel, old_labels = skeleton(old_text)
     new_skel, new_labels = skeleton(new_text)
     place = f"{path}:{new_number}"
@@ -394,17 +422,14 @@ def compare_line(path, family, old, new, terms, block_changed, report, notes):
     if old_line == new_line:
         return old_labels, new_labels
     was, now = " | ".join(old_labels), " | ".join(new_labels)
-    for bad, name in (("—", "em dash"), (";", "semicolon"), ("#", "hash")):
-        if rose(was, now, bad):
-            report(f"{place}: {name} in label: {now}")
-    if rose(was, now, FIRST_PERSON):
+    if "—" in now and "—" not in was:
+        report(f"{place}: em dash in label: {now}")
+    if len(FIRST_PERSON.findall(now)) > len(FIRST_PERSON.findall(was)):
         report(f"{place}: first person: {now}")
-    if now.count('"') % 2:
-        report(f"{place}: unmatched quote: {now}")
-    if NUMBER.findall(was) != NUMBER.findall(now):
-        report(f"{place}: numbers changed: {was!r} -> {now!r}")
-    if IDENT.findall(was) != IDENT.findall(now):
-        report(f"{place}: identifiers changed: {was!r} -> {now!r}")
+    if per_label(NUMBER, old_labels) != per_label(NUMBER, new_labels):
+        report(f"{place}: numbers differ or moved: {was!r} -> {now!r}")
+    if per_label(IDENT, old_labels) != per_label(IDENT, new_labels):
+        report(f"{place}: identifiers differ or moved: {was!r} -> {now!r}")
     lost = {term for term in terms if term in was.lower() and term not in now.lower()}
     if lost:
         report(f"{place}: pinned term dropped {sorted(lost)}: {was!r} -> {now!r}")
@@ -417,11 +442,19 @@ def compare_line(path, family, old, new, terms, block_changed, report, notes):
 
 
 def moved_labels(pairs):
-    """Return each label that left its place and landed where another changed label stood."""
+    """Return each label that traded places with another changed label."""
     old = {(line, index): label for line, (labels, _) in enumerate(pairs) for index, label in enumerate(labels)}
     new = {(line, index): label for line, (_, labels) in enumerate(pairs) for index, label in enumerate(labels)}
     changed = {place for place in old if place in new and old[place] != new[place]}
-    return sorted({new[place] for place in changed for other in changed - {place} if new[place] == old[other]})
+    arrived = {new[place] for place in changed}
+    return sorted(
+        {
+            new[place]
+            for place in changed
+            for other in changed - {place}
+            if new[place] == old[other] and old[place] in arrived
+        }
+    )
 
 
 def compare(args):
@@ -431,14 +464,17 @@ def compare(args):
     base = base.strip()
     terms = []
     if args.terms_file:
-        with open(args.terms_file, encoding="utf-8") as handle:
-            terms = [line.strip().lower() for line in handle if line.strip()]
+        try:
+            with open(args.terms_file, encoding="utf-8") as handle:
+                terms = [line.strip().lower() for line in handle if line.strip()]
+        except OSError as error:
+            stop(f"cannot read the terms file: {error}")
 
     failures, notes = [], []
 
     def report(message):
         failures.append(message)
-        print("FAIL", message)
+        print("FAIL", plain(message))
 
     blocks_seen, lines_seen, labels_changed = 0, collections.Counter(), 0
     for path in changed_files(args.repo, base):
@@ -448,14 +484,10 @@ def compare(args):
         except ValueError as error:
             report(f"{path}: {error}")
             continue
-        added, removed = [], []
-        matcher = difflib.SequenceMatcher(a=old_out, b=new_out, autojunk=False)
-        for op, a1, a2, b1, b2 in matcher.get_opcodes():
-            if op != "equal":
-                removed += old_out[a1:a2]
-                added += new_out[b1:b2]
-        if added or removed:
-            message = f"{path}: text outside the blocks changed, {len(removed)} lines out, {len(added)} in"
+        if old_out != new_out:
+            before, after = collections.Counter(old_out), collections.Counter(new_out)
+            out_count, in_count = sum((before - after).values()), sum((after - before).values())
+            message = f"{path}: text outside the blocks changed, {out_count} lines out, {in_count} in"
             (notes.append if args.prose_may_change else report)(message)
         if not old_blocks and not new_blocks:
             continue
@@ -483,53 +515,48 @@ def compare(args):
     print("blocks compared:", blocks_seen)
     print("lines compared by kind:", dict(lines_seen))
     print("lines whose label changed:", labels_changed)
-    print("notes:", *(notes or ["none"]), sep="\n  ")
-    if blocks_seen == 0 and not failures:
-        print("RESULT: NOTHING COMPARED, no changed Markdown file holds a Mermaid block")
+    print("notes:", *(plain(note) for note in notes or ["none"]), sep="\n  ")
+    if labels_changed == 0 and not failures:
+        print("RESULT: NOTHING COMPARED, no changed Markdown file holds a changed Mermaid label")
         return 2
     print("RESULT:", "FAILED" if failures else "PASS", f"({len(failures)} failures)")
     return 1 if failures else 0
 
 
 PAGE = """<!doctype html><meta charset=utf-8>
-<meta http-equiv=Content-Security-Policy content="default-src 'none'; script-src 'nonce-%(nonce)s' %(url)s; style-src 'unsafe-inline'; img-src data:; font-src data:">
+<meta http-equiv=Content-Security-Policy content="default-src 'none'; script-src 'nonce-%(nonce)s' %(url)s; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'">
 <title>drawing</title>
 <h1 id=head>Drawing</h1><pre id=failed></pre><pre id=drawn></pre><div id=out></div>
-<script src="%(url)s"%(integrity)s></script>
-<script nonce=%(nonce)s>const BLOCKS=%(blocks)s;const VERSION=%(version)s;
-const failed=[],drawn=[],out=document.getElementById('out');
-function show(head){
-document.getElementById('head').textContent=head;
+<script src="%(url)s" integrity="%(integrity)s" crossorigin=anonymous></script>
+<script nonce=%(nonce)s>const BLOCKS=%(blocks)s;
+const failed=BLOCKS.flatMap(b=>b.faults),drawn=[],out=document.getElementById('out');
+function show(head){document.getElementById('head').textContent=head;
 document.getElementById('failed').textContent=failed.join('\\n');
 document.getElementById('drawn').textContent=drawn.map(d=>d.place+'\\n  '+d.words.join('\\n  ')).join('\\n\\n');
-out.remove();document.title='done'}
+out.remove()}
 (async()=>{mermaid.initialize({startOnLoad:false});
-for(const [i,b] of BLOCKS.entries()){const place=b.file+':'+b.line;failed.push(...b.faults);
+for(const [i,b] of BLOCKS.entries()){const place=b.file+':'+b.line;
 try{const r=await mermaid.render('d'+i,b.src);const d=document.createElement('div');d.innerHTML=r.svg;out.appendChild(d);
 d.querySelectorAll('br').forEach(e=>e.replaceWith(' / '));
 const words=[...d.querySelectorAll('text, foreignObject')].map(e=>e.textContent.replace(/\\s+/g,' ').trim()).filter(Boolean);
 drawn.push({place,words});
-if(!words.length)failed.push(place+': drew no words');
-for(const w of words)if(w.startsWith('Unsupported markdown'))failed.push(place+': drew '+w)
+if(!words.length)failed.push(place+': drew no words')
 }catch(e){failed.push(place+': '+String(e.message||e).slice(0,300))}}
-show(drawn.length+' of '+BLOCKS.length+' drew, in Mermaid '+VERSION+', '+failed.length+' failed')
+show(drawn.length+' of '+BLOCKS.length+' drew, '+failed.length+' failed')
 })().catch(e=>{failed.push('the page could not run: '+String(e.message||e).slice(0,300));
-show('Mermaid '+VERSION+' did not load, so nothing drew')});</script>
+show('Mermaid did not load, so nothing drew')});</script>
 """
 
 
 def page(args):
-    if not re.fullmatch(r"\d+\.\d+\.\d+", args.mermaid):
-        stop(f"--mermaid takes an exact version such as {MERMAID}, not {args.mermaid}")
     folder = os.path.dirname(os.path.abspath(args.out))
+    if not os.path.isdir(folder):
+        stop(f"{folder} does not exist")
     others = set(os.listdir(folder)) - {os.path.basename(args.out)}
     if others:
         stop(f"{folder} holds other files, and serving it would serve them: use a new folder")
-    code, out, err = git(args.repo, "ls-files", "-z", "--", "*.md")
-    if code:
-        stop(f"git ls-files failed: {err}")
     blocks, found = [], []
-    for path in (path for path in out.split("\0") if path):
+    for path in sorted(markdown_files(args.repo, "--cached", "--others")):
         try:
             parsed, _ = split_blocks(read_file(args.repo, path))
         except ValueError as error:
@@ -542,22 +569,18 @@ def page(args):
     if not blocks:
         print("no Mermaid block in those files", file=sys.stderr)
         return 2
-    integrity = ""
-    if args.mermaid == MERMAID:
-        integrity = f' integrity="{MERMAID_SHA384}" crossorigin=anonymous'
     with open(args.out, "w", encoding="utf-8") as handle:
         handle.write(
             PAGE
             % {
                 "nonce": secrets.token_hex(16),
-                "url": html.escape(CDN.format(args.mermaid), quote=True),
-                "integrity": integrity,
-                "version": json.dumps(args.mermaid),
+                "url": CDN,
+                "integrity": MERMAID_SHA384,
                 "blocks": json.dumps(blocks).replace("<", "\\u003c"),
             }
         )
-    print(f"wrote {len(blocks)} blocks to {args.out}, for Mermaid {args.mermaid}")
-    print("faults:", *(found or ["none"]), sep="\n  ")
+    print(f"wrote {len(blocks)} blocks to {args.out}, for Mermaid {MERMAID}")
+    print("faults:", *(plain(fault) for fault in found or ["none"]), sep="\n  ")
     return 0
 
 
@@ -573,7 +596,6 @@ def main():
     two = commands.add_parser("page", help="write a page that lists the words each block drew")
     two.add_argument("repo")
     two.add_argument("out")
-    two.add_argument("--mermaid", default=MERMAID, help=f"the Mermaid version to draw with, by default {MERMAID}")
     two.set_defaults(run=page)
     args = parser.parse_args()
     return args.run(args)
