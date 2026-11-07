@@ -123,7 +123,7 @@ Launch every seated role in one message, in the background. Each prompt carries 
 2. The path of the repository's `docs/team-charter.md` and its commit, or that it has none.
 3. The files and issues to read, with absolute paths for any checkout.
 4. What is out of scope.
-5. The finding format, which each agent file already carries, so naming it is enough.
+5. The finding format, which each agent file already carries, so naming it is enough, and the template's `## What each kind means`, which no agent file carries.
 6. A scratch folder of its own, such as `<scratchpad>/team-<role>/`, because parallel agents writing to one folder overwrite each other.
 
 No prompt carries another role's findings or the delivery lead's view of the subject. A role that reads "the lead thinks this is fine" reviews that sentence instead of the code.
@@ -150,9 +150,9 @@ A finding is a claim until something executes it. For every veto and every must-
 2. A claim that a path exists, such as an order reaching a broker around the gate: write the call and run it.
 3. A claim about another repository or a vendor: read the file at its commit, or the vendor's own page.
 
-A must-fix that rests on a fact one command shows, such as a line in a file, a phrase in a source or a comment on an issue, may be confirmed by the delivery lead running that command instead. The lead only confirms this way. A veto, and any finding the lead's command would refute or lower, goes to a verifier, because the lead wrote or owns the change and cannot refute a finding against it. Where a session runs `review-round.md`, its step 4 adds the should-fixes that reach a limit, a halt condition, a record, an order of steps or a permission, because that session owns the fix. That step also adds a question where a session weighs cutting text an earlier round added, or moving or cutting a passage. It also sends a verifier any veto, must-fix or should-fix whose fix changed to read an existing record instead of adding a new one. The review comment says which findings the lead confirmed and that the cost figure leaves those checks out, because they ran in the lead's own context.
+A must-fix that rests on a fact one command shows, such as a line in a file, a phrase in a source or a comment on an issue, may be confirmed by the delivery lead running that command instead. The lead only confirms this way. A veto, and any finding the lead's command would refute or lower, goes to a verifier, because the lead wrote or owns the change and cannot refute a finding against it. The one exception is a veto that names a surviving mutant, which the lead may confirm by running that mutant. A run where the mutant dies goes to a verifier, as does anything on the path to an irreversible action. Where a session runs `review-round.md`, its step 4 adds the should-fixes that reach a limit, a halt condition, a record, an order of steps or a permission, because that session owns the fix. That step also adds a question where a session weighs cutting text an earlier round added, or moving or cutting a passage. It also sends a verifier any veto, must-fix or should-fix whose fix changed to read an existing record instead of adding a new one. The review comment says which findings the lead confirmed and that the cost figure leaves those checks out, because they ran in the lead's own context.
 
-Group findings that rest on the same fact under one verifier. Keep each round of a review under ten agent runs where the subject allows, counting the roles, the completeness, over-reach and reader lenses, and the verifiers.
+A verifier's prompt carries `templates/review-brief.md`'s `## What each kind means` as well, because no agent file holds it. Group findings that rest on the same fact under one verifier. Keep each round of a review under ten agent runs where the subject allows, counting the roles, the completeness, over-reach and reader lenses, and the verifiers.
 
 ### 5. Apply what survives
 
