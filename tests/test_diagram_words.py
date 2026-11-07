@@ -473,8 +473,33 @@ with tempfile.TemporaryDirectory() as root:
     ):
         code, out = edited(root, 'span' + name.replace(' ', ''), (old, new), text=f'```mermaid\nflowchart TD\n    {old}\n```\n')
         check(f'a node hidden by {name} is structure', code == 1 and 'structure changed' in out)
-    code, out = edited(root, 'quotedlink', ('a -- b', 'a -- the b'), text='```mermaid\nflowchart TD\n    x["a -- b"] --> y\n```\n')
-    check('a quoted label can hold a link and still change', code == 0)
+    for name, text, old in (
+        ('in a node', '    x["a --> b"] --> y', 'a --> b'),
+        ('on an edge', '    a -- "x --> y" --> b', 'x --> y'),
+    ):
+        code, out = edited(root, 'ql' + name.replace(' ', ''), (old, 'the ' + old), text=f'```mermaid\nflowchart TD\n{text}\n```\n')
+        check(f'a quoted label {name} can hold an arrow and still change', code == 0)
+    for name, text, old in (
+        ('an equals test on an edge', '    a{Sized?} -->|z == 0| b', 'z == 0'),
+        ('an equals test in a node', '    a{count == 0} --> b', 'count == 0'),
+        ('a command flag', '    a[git log --oneline] --> b', 'git log'),
+        ('a flag on an edge', '    a --> |uv run --frozen| b', 'uv run'),
+        ('a dash in a node', '    x[a -- b] --> y', 'a -- b'),
+    ):
+        code, out = edited(root, 'lk' + name.replace(' ', ''), (old, 'the ' + old), text=f'```mermaid\nflowchart TD\n{text}\n```\n')
+        check(f'{name} is a label that can change', code == 0)
+    for name, text, old, new in (
+        ('after a label with a dash', '    a -->|hold -- wait| c --> d', 'c --> d', 'e --> d'),
+        ('beside a node with a dash', '    a[x -- y] & c --> b', '& c', '& e'),
+        ('a style class after a dash', '    a[x -- y]:::hot --> b', ':::hot', ':::cold'),
+        ('after a dotted label', '    a -->|x -. y| c .-> d', 'c .->', 'e .->'),
+    ):
+        code, out = edited(root, 'dn' + name.replace(' ', ''), (old, new), text=f'```mermaid\nflowchart TD\n{text}\n```\n')
+        check(f'a node {name} is structure', code == 1 and 'structure changed' in out)
+    er = '```mermaid\nerDiagram\n    P ||--o{ O : a\n```\n'
+    for name, new in (('a colon', 'P ||--o{ O : a:b'), ('a link', 'P ||--o{ O : ac||--o{d')):
+        code, out = edited(root, 'erl' + name.replace(' ', ''), ('P ||--o{ O : a', new), text=er)
+        check(f'an unquoted entity label cannot hold {name}', code == 1 and 'structure changed' in out)
     code, out = edited(root, 'sgspace', ('"Order flow"', '"How an order flows"'), text='```mermaid\nflowchart TD\n    subgraph "Order flow"\n    a --> b\n    end\n```\n')
     check('a subgraph title with a space is no id, so it can change', code == 0)
     code, out = edited(root, 'erjoin', ('"gets filled by"', '"gets filled by" C ||--o{ D : "y"'))
