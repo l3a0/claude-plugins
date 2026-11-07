@@ -61,6 +61,11 @@ exact access). Reports of particular interest:
   request bodies as the user's `gh` login, sending back a body it read from
   GitHub. In scope is any path where text in a pull request steers what it
   posts, or where it writes outside the body's `## Revision` section.
+- `diagram_words.py`, in `ask-team`, writes a local page that draws a
+  repository's diagrams, whoever wrote them, with Mermaid loaded from
+  `cdn.jsdelivr.net`. A content security policy on the page confines it. In
+  scope is any way a diagram runs a script there or sends data off the machine,
+  or any way the script reads a file outside the repository.
 - `update-build-board` and `sync-prune-next` act on GitHub as the user's
   `gh` login, setting labels, posting comments, dispatching a workflow, and
   deleting local worktrees and branches. In scope is any path where text in

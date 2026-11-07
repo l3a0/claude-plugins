@@ -67,6 +67,8 @@ check("the script the lens runs exists", script.exists())
 for command in ("diagram_words.py page", "diagram_words.py compare"):
     check(f"the lens and the script agree on {command}", command in lens and command.split()[-1] in script.read_text())
 check("the lens names the words Mermaid draws in a label's place", "Unsupported markdown: list" in lens and "Unsupported markdown" in script.read_text())
+default = re.search(r'^MERMAID = "(.+)"$', script.read_text(), re.M)
+check("the version the lens calls the page's default is the script's", bool(default) and f"{default.group(1)} that GitHub's viewer held on 2026-11-06, which is the page's default" in lens)
 
 for word in ("recommendation", "metric", "price"):
     step6 = SKILL.split("### 6. Post and price")[1].split("## Lens mode")[0]
