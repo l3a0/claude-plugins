@@ -504,8 +504,8 @@ with tempfile.TemporaryDirectory() as root:
     folder = os.path.join(root, 'hdrfolder')
     os.mkdir(folder)
     check('page reads no fault in a YAML header', 'none' in run('page', repo, os.path.join(folder, 'out.html'))[1])
-    slow = '```mermaid\nsequenceDiagram\n' + ''.join(f'    Note over{" " * 950}x{n}\n' for n in range(40)) + '```\n'
-    code, out = edited(root, 'slowcmp', ('x7', 'x8'), text=slow)
+    slow = '```mermaid\nflowchart TD\n' + ''.join(f'    a{n} --{" " * 950}x{n}\n' for n in range(40)) + '```\n'
+    code, out = edited(root, 'slowcmp', ('x7\n', 'y7\n'), text=slow)
     check('compare cuts a long run of spaces', code != 124)
     code, out = edited(root, 'slowword', ('b[Write the plan]', 'b["' + 'w' * 900 + '"]'))
     check('compare reads a long unbroken word', code != 124)
