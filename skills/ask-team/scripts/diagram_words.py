@@ -234,7 +234,7 @@ def faults(kind, text, labels):
     if kind == "sequenceDiagram":
         if any(SEQ_JOIN.search(label) for label in labels):
             found.append(f"second statement joined to this line: {text}")
-    if kind in ("stateDiagram-v2", "stateDiagram") and len(re.findall(r"-->", text)) > 1:
+    if kind in ("stateDiagram-v2", "stateDiagram") and text.count("-->") > 1:
         found.append(f"second statement joined to this line: {text}")
     if kind in ("flowchart", "graph", "stateDiagram-v2", "stateDiagram"):
         words = labels + STATE_NAME.findall(text)
