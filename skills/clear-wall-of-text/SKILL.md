@@ -51,7 +51,7 @@ A diagram sits beside the list it draws and keeps that list's order. Mermaid's l
 
 A request for sketch notes on a design doc gets a Mermaid diagram, because a Mermaid block lives in the document and moves with its text.
 
-The words in a diagram follow the same rules as the prose. A label says what happens, in a phrase with a verb and a clear actor. Spell out shorthand, hold one idea in a label, and wrap a long one.
+The words in a diagram follow the same rules as the prose. A label says what happens, in a phrase with a verb and a clear actor, and one that only names a component or a participant needs no verb. Spell out shorthand, hold one idea in a label, and wrap a long one.
 
 ### 4. State each rule it cites
 

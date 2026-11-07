@@ -111,6 +111,7 @@ lens = SKILL.split("also gets a reader lens")[1].split("The reader lens's findin
 check("the reader lens counts its questions", "It asks six things." in lens)
 check("the reader lens lists that many", re.findall(r"^(\d)\. ", lens.split("Questions 3 and 6")[0], re.M) == list("123456"))
 check("the questions it names exist", "Questions 3 and 6 read the words the renderer drew" in lens)
+check("a label that only names something needs no verb", "only names a component or a participant needs no verb" in lens)
 script = ROOT / "skills/ask-team/scripts/diagram_words.py"
 check("the script the lens runs exists", script.exists())
 for command in ("diagram_words.py page", "diagram_words.py compare"):
