@@ -56,7 +56,7 @@ label segment longer than 58 characters, the width the first restyle wrapped at,
 and a quoted string that changed in a sequence, state or class label. A label form
 this script cannot split is compared as a whole line, so a change to it fails rather
 than passing unread, and an unquoted label that holds an arrow, such as "x --> y",
-reads as such a form. A comment is ignored, and a directive or a YAML header compares as a
+reads as such a form, apart from a flag shape written a>text]. A comment is ignored, and a directive or a YAML header compares as a
 whole line.
 
 A pass covers structure and those values. It does not read meaning, so a lens still
@@ -130,8 +130,8 @@ ER_REL = re.compile(r'^(\S+\s+\S+(?:--|\.\.)\S+\s+\S+)\s*:\s*(?:"([^"]*)"|((?:(?
 FLOW_EXACT = re.compile(r"^(?:.*@\{|%%|(?:classDef|class|style|linkStyle|click|direction|end|flowchart|graph)(?=\s|$))")
 FLOW_SUBGRAPH = re.compile(r"subgraph\s+([^\[\"]*)")
 FLOW_QUOTED_SUBGRAPH = re.compile(r'subgraph\s+"([^"\s]*)"')
-FLOW_ARROWS = ("-->", "==>", ".->", "---", "===")
-FLOW_CROSS = re.compile(r"--[xo](?=\s|$)")
+FLOW_ARROWS = ("-->", "==>", ".->", "---", "===", "-.-")
+FLOW_CROSS = re.compile(r"(?:--|==|\.-)[xo](?=\s|$)|\.-(?=\s|$)")
 FLOW_EDGE = re.compile(r"(?<![-=.])(--|==|-\.)\s+((?:(?!--|==|\.-).)+?)\s+(-->|==>|\.->|---|===|-\.-|--x|--o)(?=\s|$)")
 MARKDOWN_BLOCK = re.compile(r"^\s*`?(?:\d+[.)]|[-+*]|#{1,6}|>)(?:\s|$)|^\s*(?:-{3,}|\*{3,}|_{3,})\s*$|^\s*(?:~{3,}|`{3,})")
 IDENT = re.compile(r"`[^`]+`|\b\w+\(\)|\b\w+_\w+\b|\b[a-z][a-zA-Z0-9]*[A-Z]\w*\b|\b[A-Z][a-z0-9]+[A-Z]\w*\b|\b[\w-]{2,}\.[A-Za-z]\w+\b")
@@ -301,7 +301,7 @@ def skel_flow(text):
         if char == '"' or char == "|":
             end = text.find(char, index + 1)
             if end > 0 and holds_link(text[index + 1 : end], char):
-                return ("exact", text), []
+                return ("exact", text), labels
             if end > 0:
                 labels.append(text[index + 1 : end].strip('"'))
                 out.append(char + '""' + char if char == "|" else '""')
@@ -312,7 +312,7 @@ def skel_flow(text):
             inner = text[index : end + 1] if end > 0 else ""
             width = 1 if char == ">" else len(inner) - len(inner.lstrip("[({/\\"))
             if end > 0 and holds_link(inner[width:-width], char) and char != ">":
-                return ("exact", text), []
+                return ("exact", text), labels
             if end > 0 and not holds_link(inner[width:-width], char):
                 labels.append(inner[width:-width].strip('"'))
                 out.append(inner[:width] + '""' + inner[-width:])

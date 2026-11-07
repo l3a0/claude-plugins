@@ -464,12 +464,29 @@ with tempfile.TemporaryDirectory() as root:
     check('a statement joined onto else fails', code == 1 and 'second statement suspected' in out)
     code, out = edited(root, 'erjoin2', ('"belongs"', '"belongs"C||--o{D:"y"'))
     check('an entity line joined with no spaces is structure', code == 1 and 'structure changed' in out)
+    repo = setup(root, 'sibling', '```mermaid\nflowchart TD\n    a[1. Refit] --> b[x --> y]\n```\n')
+    folder = os.path.join(root, 'siblingpage')
+    os.mkdir(folder)
+    check('a line that compares whole still names a label read before it', '1. Refit' in run('page', repo, os.path.join(folder, 'out.html'))[1])
     for name, old, new in (
         ('a dotted edge', 'a -. z>2 .-> b[Sell]', 'a -. z>2 .-> c[Sell]'),
         ('two pipes', 'a -- x|y --> b -- z|w --> c', 'a -- x|y --> d -- z|w --> c'),
         ('two brackets', 'a -- x[y --> b -- z]w --> c', 'a -- x[y --> d -- z]w --> c'),
         ('two parentheses', 'a -- try(1 --> b -- 2) --> c', 'a -- try(1 --> d -- 2) --> c'),
         ('two braces', 'a -- x{1 --> b -- 2} --> c', 'a -- x{1 --> d -- 2} --> c'),
+        ('a pipe around a plain link', 'a -- x|y -- b --> c|w --> d', 'a -- x|y -- e --> c|w --> d'),
+        ('a bracket around a plain link', 'a -- x[y -- b --> c]w --> d', 'a -- x[y -- e --> c]w --> d'),
+        ('a thick arrow in a span', 'a -- x[y ==> b -- z]w --> c', 'a -- x[y ==> d -- z]w --> c'),
+        ('a thick link in a span', 'a -- x[y === b -- z]w --> c', 'a -- x[y === d -- z]w --> c'),
+        ('a plain link in a span', 'a -- x[y --- b -- z]w --> c', 'a -- x[y --- d -- z]w --> c'),
+        ('a dotted arrow in a span', 'a -- x[y .-> b -- z]w --> c', 'a -- x[y .-> d -- z]w --> c'),
+        ('a cross link in a span', 'a -- x[y --x b -- z]w --> c', 'a -- x[y --x d -- z]w --> c'),
+        ('a circle link in a span', 'a -- x[y --o b -- z]w --> c', 'a -- x[y --o d -- z]w --> c'),
+        ('a dotted link in a span', 'a -- x[y -.- b -- z]w --> c', 'a -- x[y -.- d -- z]w --> c'),
+        ('a dotted end in a span', 'a -- x[y .- b -- z]w --> c', 'a -- x[y .- d -- z]w --> c'),
+        ('a dotted cross in a span', 'a -- x[y .-x b -- z]w --> c', 'a -- x[y .-x d -- z]w --> c'),
+        ('a thick cross in a span', 'a -- x[y ==x b -- z]w --> c', 'a -- x[y ==x d -- z]w --> c'),
+        ('a dotted close after a flag', 'a -. z>2 -.- b[Sell]', 'a -. z>2 -.- c[Sell]'),
     ):
         code, out = edited(root, 'span' + name.replace(' ', ''), (old, new), text=f'```mermaid\nflowchart TD\n    {old}\n```\n')
         check(f'a node hidden by {name} is structure', code == 1 and 'structure changed' in out)
