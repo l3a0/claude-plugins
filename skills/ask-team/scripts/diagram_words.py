@@ -17,14 +17,16 @@ Both commands name three faults that pass a render check.
    subgraph titles, state transitions, names, descriptions and one-line notes,
    and class names, relations and notes. A label in any other form, such as a
    state note or node label over several lines or a class member, goes unnamed.
-3. A hash or semicolon that ends a label early. A sequence label stops at either
-   one, and a semicolon in a state label draws more states. An entity such as
-   #quot; is exempt.
+3. A hash or semicolon that ends a label early. A sequence label stops at a hash
+   or a semicolon inside it, and a semicolon in an unquoted state label draws more
+   states. An entity such as #quot; is exempt.
 
 These are checks on what Mermaid reads, by patterns over one line at a time. They
 catch the forms a real restyle produced and do not read Mermaid's whole grammar, so
 a clean result is no proof. A one- or two-space join with no arrow or note, such as
-"acks activate B", reads as a sentence, and only the drawn words show it.
+"acks activate B", reads as a sentence, and only the drawn words show it. A sequence
+label that holds a statement as words, such as "moves pending -> filled: done", is
+named though it draws correctly, as is a semicolon in a state note over several lines.
 
 compare checks that a restyle of a diagram's words changed nothing else. It takes
 every Markdown file that differs between the base commit and the working tree, so
@@ -35,20 +37,22 @@ structure and label, and fails on:
   block keyword, a line's indent or the number of lines,
 - two whole labels in one block that traded places,
 - on a changed label, a number or code identifier that differs in value or order.
-  An identifier is a backticked span, snake_case, camelCase, name() or name.ext. A
-  number written in digits keeps its sign and a percent mark,
+  An identifier is a backticked span, snake_case, camelCase, name() or a name.ext
+  with two or more characters on each side. A number written in digits keeps its
+  sign and a percent mark, and becoming a word counts as differing,
 - on a changed label, a term from --terms-file that was lost. A term is matched as
   a lowercase substring, so "journal" also holds "journaled". Build the file from
   the repository's documented vocabulary,
-- on a changed label, a new em dash or first person,
+- on a changed label, a new em dash or a new I, my, mine, we or our,
 - on a changed line in a changed block, any fault above,
 - text outside the blocks, unless --prose-may-change makes that a note.
 
 An unchanged line in a changed block reports a fault as a note. So does a changed
 label segment longer than 58 characters, the width the first restyle wrapped at,
-and a quoted string that changed in a sequence, state, class or entity label. A
-label form this script cannot split is compared as a whole line, so a change to it
-fails rather than passing unread, and a comment is ignored.
+and a quoted string that changed in a sequence, state or class label. A label form
+this script cannot split is compared as a whole line, so a change to it fails rather
+than passing unread. A comment is ignored, and a directive or a YAML header compares
+as a whole line.
 
 A pass covers structure and those values. It does not read meaning, so a lens still
 reads each new label. These pass and are the lens's to catch: a number written as a
@@ -57,7 +61,7 @@ label that moved, a label that moved between blocks, and a diagram outside a *.m
 file or inside a blockquote.
 
 It exits 0 on a pass, 1 on a failure, and 2 when it compared no changed label, so a
-wrong base commit never reads as a pass.
+wrong base commit never reads as a pass. A file name that is not valid text fails.
 
 page prints the faults it finds, and writes one HTML file that draws every Mermaid
 block and lists the words each one drew. out.html must be alone in its folder,
@@ -74,7 +78,7 @@ page loads Mermaid 12.2.0 from a CDN at a pinned integrity value, the version Gi
 viewer held on 2026-11-06, which carries no published advisory there. A content
 security policy stops a diagram's script from running and stops the page loading or
 sending anything else. Mermaid 12.2.0 itself removes the markup that could move the
-page, which the policy cannot stop, so a new version must pass that test again. The
+page, which the policy cannot stop, so a new version needs a fresh hostile test. The
 page draws as 12.2.0 draws, so a clean page does not clear a label for a reader on an
 older version. CI's browser test needs that CDN, so an outage there fails the step.
 """
@@ -97,30 +101,35 @@ MAX_LINE = 5_000  # Longer than any real label, and the patterns below slow down
 # Any indent, so a fence inside a list item is read too.
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})\s*(\S*)")
 ACTOR = r"[\w-]+"
+ACTORS = rf"{ACTOR}(?:\s*,\s*{ACTOR}|\s+{ACTOR})*"
 SEQ_ARROW = r"(?:<<-->>|<<->>|-->>|->>|-->|->|--x|-x|--\)|-\))"
 SEQ_MSG = re.compile(rf"^({ACTOR}?)\s*({SEQ_ARROW})\s*([+-]?)({ACTOR})\s*:\s*(.*)$")
-SEQ_NOTE = re.compile(r"^Note\s+(over|left of|right of)\s+([\w, -]+?)\s*:\s*(.*)$", re.I)
+SEQ_NOTE = re.compile(rf"^Note\s+(over|left of|right of)\s+({ACTORS})\s*:\s*(.*)$", re.I)
+SEQ_NAME = re.compile(r"^(?:participant|actor)\s+\S+\s+as\s+(.*)$|^title\s*:?\s*(.*)$", re.I)
 SEQ_KEY = re.compile(r"^(loop|alt|else|opt|par|and|critical|option|break|rect)\b\s*(.*)$")
 SEQ_JOIN = re.compile(
-    rf"\S {{3,}}\S|{ACTOR}\s*{SEQ_ARROW}\s*[+-]?{ACTOR}\s*:|\bNote\s+(?:over|left of|right of)\s+[\w, -]+?\s*:", re.I
+    rf"\S {{3,}}\S|(?<![\w-]){ACTOR}\s*{SEQ_ARROW}\s*[+-]?{ACTOR}\s*:|\bNote\s+(?:over|left of|right of)\s+{ACTORS}\s*:",
+    re.I,
 )
-SEQ_STATEMENT = re.compile(rf"^{ACTOR}?\s*{SEQ_ARROW}\s*[+-]?{ACTOR}\s*:")
-STATE_EDGE = re.compile(r"^(\S+?)\s*-->\s*(\S+?)(?:\s*:\s*(.*))?$")
+SEQ_STATEMENT = re.compile(rf"^[^:]*?{SEQ_ARROW}\s*[+-]?[^:]*?:")
+STATE_EDGE = re.compile(r"^(\S+?)\s*-->\s*([^\s:]+(?::::\S+)?)(?:\s*:(?!:)\s*(.*))?$")
 STATE_NOTE = re.compile(r"^note\s+(left of|right of)\s+(\S+?)\s*:\s*(.*)$", re.I)
 STATE_NAME = re.compile(r'^state\s+"([^"]*)"')
-STATE_TEXT = re.compile(r"^([\w-]+)\s*:\s*(.*)$")
+STATE_TEXT = re.compile(r"^([\w-]+)\s*:(?!:)\s*(.*)$")
 STATE_JOIN = re.compile(r"-->\s*\S+\s*(?::.*)?$|\S {3,}\S|\bnote\s+(?:left of|right of)\s+\S+\s*:", re.I)
 CLASS_NAME = re.compile(r'^(class\s+\S+?)\["([^"]*)"\](.*)$')
-CLASS_RELATION = re.compile(r"^(\S.*?(?:--|\.\.)[^:]*):\s*(.*)$")
+CLASS_RELATION = re.compile(r'^(\S+(?:\s+"[^"]*")?\s+\S*(?:--|\.\.)\S*(?:\s+"[^"]*")?\s+\S+)\s*:\s*(.*)$')
 CLASS_NOTE = re.compile(r'^(note\b[^"]*)"([^"]*)"\s*$')
 ER_REL = re.compile(r'^(\S+\s+\S+(?:--|\.\.)\S+\s+\S+)\s*:\s*(?:"(.*)"|(\S+))$')
-FLOW_EXACT = re.compile(r"^(?:.*@\{|%%|classDef\b|class\b|style\b|linkStyle\b|click\b|direction\b|end\b|flowchart\b|graph\b)")
+FLOW_EXACT = re.compile(r"^(?:.*@\{|%%|(?:classDef|class|style|linkStyle|click|direction|end|flowchart|graph)(?=\s|$))")
 FLOW_SUBGRAPH = re.compile(r"subgraph\s+([^\[\"]*)")
 FLOW_EDGE = re.compile(r"(?<![-=.])(--|==|-\.)\s+((?:(?!--|==|\.-).)+?)\s+(-->|==>|\.->|---|===|-\.-|--x|--o)(?=\s|$)")
-MARKDOWN_BLOCK = re.compile(r"^\s*`?(?:\d+[.)]|[-+*]|#{1,6}|>)(?:\s|$)|^\s*(?:-{3,}|\*{3,}|_{3,})\s*$")
+MARKDOWN_BLOCK = re.compile(r"^\s*`?(?:\d+[.)]|[-+*]|#{1,6}|>)(?:\s|$)|^\s*(?:-{3,}|\*{3,}|_{3,}|~{3,})\s*$")
 IDENT = re.compile(r"`[^`]+`|\b\w+\(\)|\b\w+_\w+\b|\b[a-z][a-zA-Z0-9]*[A-Z]\w*\b|\b[A-Z][a-z0-9]+[A-Z]\w*\b|\b[\w-]{2,}\.[A-Za-z]\w+\b")
 NUMBER = re.compile(r"(?:(?<!\w)-|[+−])?\d+(?:\.\d+)?%?")
 ENTITY = re.compile(r"#\w+;")
+NOT_DRAWN = re.compile(r"^(?:%%|accTitle\b|accDescr\b)")
+SPACES = re.compile(r"\s{4,}")
 FIRST_PERSON = re.compile(r"\b(?:I(?!/)|[Mm]y|[Mm]ine|[Ww]e|[Oo]ur)\b")
 OPENERS = {"[": "]", "(": ")", "{": "}"}
 FAMILIES = (
@@ -138,14 +147,14 @@ def git(repo, *args):
     return done.returncode, done.stdout.decode(errors="replace"), done.stderr.decode(errors="replace").strip()
 
 
-def stop(message):
-    print(message, file=sys.stderr)
-    sys.exit(2)
-
-
 def plain(text):
-    """Blank control characters, so a diagram's words cannot steer a terminal."""
-    return re.sub(r"[\x00-\x09\x0b-\x1f\x7f]", "?", text)
+    """Blank control characters and line breaks, so a diagram's words or a file's name cannot forge a line."""
+    return re.sub(r"[\x00-\x1f\x7f-\x9f]", "?", text)
+
+
+def stop(message):
+    print(plain(message), file=sys.stderr)
+    sys.exit(2)
 
 
 def split_blocks(text):
@@ -194,6 +203,25 @@ def kind_of(lines):
     return "?"
 
 
+def header_lines(lines):
+    """Return the numbers of the lines of a block's YAML header, which draw no label."""
+    numbers, inside = set(), False
+    for number, line in lines:
+        if line.strip() == "---":
+            numbers.add(number)
+            inside = not inside
+        elif inside:
+            numbers.add(number)
+        elif line.strip():
+            break
+    return numbers
+
+
+def squeezed(text):
+    """Cut a long run of spaces, which could otherwise match the patterns below many ways."""
+    return SPACES.sub("   ", text.strip())
+
+
 def family_of(kind):
     for prefix, family in FAMILIES:
         if kind.startswith(prefix):
@@ -209,7 +237,10 @@ def skel_sequence(text):
         return ("msg", found[1], found[2], found[3], found[4]), [found[5]]
     found = SEQ_NOTE.match(text)
     if found:
-        return ("note", found[1], found[2].replace(" ", "")), [found[3]]
+        return ("note", found[1], re.sub(r"\s*,\s*", ",", found[2])), [found[3]]
+    found = SEQ_NAME.match(text)
+    if found:
+        return ("exact", text), [found[1] or found[2] or ""]
     found = SEQ_KEY.match(text)
     if found:
         return ("key", found[1]), [found[2]]
@@ -328,22 +359,24 @@ SKELETONS = {
 def faults(family, text, labels):
     """Name what renders without an error yet draws the wrong thing, on one stripped line."""
     found = []
-    if text.startswith("%%"):
+    if NOT_DRAWN.match(text):
         return found
     if family == "sequence":
-        first = SEQ_STATEMENT.match(text)
+        first = None if SEQ_NAME.match(text) else SEQ_STATEMENT.match(text)
         body = text[first.end() :] if first else " ".join(labels) or text
         if SEQ_JOIN.search(body):
             found.append(f"second statement suspected on this line: {text}")
+    named = family == "state" and STATE_NAME.match(text)
     if family == "state":
         head, _, label = text.partition(":")
-        named = STATE_NAME.match(text) and "-->" in text
-        if named or head.count("-->") > 1 or STATE_JOIN.search(label):
+        if (named and "-->" in text) or head.count("-->") > 1 or STATE_JOIN.search(label):
             found.append(f"second statement suspected on this line: {text}")
-    if family in ("sequence", "state"):
-        marks = "#;" if family == "sequence" else ";"
+    if family == "sequence" or (family == "state" and not named):
         for label in labels:
-            if any(mark in ENTITY.sub("", label) for mark in marks):
+            words = ENTITY.sub("", label)
+            if family == "sequence":
+                words = words.rstrip("; ")
+            if any(mark in words for mark in ("#;" if family == "sequence" else ";")):
                 found.append(f"hash or semicolon ends this label early: {label}")
     if family in ("flowchart", "state", "class"):
         for label in labels:
@@ -356,10 +389,12 @@ def block_faults(lines):
     """Return (line number, fault) for every line of a block."""
     family = family_of(kind_of(lines))
     skeleton = SKELETONS.get(family, skel_exact)
+    header = header_lines(lines)
     found = []
     for number, line in lines:
-        text = line.strip()
-        found += [(number, fault) for fault in faults(family, text, skeleton(text)[1])]
+        if number not in header:
+            text = squeezed(line)
+            found += [(number, fault) for fault in faults(family, text, skeleton(text)[1])]
     return found
 
 
@@ -378,10 +413,12 @@ def changed_files(repo, base):
 
 
 def read_base(repo, base, path):
-    code, out, _ = git(repo, "show", f"{base}:{path}")
-    if len(out) > MAX_BYTES:
+    code, size, _ = git(repo, "cat-file", "-s", f"{base}:{path}")
+    if code:
+        return ""
+    if int(size) > MAX_BYTES:
         raise ValueError(f"over {MAX_BYTES} bytes at the base commit")
-    return out if code == 0 else ""
+    return git(repo, "show", f"{base}:{path}")[1]
 
 
 def read_file(repo, path):
@@ -399,15 +436,16 @@ def read_file(repo, path):
 
 
 def per_label(pattern, labels):
-    return [pattern.findall(label) for label in labels]
+    return [pattern.findall(ENTITY.sub("", label)) for label in labels]
 
 
-def compare_line(path, family, old, new, terms, block_changed, report, notes):
+def compare_line(path, family, old, new, terms, block_changed, header, report, notes):
     """Compare one line of a block, and return its old and new labels."""
     old_line, new_number, new_line = old[1], new[0], new[1]
-    skeleton = SKELETONS.get(family, skel_exact)
-    old_text, new_text = old_line.strip(), new_line.strip()
-    if old_text.startswith("%%") and new_text.startswith("%%"):
+    in_header = old[0] in header
+    skeleton = skel_exact if in_header else SKELETONS.get(family, skel_exact)
+    old_text, new_text = squeezed(old_line), squeezed(new_line)
+    if old_text.startswith("%%") and new_text.startswith("%%") and "%%{" not in old_text + new_text:
         return [], []
     old_skel, old_labels = skeleton(old_text)
     new_skel, new_labels = skeleton(new_text)
@@ -415,14 +453,14 @@ def compare_line(path, family, old, new, terms, block_changed, report, notes):
     if old_line[: len(old_line) - len(old_line.lstrip())] != new_line[: len(new_line) - len(new_line.lstrip())]:
         report(f"{place}: leading whitespace changed")
     if old_skel != new_skel:
-        report(f"{place}: structure changed\n  old {old_skel}\n  new {new_skel}")
-    if block_changed:
+        report(f"{place}: structure changed, old {old_skel}, new {new_skel}")
+    if block_changed and not in_header:
         for fault in faults(family, new_text, new_labels):
             (report if old_line != new_line else notes.append)(f"{place}: {fault}")
-    if old_line == new_line:
+    if old_labels == new_labels:
         return old_labels, new_labels
     was, now = " | ".join(old_labels), " | ".join(new_labels)
-    if "—" in now and "—" not in was:
+    if now.count("—") > was.count("—"):
         report(f"{place}: em dash in label: {now}")
     if len(FIRST_PERSON.findall(now)) > len(FIRST_PERSON.findall(was)):
         report(f"{place}: first person: {now}")
@@ -447,14 +485,10 @@ def moved_labels(pairs):
     new = {(line, index): label for line, (_, labels) in enumerate(pairs) for index, label in enumerate(labels)}
     changed = {place for place in old if place in new and old[place] != new[place]}
     arrived = {new[place] for place in changed}
-    return sorted(
-        {
-            new[place]
-            for place in changed
-            for other in changed - {place}
-            if new[place] == old[other] and old[place] in arrived
-        }
-    )
+    left = collections.defaultdict(set)
+    for place in changed:
+        left[old[place]].add(place)
+    return sorted({new[place] for place in changed if left[new[place]] and old[place] in arrived})
 
 
 def compare(args):
@@ -478,6 +512,9 @@ def compare(args):
 
     blocks_seen, lines_seen, labels_changed = 0, collections.Counter(), 0
     for path in changed_files(args.repo, base):
+        if "\ufffd" in path:
+            report(f"{path}: the file name is not valid text, so it cannot be read")
+            continue
         try:
             old_blocks, old_out = split_blocks(read_base(args.repo, base, path))
             new_blocks, new_out = split_blocks(read_file(args.repo, path))
@@ -505,9 +542,10 @@ def compare(args):
                 continue
             lines_seen[kind] += len(old)
             family, changed, pairs = family_of(kind), old != new, []
+            header = header_lines(old)
             for old_line, new_line in zip(old, new):
-                pairs.append(compare_line(path, family, old_line, new_line, terms, changed, report, notes))
-                labels_changed += old_line[1] != new_line[1]
+                pairs.append(compare_line(path, family, old_line, new_line, terms, changed, header, report, notes))
+                labels_changed += pairs[-1][0] != pairs[-1][1] or (old_line[0] in header and old_line[1] != new_line[1])
             for label in moved_labels(pairs):
                 report(f"{path} block {index} (line {start}): label moved: {label}")
 
@@ -557,6 +595,8 @@ def page(args):
         stop(f"{folder} holds other files, and serving it would serve them: use a new folder")
     blocks, found = [], []
     for path in sorted(markdown_files(args.repo, "--cached", "--others")):
+        if "\ufffd" in path:
+            stop(f"{path}: the file name is not valid text, so it cannot be read")
         try:
             parsed, _ = split_blocks(read_file(args.repo, path))
         except ValueError as error:
