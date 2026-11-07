@@ -65,12 +65,13 @@ check("the session shows those tests fail", "failing on the mutant that raised i
 exception = step6.split("The exception never covers")[1].split("The first round that confirms neither")[0]
 for clause in ("a wrong result or a weakened guarantee", "any other veto", "any rule the subject writes", "any fix of any kind", "the path to an irreversible action", "a test of it or a test helper", "with the required seat"):
     check(f"the exception leaves out {clause}", clause in exception)
-check("only vetoes and must-fixes bear on the exception", "every veto and must-fix it confirmed" in step6)
-check("a command decides whether a fix touches the path", "`git diff --name-only` and `git diff -G<call>` on the fix decide" in step1)
-check("a missing line counts as touching the path", "A brief with no such line" in step1)
+check("the exception turns on the vetoes and must-fixes confirmed", "every veto and must-fix it confirmed" in step6)
+check("the last round holds no fix on that path", "confirms neither and holds no fix on that path" in step6)
+check("the risk engineer confirms the brief's line", "the risk engineer confirms that line in round 1" in step1)
+check("the risk engineer sits unless the line says none", "the risk engineer sits every round and says whether the fix touches the path" in step2)
 check("a later round rereads a rewrite", "rewrites the subject rather than patching it, the round reads the whole change again" in step1)
-check("a later round reads an irreversible path whole", "reads that path from its entry to the action" in step1)
-check("a required seat still sits", "A required seat still sits when the fix touches its path" in step2)
+check("a later round reads an irreversible path whole", "reads it from its entry to the action" in step1)
+check("a required seat still sits", "Any other required seat sits when the fix touches its path" in step2)
 check("a later round keeps the reader lens", "on a design the reader lens" in step2)
 step3 = ROUND.split("## 3. Run the blind round")[1].split("## 4. ")[0]
 check("the limits do not bind an irreversible path", "Neither limit binds the path to an irreversible action" in step3)
@@ -92,7 +93,7 @@ check("a limit on what a role protects stays in review", "A limit on anything a 
 step3skill = SKILL.split("### 3. Blind round")[1].split("### 4. ")[0]
 check("every prompt gets the kinds", "`## What each kind means`" in step3skill)
 slot = BRIEF.split("From round 2 on, what this round reads")[1].split("Delete this line in round 1")[0]
-for phrase in ("states the same fact", "from its entry to the action", "whole change"):
+for phrase in ("states the same fact", "from its entry to the action", "the risk engineer says the fix touches it", "whole change"):
     check(f"the brief's later round line says {phrase}", phrase in slot)
 check("the brief names the path's files, tests and calls", "with their tests and helpers, and the calls that perform the action" in BRIEF)
 check("a verifier gets the kinds", "A verifier's prompt carries" in skill4)
