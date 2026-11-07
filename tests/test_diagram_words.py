@@ -462,7 +462,7 @@ with tempfile.TemporaryDirectory() as root:
     check('a statement joined onto a keyword fails', code == 1 and 'second statement suspected' in out)
     code, out = edited(root, 'kw3', ('else it waits', 'else it waits B->>S: more'), text=DOC.replace('    end\n', '    else it waits\n    end\n', 1))
     check('a statement joined onto else fails', code == 1 and 'second statement suspected' in out)
-    code, out = edited(root, 'erjoin2', ('"gets filled by"', '"gets filled by"C||--o{D:"y"'))
+    code, out = edited(root, 'erjoin2', ('"belongs"', '"belongs"C||--o{D:"y"'))
     check('an entity line joined with no spaces is structure', code == 1 and 'structure changed' in out)
     for name, old, new in (
         ('a dotted edge', 'a -. z>2 .-> b[Sell]', 'a -. z>2 .-> c[Sell]'),
