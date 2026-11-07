@@ -62,7 +62,11 @@ check("a later round seats by the fix", "as applied to the fix rather than to th
 check("only tests or statements end the rounds", "every finding it confirmed claims only a missing test or only a false or missing statement" in step6)
 check("every fix must be of that kind", "every fix only adds that test or corrects that statement" in step6)
 check("the session shows those tests fail", "failing on the mutant that raised it" in step6)
-check("the exception leaves out the paths that matter", "The exception never covers a wrong result or a weakened guarantee" in step6 and "the path to an irreversible action" in step6)
+exception = step6.split("The exception never covers")[1].split("The first round that confirms neither")[0]
+for clause in ("a wrong result or a weakened guarantee", "any other veto", "any rule the subject writes", "the path to an irreversible action", "a test of it or a test helper", "with the required seat"):
+    check(f"the exception leaves out {clause}", clause in exception)
+check("only vetoes and must-fixes bear on the exception", "every veto and must-fix it confirmed" in step6)
+check("a command decides whether a fix touches the path", "`git diff --name-only` on the fix decides" in step1)
 check("a later round rereads a rewrite", "rewrites the subject rather than patching it, the round reads the whole change again" in step1)
 check("a later round reads an irreversible path whole", "reads that path from its entry to the action" in step1)
 check("a required seat still sits", "A required seat still sits when the fix touches its path" in step2)
@@ -84,7 +88,13 @@ check("the kinds lower no veto or limit", "lowers no veto, no hard limit" in kin
 check("a rare fault on something protected stays a must fix", "however rare" in kinds and "reaches nothing a role protects" in kinds)
 outside = BRIEF.split("\n## Out of scope")[1]
 check("a limit on what a role protects stays in review", "A limit on anything a role protects stays in review" in outside)
-check("every prompt gets the kinds", "every prompt gets its `## What each kind means`" in SKILL)
+step3skill = SKILL.split("### 3. Blind round")[1].split("### 4. ")[0]
+check("every prompt gets the kinds", "`## What each kind means`" in step3skill)
+slot = BRIEF.split("From round 2 on, what this round reads")[1].split("Delete this line in round 1")[0]
+for phrase in ("states the same fact", "from its entry to the action", "whole change"):
+    check(f"the brief's later round line says {phrase}", phrase in slot)
+check("the brief names the path's files", "The files that hold the path to an irreversible action" in BRIEF)
+check("step 5 keeps a limit on what a role protects in review", "A limit on anything a role protects stays in review" in step5)
 check("a surviving mutant may be confirmed by running it", "a veto that names a surviving mutant" in skill4)
 check("a mutant that dies goes to a verifier", "A run where the mutant dies goes to a verifier" in skill4)
 check("the comment names roles that sat out and fixes that start no round", "Roles that sat out" in TEMPLATE and "starts no round for" in TEMPLATE)

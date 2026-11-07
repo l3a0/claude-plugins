@@ -64,7 +64,7 @@ The subject is one of five things, and each needs its anchor.
 4. **A technical question that crosses modules.** The question, the options, and the files each option would change.
 5. **A blog post or other prose that quotes results.** The file and the commit, and the tests or log entries its numbers come from.
 
-Write down what is out of scope, so a role does not review the whole repository. For a plan, a design or a pull request, where it writes rules, that includes the mechanics other work owns, each with its link and its kind. The paragraphs under `## Out of scope` in `templates/review-brief.md` are the one definition of what counts as owning work and what a role does with it, and listing other work or a waiting question takes nothing a role protects out of review. A review run without that brief, such as a plan audit or a caller in lens mode, pastes those paragraphs whole, with the owner's GitHub login, into every role's, lens's and verifier's prompt, unless the template's last line lets them be dropped, because no agent file carries them. An agent with no agent file also gets the template's `## Limits for every agent in the round`, as `review-round.md`'s step 3 says, and every prompt gets its `## What each kind means`. Check whether the repository has a `docs/team-charter.md`, and note its commit, because every role prompt names it.
+Write down what is out of scope, so a role does not review the whole repository. For a plan, a design or a pull request, where it writes rules, that includes the mechanics other work owns, each with its link and its kind. The paragraphs under `## Out of scope` in `templates/review-brief.md` are the one definition of what counts as owning work and what a role does with it, and listing other work or a waiting question takes nothing a role protects out of review. A review run without that brief, such as a plan audit or a caller in lens mode, pastes those paragraphs whole, with the owner's GitHub login, into every role's, lens's and verifier's prompt, unless the template's last line lets them be dropped, because no agent file carries them. An agent with no agent file also gets the template's `## Limits for every agent in the round`, as `review-round.md`'s step 3 says. Check whether the repository has a `docs/team-charter.md`, and note its commit, because every role prompt names it.
 
 ### 2. Seat the roles
 
@@ -123,7 +123,7 @@ Launch every seated role in one message, in the background. Each prompt carries 
 2. The path of the repository's `docs/team-charter.md` and its commit, or that it has none.
 3. The files and issues to read, with absolute paths for any checkout.
 4. What is out of scope.
-5. The finding format, which each agent file already carries, so naming it is enough.
+5. The finding format, which each agent file already carries, so naming it is enough, and the template's `## What each kind means`, which no agent file carries.
 6. A scratch folder of its own, such as `<scratchpad>/team-<role>/`, because parallel agents writing to one folder overwrite each other.
 
 No prompt carries another role's findings or the delivery lead's view of the subject. A role that reads "the lead thinks this is fine" reviews that sentence instead of the code.

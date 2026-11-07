@@ -8,7 +8,9 @@
 
 Review the head commit named here, not the branch tip, which may move while the round runs.
 
-<From round 2 on, what this round reads: `git diff <last round's anchor> <fixing commit>`, leaving out what a merge of the base brought, and what that diff touches. Delete this line in round 1.>
+<From round 2 on, what this round reads: `git diff <last round's anchor> <fixing commit>`, leaving out what a merge of the base brought, any passage or function it touches or that states the same fact, and the path below from its entry to the action where the diff names one of its files. Where a fix rewrites the subject, it reads the whole change. Delete this line in round 1.>
+
+<The files that hold the path to an irreversible action, or "none in this subject".>
 
 ## Facts not to re-derive
 
