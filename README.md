@@ -181,10 +181,6 @@ Some books will not open in the Kindle Cloud Reader, so `kindle-highlights` cann
 
 Prices a finished plan, build or review loop in tokens and dollars, measured from the transcripts of every agent the loop ran. A figure read off an agent's completion notice is the size of its last context, not what it spent. One decompose loop reported that way as about 242k tokens had processed 18.3M tokens, for at least 5.29 US dollars. The script `skills/loop-cost/scripts/agent-cost.py` takes agent ids, a file of ids, or a pattern matched against each agent's spawn description, and prices groups such as a review's lenses and its verifiers apart and together. Output tokens are a lower bound, and the dollars are list prices. At every handover the skill also asks the session to name the costliest step and say whether any procedure it worked out qualifies to become a skill.
 
-### clear-wall-of-text
-
-Turns a dense passage in a design doc, an architecture doc, a charter or a README into text a reader follows on one read. Each question gets a subheading, steps get a numbered list, conditions get a titled table, and a mechanism gets a diagram. Each cited rule is stated in plain words, and the skill proves every fact survived before it reads the rendered result.
-
 ### book-to-rules
 
 Ten books became rules for an engineering team in five days. The first four runs each worked out the same pipeline again at about 15 to 32 US dollars a book. This skill holds that pipeline in seven steps.
@@ -198,6 +194,10 @@ Ten books became rules for an engineering team in five days. The first four runs
 7. Price the loop with `loop-cost`.
 
 Its `pg.py` says whether each cited phrase is on its page, names the right page when it is not, and exits non-zero, so a wrong page stops a run before a reviewer finds it. The readers run as the plugin's `book-reader` agent, which has no shell, because the book's text is untrusted input. The skill also lists twenty-six checks to run before the pull requests open, twenty-four of them findings the books' reviews made, such as a rule claiming more than its page supports, or a never-skip list that points to a group instead of naming each protection. The book's text, the OCR output and the reader notes stay in a run directory outside every repository, because the repositories are public and the book is copyrighted. `overlap.py` checks a diff, a pull request body or a comment for six or more words in a row shared with the book.
+
+### clear-wall-of-text
+
+Turns a dense passage in a design doc, an architecture doc, a charter or a README into text a reader follows on one read. Each question gets a subheading, steps get a numbered list, conditions get a titled table, and a mechanism gets a diagram. The skill states each cited rule in plain words, and it proves every fact survived before it reads the rendered result.
 
 ## License
 
