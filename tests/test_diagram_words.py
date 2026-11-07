@@ -468,6 +468,10 @@ with tempfile.TemporaryDirectory() as root:
     folder = os.path.join(root, 'siblingpage')
     os.mkdir(folder)
     check('a line that compares whole still names a label read before it', '1. Refit' in run('page', repo, os.path.join(folder, 'out.html'))[1])
+    repo = setup(root, 'siblingpipe', '```mermaid\nflowchart TD\n    a[1. Refit] -- x|y --> c|w --> d\n```\n')
+    folder = os.path.join(root, 'siblingpipepage')
+    os.mkdir(folder)
+    check('a pipe span still names a label read before it', '1. Refit' in run('page', repo, os.path.join(folder, 'out.html'))[1])
     for name, old, new in (
         ('a dotted edge', 'a -. z>2 .-> b[Sell]', 'a -. z>2 .-> c[Sell]'),
         ('two pipes', 'a -- x|y --> b -- z|w --> c', 'a -- x|y --> d -- z|w --> c'),
@@ -483,6 +487,7 @@ with tempfile.TemporaryDirectory() as root:
         ('a cross link in a span', 'a -- x[y --x b -- z]w --> c', 'a -- x[y --x d -- z]w --> c'),
         ('a circle link in a span', 'a -- x[y --o b -- z]w --> c', 'a -- x[y --o d -- z]w --> c'),
         ('a dotted link in a span', 'a -- x[y -.- b -- z]w --> c', 'a -- x[y -.- d -- z]w --> c'),
+        ('a dotted link with no space in a span', 'a -- x[y -.-b -- z]w --> c', 'a -- x[y -.-d -- z]w --> c'),
         ('a dotted end in a span', 'a -- x[y .- b -- z]w --> c', 'a -- x[y .- d -- z]w --> c'),
         ('a dotted cross in a span', 'a -- x[y .-x b -- z]w --> c', 'a -- x[y .-x d -- z]w --> c'),
         ('a thick cross in a span', 'a -- x[y ==x b -- z]w --> c', 'a -- x[y ==x d -- z]w --> c'),

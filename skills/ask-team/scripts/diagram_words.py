@@ -56,7 +56,8 @@ label segment longer than 58 characters, the width the first restyle wrapped at,
 and a quoted string that changed in a sequence, state or class label. A label form
 this script cannot split is compared as a whole line, so a change to it fails rather
 than passing unread, and an unquoted label that holds an arrow, such as "x --> y",
-reads as such a form, apart from a flag shape written a>text]. A comment is ignored, and a directive or a YAML header compares as a
+reads as such a form, apart from a flag shape written a>text]. On such a line the
+faults read only the labels before that span, not edge text or anything after it. A comment is ignored, and a directive or a YAML header compares as a
 whole line.
 
 A pass covers structure and those values. It does not read meaning, so a lens still
