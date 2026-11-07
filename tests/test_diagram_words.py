@@ -47,7 +47,10 @@ def git(repo, *args):
 
 
 def run(*args):
-    done = subprocess.run([sys.executable, '-I', SCRIPT, *args], capture_output=True, text=True)
+    try:
+        done = subprocess.run([sys.executable, '-I', SCRIPT, *args], capture_output=True, text=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        return 124, 'the script ran past the limit'
     return done.returncode, done.stdout + done.stderr
 
 
@@ -264,8 +267,6 @@ with tempfile.TemporaryDirectory() as root:
     fault_doc = DOC + '\n```mermaid\nflowchart TD\n    a["1. Refit"] --> b\n```\n'
     code, out = edited(root, 'mdother', ('asks again', 'the supervisor asks again'), text=fault_doc)
     check('a fault in an unchanged block does not fail a restyle', code == 0 and 'Markdown block' not in out)
-    code, out = edited(root, 'mdnote', ('b\n```\n', 'c\n```\n'), text=fault_doc.replace('a["1. Refit"] --> b', 'a["1. Refit"] --> b\n    b --> b'))
-    check('a fault on an unchanged line of a changed block fails on the change it holds', code == 1)
     note_doc = fault_doc.replace('a["1. Refit"] --> b', 'a["1. Refit"] --> b\n    b["old"] --> c')
     code, out = edited(root, 'mdnote2', ('b["old"]', 'b["the new"]'), text=note_doc)
     check('a fault on an unchanged line of a changed block is a note', code == 0 and 'Markdown block' in out)
@@ -299,8 +300,8 @@ with tempfile.TemporaryDirectory() as root:
         check(f'{name} that differs fails', code == 1 and word in out)
     code, out = edited(root, 'thirdnode', ('--- b ---', '--- x ---'), text='```mermaid\nflowchart TD\n    a --- b --- c\n```\n')
     check('a node between two plain links is no edge label', code == 1 and 'structure changed' in out)
-    check('an entity label losing its quotes fails on one word', 'structure changed' in edited(
-        root, 'erquote', ('"belongs"', 'belongs'))[1])
+    check('an entity label can gain the quotes a phrase needs', edited(
+        root, 'erquote', ('PLAN : belongs', 'PLAN : "belongs to"'), text=DOC.replace('PLAN : "belongs"', 'PLAN : belongs'))[0] == 0)
     code, out = edited(root, 'wekept', ('we ack', 'we ack it now'), text=DOC.replace('B-->>-S: acks', 'B-->>-S: we ack'))
     check('first person the old label held passes', code == 0)
 
@@ -379,14 +380,264 @@ with tempfile.TemporaryDirectory() as root:
     code, out = edited(root, 'seqent', ('says it', 'says it now'), text=DOC.replace('B-->>-S: acks', 'B-->>-S: says it #quot;done#quot;'))
     check('an entity in a sequence label passes', code == 0)
     code, out = edited(root, 'comment', ('%% one', '%% two'), text=DOC.replace('    S->>B: asks again', '    %% one\n    S->>B: the asks again'))
-    check('a comment is no label', code == 0 and 'structure changed' not in out)
+    check('a change to a comment alone compares nothing', code == 2 and 'structure changed' not in out)
+    for name, old, new in (
+        ('a sender', 'S->>B: asks again', 'B->>B: asks again'),
+        ('a target', 'S->>B: asks again', 'S->>S: asks again'),
+        ('a line turned into a comment', '    S->>B: asks again', '    %% S->>B: asks again'),
+        ('a two-word participant in a note', 'Note over Order Svc: holds', 'Note over OrderSvc: holds'),
+    ):
+        text = DOC.replace('Note over S: journal holds it', 'Note over Order Svc: holds')
+        code, out = edited(root, 'so' + name.replace(' ', ''), (old, new), text=text)
+        check(f'{name} is structure', code == 1 and 'structure changed' in out)
+    for name, text, old, new in (
+        ('a class id', '```mermaid\nclassDiagram\n    class A["x"]\n```\n', 'class A', 'class B'),
+        ('a node between thick links', '```mermaid\nflowchart TD\n    a === b === c\n```\n', '=== b ===', '=== x ==='),
+        ('a state style class', '```mermaid\nstateDiagram-v2\n    A --> B:::hot\n```\n', ':::hot', ':::cold'),
+        ('a state style class turned into a label', '```mermaid\nstateDiagram-v2\n    A --> B:::hot\n```\n', ':::hot', ': hot'),
+        ('a state style class on its own', '```mermaid\nstateDiagram-v2\n    B:::hot\n```\n', ':::hot', ':::cold'),
+        ('a class member holding dots', '```mermaid\nclassDiagram\n    class A {\n        +send(args...): void\n    }\n```\n', 'void', 'bool'),
+        ('a directive', '```mermaid\n%%{init: {"theme": "dark"}}%%\nsequenceDiagram\n    A->>B: x\n```\n', 'dark', 'forest'),
+        ('a YAML header in a state diagram', '```mermaid\n---\nlayout: dagre\n---\nstateDiagram-v2\n    A --> B\n```\n', 'dagre', 'elk'),
+        ('a style line with parentheses', '```mermaid\nflowchart TD\n    a --> b\n    style a fill:rgb(1,2,3)\n```\n', '1,2', '9,2'),
+    ):
+        code, out = edited(root, 'se' + name.replace(' ', ''), (old, new), text=text)
+        check(f'{name} is structure', code == 1 and 'structure changed' in out)
+    for name, text, old, new in (
+        ('a block keyword', '```mermaid\nsequenceDiagram\n    loop every 5 days\n    A->>B: x\n    end\n```\n', '5 days', '6 days'),
+        ('an entity', '```mermaid\nerDiagram\n    A ||--o{ B : "has 5 rows"\n```\n', '5 rows', '6 rows'),
+        ('a spaced edge', '```mermaid\nflowchart TD\n    a -- within 5 days --> b\n```\n', '5 days', '6 days'),
+    ):
+        code, out = edited(root, 'nu' + name.replace(' ', ''), (old, new), text=text)
+        check(f'a number changed in {name} label fails', code == 1 and 'numbers differ or moved' in out)
+    for name, text, old in (
+        ('a spaced edge', '```mermaid\nflowchart TD\n    a -- x --> b\n```\n', '-- x -->'),
+        ('a state name', '```mermaid\nstateDiagram-v2\n    state "x" as X\n```\n', '"x"'),
+    ):
+        code, out = edited(root, 'fa' + name.replace(' ', ''), (old, old.replace('x', '1. x')), text=text)
+        check(f'{name} reads the Markdown fault', 'starts like a Markdown block' in out)
+    for name, old, new, word in (
+        ('a backticked span', 'calls `gate()`', 'calls `check()`', 'identifiers differ'),
+        ('a PascalCase name', 'calls PlaceOrder', 'calls SendOrder', 'identifiers differ'),
+        ('a plus sign', 'at close+20', 'at close−20', 'numbers differ'),
+    ):
+        code, out = edited(root, 'mo' + name.replace(' ', ''), (old, new), text=DOC.replace('Write the plan', old))
+        check(f'{name} that differs fails', code == 1 and word in out)
+    code, out = edited(root, 'dash2', ('acks — done', 'acks — done — then'), text=DOC.replace('B-->>-S: acks', 'B-->>-S: acks — done'))
+    check('a second em dash fails', code == 1 and 'em dash' in out)
+    for word in ('my', 'mine', 'our'):
+        code, out = edited(root, 'fp' + word, ('B-->>-S: acks', f'B-->>-S: acks {word} order'))
+        check(f'{word} is first person', code == 1 and 'first person' in out)
+    code, out = edited(root, 'stateh', ('z below 1 at', 'the z-score falls below 1 at'), text=DOC.replace('z below 1', 'z below 1 at item #4'))
+    check('a hash in a state label draws fine and passes', code == 0)
+    code, out = edited(root, 'trail', ('B-->>-S: acks', 'B-->>-S: acks now;'))
+    check('a trailing semicolon in a sequence label passes', code == 0)
+    code, out = edited(root, 'entnum', ('order #4x filled', 'the order #35;4x is filled'), text=DOC.replace('Write the plan', 'order #4x filled'))
+    check('an entity is no number', code == 0)
+    code, out = edited(root, 'dec2', ('B-->>-S: acks', 'B-->>-S: order #35;4 filled'), text=DOC)
+    check('writing the entity the skill names fails no check on the mark', 'ends this label early' not in out)
+    code, out = edited(root, 'stnamed', ('holds one unit', 'the book holds it'), text=DOC.replace('"Flat (0 units)" as Flat', '"Flat; part remains" as Flat'))
+    check('a semicolon in a quoted state name draws fine', code == 0 and 'ends this label early' not in out)
+    code, out = edited(root, 'partalias', ('participant S as Supervisor', 'participant S as order #4'))
+    check('a hash in a participant alias is named', 'ends this label early' in out)
+    aligned = DOC.replace('participant S as Supervisor', 'participant S   as Supervisor')
+    code, out = edited(root, 'align', ('asks again', 'the supervisor asks again'), text=aligned)
+    check('an aligned participant line is no join', code == 0 and 'second statement' not in out)
+    fence = '- item\n\n    ```mermaid\n    sequenceDiagram\n        A->>B: x\n    ```\n'
+    code, out = edited(root, 'indent', ('A->>B', 'B->>A'), text=fence)
+    check('a fence inside a list item is read', code == 1 and 'structure changed' in out)
+    slow = '```mermaid\nsequenceDiagram\n    Note over' + ' ' * 900 + 'x\n```\n\n```mermaid\nflowchart TD\n    a --' + ' ' * 900 + 'x\n```\n'
+    repo = setup(root, 'slow', slow)
+    folder = os.path.join(root, 'slowpage')
+    os.mkdir(folder)
+    started = time.time()
+    code, out = run('page', repo, os.path.join(folder, 'out.html'))
+    check('a long run of spaces stays fast', code == 0 and time.time() - started < 10)
+    code, out = edited(root, 'tilde2', ('b[Write the plan]', 'b["~~~"]'))
+    check('a tilde rule starts like a Markdown block', 'starts like a Markdown block' in out)
+    click_id = '```mermaid\nflowchart TD\n    click-a["x"] --> b\n```\n'
+    code, out = edited(root, 'clickid', ('"x"', '"1. x"'), text=click_id)
+    check('a node id that starts with a keyword is still read', 'starts like a Markdown block' in out)
+    code, out = edited(root, 'kw2', ('alt it fills', 'alt it fills S->>B: goes on'))
+    check('a statement joined onto a keyword fails', code == 1 and 'second statement suspected' in out)
+    code, out = edited(root, 'kw3', ('else it waits', 'else it waits B->>S: more'), text=DOC.replace('    end\n', '    else it waits\n    end\n', 1))
+    check('a statement joined onto else fails', code == 1 and 'second statement suspected' in out)
+    code, out = edited(root, 'erjoin2', ('"belongs"', '"belongs"C||--o{D:"y"'))
+    check('an entity line joined with no spaces is structure', code == 1 and 'structure changed' in out)
+    repo = setup(root, 'sibling', '```mermaid\nflowchart TD\n    a[1. Refit] --> b[x --> y]\n```\n')
+    folder = os.path.join(root, 'siblingpage')
+    os.mkdir(folder)
+    check('a line that compares whole still names a label read before it', '1. Refit' in run('page', repo, os.path.join(folder, 'out.html'))[1])
+    repo = setup(root, 'siblingpipe', '```mermaid\nflowchart TD\n    a[1. Refit] -- x|y --> c|w --> d\n```\n')
+    folder = os.path.join(root, 'siblingpipepage')
+    os.mkdir(folder)
+    check('a pipe span still names a label read before it', '1. Refit' in run('page', repo, os.path.join(folder, 'out.html'))[1])
+    for name, old, new in (
+        ('a dotted edge', 'a -. z>2 .-> b[Sell]', 'a -. z>2 .-> c[Sell]'),
+        ('two pipes', 'a -- x|y --> b -- z|w --> c', 'a -- x|y --> d -- z|w --> c'),
+        ('two brackets', 'a -- x[y --> b -- z]w --> c', 'a -- x[y --> d -- z]w --> c'),
+        ('two parentheses', 'a -- try(1 --> b -- 2) --> c', 'a -- try(1 --> d -- 2) --> c'),
+        ('two braces', 'a -- x{1 --> b -- 2} --> c', 'a -- x{1 --> d -- 2} --> c'),
+        ('a pipe around a plain link', 'a -- x|y -- b --> c|w --> d', 'a -- x|y -- e --> c|w --> d'),
+        ('a bracket around a plain link', 'a -- x[y -- b --> c]w --> d', 'a -- x[y -- e --> c]w --> d'),
+        ('a thick arrow in a span', 'a -- x[y ==> b -- z]w --> c', 'a -- x[y ==> d -- z]w --> c'),
+        ('a thick link in a span', 'a -- x[y === b -- z]w --> c', 'a -- x[y === d -- z]w --> c'),
+        ('a plain link in a span', 'a -- x[y --- b -- z]w --> c', 'a -- x[y --- d -- z]w --> c'),
+        ('a dotted arrow in a span', 'a -- x[y .-> b -- z]w --> c', 'a -- x[y .-> d -- z]w --> c'),
+        ('a cross link in a span', 'a -- x[y --x b -- z]w --> c', 'a -- x[y --x d -- z]w --> c'),
+        ('a circle link in a span', 'a -- x[y --o b -- z]w --> c', 'a -- x[y --o d -- z]w --> c'),
+        ('a dotted link in a span', 'a -- x[y -.- b -- z]w --> c', 'a -- x[y -.- d -- z]w --> c'),
+        ('a dotted link with no space in a span', 'a -- x[y -.-b -- z]w --> c', 'a -- x[y -.-d -- z]w --> c'),
+        ('a dotted end in a span', 'a -- x[y .- b -- z]w --> c', 'a -- x[y .- d -- z]w --> c'),
+        ('a dotted cross in a span', 'a -- x[y .-x b -- z]w --> c', 'a -- x[y .-x d -- z]w --> c'),
+        ('a thick cross in a span', 'a -- x[y ==x b -- z]w --> c', 'a -- x[y ==x d -- z]w --> c'),
+        ('a dotted close after a flag', 'a -. z>2 -.- b[Sell]', 'a -. z>2 -.- c[Sell]'),
+    ):
+        code, out = edited(root, 'span' + name.replace(' ', ''), (old, new), text=f'```mermaid\nflowchart TD\n    {old}\n```\n')
+        check(f'a node hidden by {name} is structure', code == 1 and 'structure changed' in out)
+    for name, text, old in (
+        ('in a node', '    x["a --> b"] --> y', 'a --> b'),
+        ('on an edge', '    a -- "x --> y" --> b', 'x --> y'),
+    ):
+        code, out = edited(root, 'ql' + name.replace(' ', ''), (old, 'the ' + old), text=f'```mermaid\nflowchart TD\n{text}\n```\n')
+        check(f'a quoted label {name} can hold an arrow and still change', code == 0)
+    for name, text, old in (
+        ('an equals test on an edge', '    a{Sized?} -->|z == 0| b', 'z == 0'),
+        ('an equals test in a node', '    a{count == 0} --> b', 'count == 0'),
+        ('a command flag', '    a[git log --oneline] --> b', 'git log'),
+        ('a flag on an edge', '    a --> |uv run --frozen| b', 'uv run'),
+        ('a dash in a node', '    x[a -- b] --> y', 'a -- b'),
+    ):
+        code, out = edited(root, 'lk' + name.replace(' ', ''), (old, 'the ' + old), text=f'```mermaid\nflowchart TD\n{text}\n```\n')
+        check(f'{name} is a label that can change', code == 0)
+    for name, text, old, new in (
+        ('after a label with a dash', '    a -->|hold -- wait| c --> d', 'c --> d', 'e --> d'),
+        ('beside a node with a dash', '    a[x -- y] & c --> b', '& c', '& e'),
+        ('a style class after a dash', '    a[x -- y]:::hot --> b', ':::hot', ':::cold'),
+        ('after a dotted label', '    a -->|x -. y| c .-> d', 'c .->', 'e .->'),
+    ):
+        code, out = edited(root, 'dn' + name.replace(' ', ''), (old, new), text=f'```mermaid\nflowchart TD\n{text}\n```\n')
+        check(f'a node {name} is structure', code == 1 and 'structure changed' in out)
+    er = '```mermaid\nerDiagram\n    P ||--o{ O : a\n```\n'
+    for name, new in (('a colon', 'P ||--o{ O : a:b'), ('a link', 'P ||--o{ O : ac||--o{d')):
+        code, out = edited(root, 'erl' + name.replace(' ', ''), ('P ||--o{ O : a', new), text=er)
+        check(f'an unquoted entity label cannot hold {name}', code == 1 and 'structure changed' in out)
+    code, out = edited(root, 'sgspace', ('"Order flow"', '"How an order flows"'), text='```mermaid\nflowchart TD\n    subgraph "Order flow"\n    a --> b\n    end\n```\n')
+    check('a subgraph title with a space is no id, so it can change', code == 0)
+    code, out = edited(root, 'erjoin', ('"gets filled by"', '"gets filled by" C ||--o{ D : "y"'))
+    check('a joined entity line is structure', code == 1 and 'structure changed' in out)
+    flag = '```mermaid\nflowchart TD\n    a -- z>2 --> b[Sell]\n```\n'
+    for name, new in (('target', 'a -- z>2 --> c[Sell]'), ('arrow', 'a -- z>2 --- b[Sell]')):
+        code, out = edited(root, 'gt' + name, ('a -- z>2 --> b[Sell]', new), text=flag)
+        check(f'a > in an edge label hides no {name}', code == 1 and 'structure changed' in out)
+    check('a > in an edge label can still change', edited(root, 'gtok', ('z>2', 'when z>2'), text=flag)[0] == 0)
+    for name, text, old, new in (
+        ('class', '```mermaid\nclassDiagram\n    A --> B : uses\n```\n', 'uses', 'uses\rC --> D : extra'),
+        ('entity', '```mermaid\nerDiagram\n    A ||--o{ B : "has"\n```\n', '"has"', '"has"\rC ||--o{ D : "y"'),
+        ('sequence', '```mermaid\nsequenceDiagram\n    A->>B: hello\n```\n', 'hello', 'hello\rdeactivate B'),
+    ):
+        code, out = edited(root, 'cr' + name, (old, new), text=text)
+        check(f'a bare return in a {name} line adds a line', code == 1 and 'lines became' in out)
+    code, out = edited(root, 'rect', ('rect pink', 'rect red'), text=DOC.replace('    alt it fills', '    rect pink\n    alt it fills', 1).replace('    end\n', '    end\n    end\n', 1))
+    check('a rect colour is structure', code == 1 and 'structure changed' in out)
+    code, out = edited(root, 'sgq', ('"x"', '"y"'), text='```mermaid\nflowchart TD\n    subgraph "x"\n    a --> b\n    end\n```\n')
+    check('a subgraph title in quotes is its id', code == 1 and 'structure changed' in out)
+    code, out = edited(root, 'title', ('title: Order flw', 'title: How an order flows'), text='```mermaid\nsequenceDiagram\n    title: Order flw\n    A->>B: x\n```\n')
+    check('a title can change', code == 0)
+    code, out = edited(root, 'title2', ('title: Order flw', 'title: order #4'), text='```mermaid\nsequenceDiagram\n    title: Order flw\n    A->>B: x\n```\n')
+    check('a hash in a title is named', 'ends this label early' in out)
+    code, out = edited(root, 'stylelabel', ('holds', 'it holds'), text='```mermaid\nstateDiagram-v2\n    A --> B:::hot: holds\n```\n')
+    check('a label after a state style class can change', code == 0)
+    for name, label in (('tilde', '~~~ x'), ('backtick', '``` x')):
+        code, out = edited(root, 'fence' + name, ('z below 1', label))
+        check(f'a {name} fence opening a label starts like a Markdown block', 'starts like a Markdown block' in out)
+    check('an arrow inside a quoted state name is no join', 'second statement' not in edited(
+        root, 'namedarrow', ('holds one unit', 'the book holds it'), text=DOC.replace('"Flat (0 units)" as Flat', '"from --> to" as Flat'))[1])
+    code, out = edited(root, 'acc', ('holds one unit', 'the book holds it'), ('    accTitle: Orders; fills', '    accTitle: Orders; all fills'), text=DOC.replace('    [*] --> Flat', '    accTitle: Orders; fills\n    [*] --> Flat'))
+    check('an accessible title is not drawn, so it raises no fault', 'ends this label early' not in out)
+    code, out = edited(root, 'c1', ('asks again', 'asks \x9b2J\u2028RESULT: PASS #4'))
+    check('C1 bytes and Unicode line breaks never reach the output', '\x9b' not in out and '\u2028' not in out)
+    code, out = edited(root, 'bidi', ('asks again', 'asks \u200e\u200f\u202e\u2066 #4'))
+    check('text direction marks never reach the output', not any(mark in out for mark in '\u200e\u200f\u202e\u2066'))
+    header = '```mermaid\n---\ntitle: 1. Orders; fills\n---\nstateDiagram-v2\n    A --> B: holds\n```\n'
+    code, out = edited(root, 'hdr', ('holds', 'it holds'), text=header)
+    check('a YAML header raises no fault', code == 0 and 'Markdown block' not in out and 'ends this label' not in out)
+    arrowed = header.replace('1. Orders; fills', 'from A --> B')
+    code, out = edited(root, 'hdr3', ('holds', 'it holds'), text=arrowed)
+    check('an arrow in a YAML title raises no note', code == 0 and 'second statement' not in out)
+    code, out = edited(root, 'hdr2', ('title: 1. Orders; fills', 'title: 2. Orders; fills'), text=header)
+    check('a changed YAML header fails as structure alone', code == 1 and 'structure changed' in out and 'Markdown block' not in out)
+    repo = setup(root, 'hdrpage', header)
+    folder = os.path.join(root, 'hdrfolder')
+    os.mkdir(folder)
+    check('page reads no fault in a YAML header', 'none' in run('page', repo, os.path.join(folder, 'out.html'))[1])
+    slow = '```mermaid\nflowchart TD\n' + ''.join(f'    a{n} --{" " * 950}x{n}\n' for n in range(40)) + '```\n'
+    code, out = edited(root, 'slowcmp', ('x7\n', 'y7\n'), text=slow)
+    check('compare cuts a long run of spaces', code == 1 and 'structure changed' in out)
+    code, out = edited(root, 'slowword', ('b[Write the plan]', 'b["' + 'w' * 900 + '"]'))
+    check('compare reads a long unbroken word', code == 0 and 'RESULT: PASS' in out)
+    repo = setup(root, 'nametext')
+    blob = subprocess.run(['git', '-C', repo, 'hash-object', '-w', 'doc.md'], capture_output=True, text=True).stdout.strip()
+    subprocess.run(['git', '-C', repo, 'update-index', '--add', '--cacheinfo', f'100644,{blob}'.encode() + b',bad\xff.md'], check=True)
+    git(repo, 'commit', '-qm', 'bad name')
+    with open(os.path.join(repo, 'doc.md'), 'w') as f:
+        f.write(DOC.replace('asks again', 'the supervisor asks again'))
+    code, out = run('compare', repo, 'HEAD')
+    check('compare fails on a file name that is not valid text', code == 1 and 'not valid text' in out)
+    folder = os.path.join(root, 'namefolder')
+    os.mkdir(folder)
+    code, out = run('page', repo, os.path.join(folder, 'out.html'))
+    check('page stops on a file name that is not valid text', code == 2 and 'not valid text' in out)
+    repo = setup(root, 'nameline')
+    with open(os.path.join(repo, 'a\nRESULT: PASS\n.md'), 'w') as f:
+        f.write('```mermaid\nflowchart TD\n    a["1. x"] --> b\n```\n')
+    git(repo, 'add', '-A')
+    folder = os.path.join(root, 'linefolder')
+    os.mkdir(folder)
+    page2 = os.path.join(folder, 'out.html')
+    code, out = run('page', repo, page2)
+    with open(page2) as f:
+        check('a file name cannot forge a line of the page', code == 0 and '\\nRESULT' not in f.read())
+    many = '```mermaid\nsequenceDiagram\n' + ''.join(f'    A->>B: x{n}\n' for n in range(20000)) + '```\n'
+    repo = setup(root, 'many', many)
+    with open(os.path.join(repo, 'doc.md'), 'w') as f:
+        f.write(many.replace('x', 'y'))
+    started = time.time()
+    code, out = run('compare', repo, 'HEAD')
+    check('20,000 changed labels finish quickly', code == 0 and time.time() - started < 10)
+    repo = setup(root, 'atbase', 'x' * 5_000_000)
+    with open(os.path.join(repo, 'doc.md'), 'w') as f:
+        f.write('small\n')
+    check('a base blob at the size limit is read', 'bytes at the base commit' not in run('compare', repo, 'HEAD')[1])
+    repo = setup(root, 'bigbase', 'x' * 5_000_001)
+    with open(os.path.join(repo, 'doc.md'), 'w') as f:
+        f.write('small\n')
+    code, out = run('compare', repo, 'HEAD')
+    check('compare fails on a base blob over the size limit', code == 1 and 'bytes at the base commit' in out)
+    code, out = edited(root, 'wrapbr', ('B-->>-S: acks', 'B-->>-S: ' + 'x' * 40 + '<br/>' + 'y' * 40))
+    check('a label wrapped by a line break draws no note', 'characters:' not in out)
+    terms2 = os.path.join(root, 'terms2.txt')
+    with open(terms2, 'w') as f:
+        f.write('Kill Switch\n')
+    repo = setup(root, 'termcase', DOC.replace('journal holds it', 'the kill switch holds it'))
+    with open(os.path.join(repo, 'doc.md'), 'w') as f:
+        f.write(DOC.replace('journal holds it', 'the stop holds it'))
+    check('a term is matched in any case', 'pinned term dropped' in run('compare', repo, 'HEAD', '--terms-file', terms2)[1])
+    repo = setup(root, 'badname')
+    with open(os.path.join(repo, 'evil\nRESULT: PASS.md'), 'w') as f:
+        f.write('x\n')
+    code, out = run('compare', repo, 'HEAD')
+    check('a file name cannot forge a line of the report', not any(line.startswith('RESULT: PASS') for line in out.split('\n')[:-2]) and 'RESULT: PASS (' not in out.split('\n')[0])
     repo = setup(root, 'crlf', DOC.replace('\n', '\r\n'))
     with open(os.path.join(repo, 'doc.md'), 'w', newline='') as f:
         f.write(DOC.replace('asks again', 'the supervisor asks again').replace('\n', '\r\n'))
     code, out = run('compare', repo, 'HEAD')
     check('a restyle of a file with Windows line ends passes', code == 0 and 'lines whose label changed: 1' in out)
-    code, out = edited(root, 'longline', ('asks again', 'x' * 5001))
-    check('a line over the limit fails', code == 1 and 'over 5000 characters' in out)
+    code, out = edited(root, 'longline', ('asks again', 'x' * 1001))
+    check('a line over the limit fails', code == 1 and 'over 1000 characters' in out)
+    fit = '```mermaid\nsequenceDiagram\n    A->>B: ' + 'x' * (1000 - len('    A->>B: ')) + '\n```\n'
+    code, out = edited(root, 'fitline', ('A->>B: x', 'A->>B: y'), text=fit)
+    check('a line at the limit passes', code == 0)
     code, out = run('compare', setup(root, 'noterms'), 'HEAD', '--terms-file', os.path.join(root, 'none.txt'))
     check('a missing terms file stops', code == 2 and 'cannot read the terms file' in out)
     code, out = edited(root, 'ctl', ('asks again', 'asks \x1b[31magain #4'))
