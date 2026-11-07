@@ -18,7 +18,7 @@ Dependabot bumps the workflow's pinned actions weekly, per `.github/dependabot.y
 
 The owner's global `~/.claude/CLAUDE.md` is the source for these rules. This section repeats them because the repo is public and a reader or an agent may arrive without that file. The price is that the two copies can drift. The global file wins, and this section is what gets corrected.
 
-Clarity comes first. Write plain sentences a reader understands on one read. Prefer short, complete sentences, but never at the cost of clarity. Do not chop an idea into cryptic one-idea fragments. When a short sentence turns hard to parse, write the clear sentence instead, even if it runs a little longer. Explain as you go, like teaching, so the reader follows without backtracking. Avoid em dashes and semicolons. This applies to every prose surface: this file, each `SKILL.md`, commit messages, pull request bodies, and chat replies.
+Clarity comes first. Write plain sentences a reader understands on one read. Prefer short, complete sentences, but never at the cost of clarity. Do not chop an idea into cryptic one-idea fragments. When a short sentence turns hard to parse, write the clear sentence instead, even if it runs a little longer. Explain as you go, like teaching, so the reader follows without backtracking. Avoid em dashes and semicolons. This applies to every prose surface: this file, each `SKILL.md`, commit messages, pull request bodies, chat replies, and the words in an architecture or design diagram.
 
 **Impersonal voice.** Write without the first person. No "I," "my," or "mine." The subject is the process, the mechanism, or the finding, not the author. "Running the script reproduced the result" beats "I ran the script to reproduce it." Keep it active, not passive: "The check reads the config," never "the config is read." Direct advice stays as an imperative. Drop the explicit "you" and "your" where it reads cleaner.
 
@@ -31,6 +31,15 @@ Clarity comes first. Write plain sentences a reader understands on one read. Pre
 **Lead with why it matters, show the reasoning, and name the price.** Establish why something matters before explaining what it is. State the claim, then walk through why. When a choice carries a cost, name it outright, as in "the price for X is Y." When weighing two options, hand over the metric that decides between them instead of gesturing at "tradeoffs."
 
 **Cut what carries nothing.** Throat-clearing, significance-announcing pivots, self-effort asides, hedging, redundancy, decorative modifiers that survive the subtraction test, unsubstantiated superlatives, reversal scaffolding, reassurance tags, and a closing moral that restates the heading. The global file carries the worked examples for each.
+
+**A diagram's words follow the rules a blog post follows (owner directive, 2026-11-06).** A reader takes a diagram as the short version of the text beside it, so a label written as shorthand fails the reader the way a cryptic sentence does. So these rules govern every label, note, edge and legend in an architecture or design diagram.
+
+1. A label says what happens, in a plain phrase with a verb and its actor clear. Write "dies before the broker answers" rather than "dies before the ack". A label that only names a component or a participant needs no verb.
+2. A term a reader has not met is dropped, or the text beside the diagram explains it. An abbreviation gets the same treatment.
+3. A label holds one idea. Several ideas become several arrows or a note, and a long label wraps.
+4. Code identifiers, state names, entry names and a term a `SKILL.md` defines on purpose stay exact, and a restyle changes no fact, actor, arrow or order.
+
+**Say what a rule says, then point to it (owner directive, 2026-11-06).** A number chain such as "under case 3 of rule 5 of design.md's `### A fill is measured from the decision`" makes the reader open another file to learn what the sentence means, and the number breaks when the list moves. So a design doc, a charter, a CLAUDE.md or a diagram states what the rule requires in plain words, and a link to the section by name follows for a reader who wants more. A section link alone is fine where the sentence already says what happens. A list item in view of the sentence naming it needs no gloss, and neither does a heading.
 
 **Restyle an existing file in a change of its own.** `README.md` and `skills/kindle-highlights/SKILL.md` predate these rules and still carry em dashes and the second person. An edit to one line follows the rules for that line and leaves the rest of the file alone, since a restyle swept into an unrelated change hides the change it rode in with.
 
@@ -71,6 +80,7 @@ A repo drifts when two surfaces describe the same thing and only one gets update
   2. The scope list in [SECURITY.md](SECURITY.md).
   3. The receiver gotcha under Step 2 of `skills/kindle-highlights/SKILL.md`.
 - **The form of a question for the owner** sits in step 6 of `skills/ask-team/SKILL.md` and in `skills/ask-team/templates/review-comment.md`, and `review-round.md` points at the first. `tests/test_ask_team_links.py` holds the links between them.
+- **The rules on a diagram's words and on number chains** sit in three places here: `## Writing style` above, the reader lens's questions 1 and 6 in `skills/ask-team/SKILL.md`, and steps 3 and 4 of `skills/clear-wall-of-text/SKILL.md`. The owner's global file wins over all three, so a change there reaches each.
 - **The blog post** in `blog/how-to-take-back-your-kindle-highlights.md` is also published on Substack, and nothing syncs the two copies.
 
 Before reporting a change done, sweep the prose surfaces for what the change could have invalidated, and end the response with a short **Consistency sweep** note listing what was checked, what was updated, and what is still stale. For a pure-internal refactor that changes no observable behavior, say "no prose-facing surfaces affected" so it is clear the check was considered rather than forgotten.
