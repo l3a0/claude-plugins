@@ -21,14 +21,15 @@ Both commands name three faults that pass a render check.
    "word: text".
 3. A hash or semicolon that ends a label early. A sequence label stops at a hash
    or a semicolon inside it, and a semicolon in a state transition, description or
-   note draws more states. An entity such as #quot; is exempt.
+   one-line note draws more states. An entity such as #quot; is exempt.
 
 These are checks on what Mermaid reads, by patterns over one line at a time. They
 catch the forms a real restyle produced and do not read Mermaid's whole grammar, so
 a clean result is no proof. A one- or two-space join with no arrow or note, such as
 "acks activate B", reads as a sentence, and only the drawn words show it. A sequence
 or state label that holds a statement as words, such as "moves pending -> filled:
-done", or a word such as "non-xml: bad", is named though it draws correctly.
+done", or a word such as "non-xml: bad", is named though it draws correctly, as is a
+semicolon on a "word: text" line of a state note over several lines.
 
 compare checks that a restyle of a diagram's words changed nothing else. It takes
 every Markdown file that differs between the base commit and the working tree, so
@@ -54,8 +55,9 @@ An unchanged line in a changed block reports a fault as a note. So does a change
 label segment longer than 58 characters, the width the first restyle wrapped at,
 and a quoted string that changed in a sequence, state or class label. A label form
 this script cannot split is compared as a whole line, so a change to it fails rather
-than passing unread. A comment is ignored, and a directive or a YAML header compares
-as a whole line.
+than passing unread, and an unquoted label that holds a link, such as "x -- y", reads
+as such a form. A comment is ignored, and a directive or a YAML header compares as a
+whole line.
 
 A pass covers structure and those values. It does not read meaning, so a lens still
 reads each new label. These pass and are the lens's to catch: a number written as a
@@ -124,11 +126,11 @@ STATE_JOIN = re.compile(r"-->\s*\S+\s*(?::.*)?$|\S {3,}\S|\bnote\s+(?:left of|ri
 CLASS_NAME = re.compile(r'^(class\s+\S+?)\["([^"]*)"\](.*)$')
 CLASS_RELATION = re.compile(r'^(\S+(?:\s+"[^"]*")?\s+\S*(?:--|\.\.)\S*(?:\s+"[^"]*")?\s+\S+)\s*:\s*(.*)$')
 CLASS_NOTE = re.compile(r'^(note\b[^"]*)"([^"]*)"\s*$')
-ER_REL = re.compile(r'^(\S+\s+\S+(?:--|\.\.)\S+\s+\S+)\s*:\s*(?:"([^"]*)"|(\S+))$')
+ER_REL = re.compile(r'^(\S+\s+\S+(?:--|\.\.)\S+\s+\S+)\s*:\s*(?:"([^"]*)"|((?:(?!--)[^\s":])+))$')
 FLOW_EXACT = re.compile(r"^(?:.*@\{|%%|(?:classDef|class|style|linkStyle|click|direction|end|flowchart|graph)(?=\s|$))")
 FLOW_SUBGRAPH = re.compile(r"subgraph\s+([^\[\"]*)")
-FLOW_QUOTED_SUBGRAPH = re.compile(r'subgraph\s+"([^"]*)"')
-FLOW_LINK = re.compile(r"--|==|-\.")
+FLOW_QUOTED_SUBGRAPH = re.compile(r'subgraph\s+"([^"\s]*)"')
+FLOW_LINK = re.compile(r"--|==|-\.|\.-")
 FLOW_EDGE = re.compile(r"(?<![-=.])(--|==|-\.)\s+((?:(?!--|==|\.-).)+?)\s+(-->|==>|\.->|---|===|-\.-|--x|--o)(?=\s|$)")
 MARKDOWN_BLOCK = re.compile(r"^\s*`?(?:\d+[.)]|[-+*]|#{1,6}|>)(?:\s|$)|^\s*(?:-{3,}|\*{3,}|_{3,})\s*$|^\s*(?:~{3,}|`{3,})")
 IDENT = re.compile(r"`[^`]+`|\b\w+\(\)|\b\w+_\w+\b|\b[a-z][a-zA-Z0-9]*[A-Z]\w*\b|\b[A-Z][a-z0-9]+[A-Z]\w*\b|\b[\w-]{2,}\.[A-Za-z]\w+\b")
@@ -259,8 +261,7 @@ def skel_sequence(text):
 def flow_shape(text, start):
     """Return where the node text opening at start closes, or -1."""
     if text[start] == ">":
-        end = text.find("]", start)
-        return -1 if FLOW_LINK.search(text[start : end + 1]) else end
+        return text.find("]", start)
     depth, quoted = 0, False
     for index in range(start, len(text)):
         char = text[index]
@@ -273,6 +274,12 @@ def flow_shape(text, start):
             if depth == 0:
                 return index
     return -1
+
+
+def holds_link(span, opener):
+    """Say whether a span is really more of the line, so it compares whole and never reads as a label."""
+    words = span.strip()
+    return opener != '"' and not words.startswith('"') and words.strip("-=.") != "" and FLOW_LINK.search(words) is not None
 
 
 def skel_flow(text):
@@ -290,16 +297,16 @@ def skel_flow(text):
         after_id = before.isalnum() or before == "_" or (subgraph and before == " ")
         if char == '"' or char == "|":
             end = text.find(char, index + 1)
-            if end > 0:
+            if end > 0 and not holds_link(text[index + 1 : end], char):
                 labels.append(text[index + 1 : end].strip('"'))
                 out.append(char + '""' + char if char == "|" else '""')
                 index = end + 1
                 continue
         if after_id and (char in OPENERS or char == ">"):
             end = flow_shape(text, index)
-            if end > 0:
-                inner = text[index : end + 1]
-                width = 1 if char == ">" else len(inner) - len(inner.lstrip("[({/\\"))
+            inner = text[index : end + 1] if end > 0 else ""
+            width = 1 if char == ">" else len(inner) - len(inner.lstrip("[({/\\"))
+            if end > 0 and not holds_link(inner[width:-width], char):
                 labels.append(inner[width:-width].strip('"'))
                 out.append(inner[:width] + '""' + inner[-width:])
                 index = end + 1
@@ -465,7 +472,7 @@ def compare_line(path, family, old, new, terms, block_changed, header, report, n
         report(f"{place}: leading whitespace changed")
     if old_skel != new_skel:
         report(f"{place}: structure changed, old {old_skel}, new {new_skel}")
-    if block_changed:
+    if block_changed and old[0] not in header:
         for fault in faults(family, new_text, new_labels):
             (report if old_line != new_line else notes.append)(f"{place}: {fault}")
     if old_labels == new_labels:

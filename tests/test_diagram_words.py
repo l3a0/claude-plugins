@@ -301,7 +301,7 @@ with tempfile.TemporaryDirectory() as root:
     code, out = edited(root, 'thirdnode', ('--- b ---', '--- x ---'), text='```mermaid\nflowchart TD\n    a --- b --- c\n```\n')
     check('a node between two plain links is no edge label', code == 1 and 'structure changed' in out)
     check('an entity label can gain the quotes a phrase needs', edited(
-        root, 'erquote', ('PLAN : "belongs"', 'PLAN : "belongs to"'), text=DOC.replace('PLAN : "belongs"', 'PLAN : belongs').replace('PLAN : belongs', 'PLAN : "belongs"'))[0] == 0)
+        root, 'erquote', ('PLAN : belongs', 'PLAN : "belongs to"'), text=DOC.replace('PLAN : "belongs"', 'PLAN : belongs'))[0] == 0)
     code, out = edited(root, 'wekept', ('we ack', 'we ack it now'), text=DOC.replace('B-->>-S: acks', 'B-->>-S: we ack'))
     check('first person the old label held passes', code == 0)
 
@@ -462,6 +462,21 @@ with tempfile.TemporaryDirectory() as root:
     check('a statement joined onto a keyword fails', code == 1 and 'second statement suspected' in out)
     code, out = edited(root, 'kw3', ('else it waits', 'else it waits B->>S: more'), text=DOC.replace('    end\n', '    else it waits\n    end\n', 1))
     check('a statement joined onto else fails', code == 1 and 'second statement suspected' in out)
+    code, out = edited(root, 'erjoin2', ('"gets filled by"', '"gets filled by"C||--o{D:"y"'))
+    check('an entity line joined with no spaces is structure', code == 1 and 'structure changed' in out)
+    for name, old, new in (
+        ('a dotted edge', 'a -. z>2 .-> b[Sell]', 'a -. z>2 .-> c[Sell]'),
+        ('two pipes', 'a -- x|y --> b -- z|w --> c', 'a -- x|y --> d -- z|w --> c'),
+        ('two brackets', 'a -- x[y --> b -- z]w --> c', 'a -- x[y --> d -- z]w --> c'),
+        ('two parentheses', 'a -- try(1 --> b -- 2) --> c', 'a -- try(1 --> d -- 2) --> c'),
+        ('two braces', 'a -- x{1 --> b -- 2} --> c', 'a -- x{1 --> d -- 2} --> c'),
+    ):
+        code, out = edited(root, 'span' + name.replace(' ', ''), (old, new), text=f'```mermaid\nflowchart TD\n    {old}\n```\n')
+        check(f'a node hidden by {name} is structure', code == 1 and 'structure changed' in out)
+    code, out = edited(root, 'quotedlink', ('a -- b', 'a -- the b'), text='```mermaid\nflowchart TD\n    x["a -- b"] --> y\n```\n')
+    check('a quoted label can hold a link and still change', code == 0)
+    code, out = edited(root, 'sgspace', ('"Order flow"', '"How an order flows"'), text='```mermaid\nflowchart TD\n    subgraph "Order flow"\n    a --> b\n    end\n```\n')
+    check('a subgraph title with a space is no id, so it can change', code == 0)
     code, out = edited(root, 'erjoin', ('"gets filled by"', '"gets filled by" C ||--o{ D : "y"'))
     check('a joined entity line is structure', code == 1 and 'structure changed' in out)
     flag = '```mermaid\nflowchart TD\n    a -- z>2 --> b[Sell]\n```\n'
@@ -495,9 +510,14 @@ with tempfile.TemporaryDirectory() as root:
     check('an accessible title is not drawn, so it raises no fault', 'ends this label early' not in out)
     code, out = edited(root, 'c1', ('asks again', 'asks \x9b2J\u2028RESULT: PASS #4'))
     check('C1 bytes and Unicode line breaks never reach the output', '\x9b' not in out and '\u2028' not in out)
+    code, out = edited(root, 'bidi', ('asks again', 'asks \u200e\u200f\u202e\u2066 #4'))
+    check('text direction marks never reach the output', not any(mark in out for mark in '\u200e\u200f\u202e\u2066'))
     header = '```mermaid\n---\ntitle: 1. Orders; fills\n---\nstateDiagram-v2\n    A --> B: holds\n```\n'
     code, out = edited(root, 'hdr', ('holds', 'it holds'), text=header)
     check('a YAML header raises no fault', code == 0 and 'Markdown block' not in out and 'ends this label' not in out)
+    arrowed = header.replace('1. Orders; fills', 'from A --> B')
+    code, out = edited(root, 'hdr3', ('holds', 'it holds'), text=arrowed)
+    check('an arrow in a YAML title raises no note', code == 0 and 'second statement' not in out)
     code, out = edited(root, 'hdr2', ('title: 1. Orders; fills', 'title: 2. Orders; fills'), text=header)
     check('a changed YAML header fails as structure alone', code == 1 and 'structure changed' in out and 'Markdown block' not in out)
     repo = setup(root, 'hdrpage', header)
@@ -506,9 +526,9 @@ with tempfile.TemporaryDirectory() as root:
     check('page reads no fault in a YAML header', 'none' in run('page', repo, os.path.join(folder, 'out.html'))[1])
     slow = '```mermaid\nflowchart TD\n' + ''.join(f'    a{n} --{" " * 950}x{n}\n' for n in range(40)) + '```\n'
     code, out = edited(root, 'slowcmp', ('x7\n', 'y7\n'), text=slow)
-    check('compare cuts a long run of spaces', code != 124)
+    check('compare cuts a long run of spaces', code == 1 and 'structure changed' in out)
     code, out = edited(root, 'slowword', ('b[Write the plan]', 'b["' + 'w' * 900 + '"]'))
-    check('compare reads a long unbroken word', code != 124)
+    check('compare reads a long unbroken word', code == 0 and 'RESULT: PASS' in out)
     repo = setup(root, 'nametext')
     blob = subprocess.run(['git', '-C', repo, 'hash-object', '-w', 'doc.md'], capture_output=True, text=True).stdout.strip()
     subprocess.run(['git', '-C', repo, 'update-index', '--add', '--cacheinfo', f'100644,{blob}'.encode() + b',bad\xff.md'], check=True)
@@ -568,6 +588,9 @@ with tempfile.TemporaryDirectory() as root:
     check('a restyle of a file with Windows line ends passes', code == 0 and 'lines whose label changed: 1' in out)
     code, out = edited(root, 'longline', ('asks again', 'x' * 1001))
     check('a line over the limit fails', code == 1 and 'over 1000 characters' in out)
+    fit = '```mermaid\nsequenceDiagram\n    A->>B: ' + 'x' * (1000 - len('    A->>B: ')) + '\n```\n'
+    code, out = edited(root, 'fitline', ('A->>B: x', 'A->>B: y'), text=fit)
+    check('a line at the limit passes', code == 0)
     code, out = run('compare', setup(root, 'noterms'), 'HEAD', '--terms-file', os.path.join(root, 'none.txt'))
     check('a missing terms file stops', code == 2 and 'cannot read the terms file' in out)
     code, out = edited(root, 'ctl', ('asks again', 'asks \x1b[31magain #4'))
