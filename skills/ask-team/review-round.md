@@ -47,7 +47,7 @@ Run the completeness and over-reach lenses `SKILL.md`'s step 2 names, and on a d
 
 A round run this way follows lens mode's run limit, as `SKILL.md`'s lens mode says: the roles and the verifiers stay under ten runs in each round, and the completeness, over-reach and reader lenses are the caller's own.
 
-From round 2 on, seat the completeness and over-reach lenses, on a design the reader lens, and each role whose objective the fix can hurt, by `SKILL.md`'s step 2 as applied to the fix rather than to the change. Unless the brief's line says none, the risk engineer sits every round, because no command finds every route to an action and the session cannot judge its own fix. Any other required seat sits when the fix touches its path. A role whose area no fix touched sits out, and the comment names it and what the fix was searched for.
+From round 2 on, seat the completeness and over-reach lenses, on a design the reader lens, and each role whose objective the fix can hurt, by `SKILL.md`'s step 2 as applied to the fix rather than to the change. The risk engineer sits in round 1 to confirm the brief's line, and in every later round unless that line says none, because no command finds every route to an action and the session cannot judge its own fix. Any other required seat sits when the fix touches its path. Any other role whose area no fix touched sits out, and the comment names it and what the fix was searched for.
 
 ## 3. Run the blind round
 
