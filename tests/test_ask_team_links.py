@@ -59,8 +59,8 @@ step2 = ROUND.split("## 2. Choose the lenses")[1].split("## 3. ")[0]
 step6 = ROUND.split("## 6. Price the round")[1].split("## 7. ")[0]
 check("a later round reads the fix", "the diff from the last round's anchor to the fixing commit" in step1)
 check("a later round seats by the fix", "as applied to the fix rather than to the change" in step2)
-check("only tests or statements end the rounds", "every finding it confirmed claims only a missing test or only a false or missing statement" in step6)
-check("every fix must be of that kind", "every fix only adds that test or corrects that statement" in step6)
+check("only tests or statements end the rounds", "every veto and must-fix it confirmed claims only a missing test or only a false or missing statement" in step6)
+check("every fix must be of that kind", "every fix for them only adds that test or corrects that statement" in step6)
 check("the session shows those tests fail", "failing on the mutant that raised it" in step6)
 exception = step6.split("The exception never covers")[1].split("The first round that confirms neither")[0]
 for clause in ("a wrong result or a weakened guarantee", "any other veto", "any rule the subject writes", "the path to an irreversible action", "a test of it or a test helper", "with the required seat"):
