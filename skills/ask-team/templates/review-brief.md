@@ -8,7 +8,7 @@
 
 Review the head commit named here, not the branch tip, which may move while the round runs.
 
-<From round 2 on, what this round reads: `git diff <last round's anchor> <fixing commit>` without what a merge of the base brought, any passage or function that diff touches or that states the same fact, and the path below from its entry to the action where the risk engineer says the fix touches it. Where a fix rewrites the subject, it reads the whole change. Delete this line in round 1.>
+<From round 2 on, what this round reads: `git diff <last round's anchor> <fixing commit>` without what a merge of the base brought, and any passage or function that diff touches or that states the same fact. The risk engineer also reads the path below from its entry to the action. Where a fix rewrites the subject, the round reads the whole change. Delete this line in round 1.>
 
 <The files that hold the path to an irreversible action, with their tests and helpers, and the calls that perform the action, or "none in this subject".>
 
