@@ -130,7 +130,8 @@ ER_REL = re.compile(r'^(\S+\s+\S+(?:--|\.\.)\S+\s+\S+)\s*:\s*(?:"([^"]*)"|((?:(?
 FLOW_EXACT = re.compile(r"^(?:.*@\{|%%|(?:classDef|class|style|linkStyle|click|direction|end|flowchart|graph)(?=\s|$))")
 FLOW_SUBGRAPH = re.compile(r"subgraph\s+([^\[\"]*)")
 FLOW_QUOTED_SUBGRAPH = re.compile(r'subgraph\s+"([^"\s]*)"')
-FLOW_LINK = re.compile(r"-->|==>|\.->|---|===|--[xo](?=\s|$)")
+FLOW_ARROWS = ("-->", "==>", ".->", "---", "===")
+FLOW_CROSS = re.compile(r"--[xo](?=\s|$)")
 FLOW_EDGE = re.compile(r"(?<![-=.])(--|==|-\.)\s+((?:(?!--|==|\.-).)+?)\s+(-->|==>|\.->|---|===|-\.-|--x|--o)(?=\s|$)")
 MARKDOWN_BLOCK = re.compile(r"^\s*`?(?:\d+[.)]|[-+*]|#{1,6}|>)(?:\s|$)|^\s*(?:-{3,}|\*{3,}|_{3,})\s*$|^\s*(?:~{3,}|`{3,})")
 IDENT = re.compile(r"`[^`]+`|\b\w+\(\)|\b\w+_\w+\b|\b[a-z][a-zA-Z0-9]*[A-Z]\w*\b|\b[A-Z][a-z0-9]+[A-Z]\w*\b|\b[\w-]{2,}\.[A-Za-z]\w+\b")
@@ -279,7 +280,9 @@ def flow_shape(text, start):
 def holds_link(span, opener):
     """Say whether a span runs past a closing arrow, so it is more of the line rather than a label."""
     words = span.strip()
-    return opener != '"' and not words.startswith('"') and words.strip("-=.") != "" and FLOW_LINK.search(words) is not None
+    if opener == '"' or words.startswith('"') or not words.strip("-=."):
+        return False
+    return any(arrow in words for arrow in FLOW_ARROWS) or FLOW_CROSS.search(words) is not None
 
 
 def skel_flow(text):
