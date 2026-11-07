@@ -59,14 +59,35 @@ step2 = ROUND.split("## 2. Choose the lenses")[1].split("## 3. ")[0]
 step6 = ROUND.split("## 6. Price the round")[1].split("## 7. ")[0]
 check("a later round reads the fix", "the diff from the last round's anchor to the fixing commit" in step1)
 check("a later round seats by the fix", "as applied to the fix rather than to the change" in step2)
-check("a fix of tests or a stated limit starts no round", "adds only tests or only states a limit in prose" in step6)
-check("the session shows those tests fail", "fails on the mutant that raised it" in step6)
+check("only tests or statements end the rounds", "every finding it confirmed claims only a missing test or only a false or missing statement" in step6)
+check("every fix must be of that kind", "every fix only adds that test or corrects that statement" in step6)
+check("the session shows those tests fail", "failing on the mutant that raised it" in step6)
+check("the exception leaves out the paths that matter", "The exception never covers a wrong result or a weakened guarantee" in step6 and "the path to an irreversible action" in step6)
+check("a later round rereads a rewrite", "rewrites the subject rather than patching it, the round reads the whole change again" in step1)
+check("a later round reads an irreversible path whole", "reads that path from its entry to the action" in step1)
+check("a required seat still sits", "A required seat still sits when the fix touches its path" in step2)
+check("a later round keeps the reader lens", "on a design the reader lens" in step2)
+step3 = ROUND.split("## 3. Run the blind round")[1].split("## 4. ")[0]
+check("the limits do not bind an irreversible path", "Neither limit binds the path to an irreversible action" in step3)
+check("a session reads the state before pushing", "--json state` before pushing" in step5)
+check("a session names the cause", "name the cause, and fix that" in step5)
+check("the paragraph step 5 points at sits above it", 0 <= step5.find("Where a passage this change adds") < step5.find("the first sentence of the paragraph above"))
+between = step5.split("Where a passage this change adds")[1].split("the first sentence of the paragraph above")[0]
+check("nothing sits between them", between.count("\n\n") == 1)
 BRIEF = (ROOT / "skills/ask-team/templates/review-brief.md").read_text()
 check("the brief defines the kinds", "## What each kind means" in BRIEF)
 kinds = BRIEF.split("## What each kind means")[1].split("## Out of scope")[0]
-check("each kind the finding format names is defined", all(f"**{word}:**" in kinds for word in ("Veto", "Must fix", "Should fix", "Note")))
+format_line = re.search(r"\*\*Kind:\*\* (.+)", SKILL).group(1)
+named = [word.strip().rstrip(".") for word in re.split(r",| or ", format_line) if word.strip()]
+check("each kind the finding format names is defined", bool(named) and all(f"**{word.capitalize()}:**" in kinds for word in named))
 check("the kinds lower no veto or limit", "lowers no veto, no hard limit" in kinds)
+check("a rare fault on something protected stays a must fix", "however rare" in kinds and "reaches nothing a role protects" in kinds)
+outside = BRIEF.split("\n## Out of scope")[1]
+check("a limit on what a role protects stays in review", "A limit on anything a role protects stays in review" in outside)
+check("every prompt gets the kinds", "every prompt gets its `## What each kind means`" in SKILL)
 check("a surviving mutant may be confirmed by running it", "a veto that names a surviving mutant" in skill4)
+check("a mutant that dies goes to a verifier", "A run where the mutant dies goes to a verifier" in skill4)
+check("the comment names roles that sat out and fixes that start no round", "Roles that sat out" in TEMPLATE and "starts no round for" in TEMPLATE)
 
 subject = re.search(r"^2\. \*\*(.+?)\*\*", SKILL.split("### 1. Name the subject")[1], re.M)
 check("step 1's second subject is the design subject", bool(subject) and "design" in subject.group(1))
