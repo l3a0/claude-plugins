@@ -3,7 +3,7 @@
 
     python3 tests/test_diagram_words.py
 """
-import os, re, shutil, subprocess, sys, tempfile, time
+import html.parser, os, re, shutil, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, '..', 'skills', 'ask-team', 'scripts', 'diagram_words.py')
@@ -15,6 +15,30 @@ def check(name, cond):
     global failures
     print(('ok   ' if cond else 'FAIL ') + name)
     failures += not cond
+
+
+class Report(html.parser.HTMLParser):
+    """Keep only what the drawn page wrote into its three report elements, so text in its script counts for nothing."""
+
+    def __init__(self):
+        super().__init__()
+        self.inside, self.text = False, []
+
+    def handle_starttag(self, tag, attrs):
+        self.inside = dict(attrs).get('id') in ('head', 'failed', 'drawn')
+
+    def handle_endtag(self, tag):
+        self.inside = False
+
+    def handle_data(self, data):
+        if self.inside:
+            self.text.append(data)
+
+
+def report_of(page):
+    report = Report()
+    report.feed(page)
+    return '\n'.join(report.text)
 
 
 def git(repo, *args):
@@ -428,7 +452,7 @@ with tempfile.TemporaryDirectory() as root:
             done = subprocess.run([chrome, '--headless=new', '--no-sandbox', '--disable-gpu', '--timeout=30000',
                                    '--virtual-time-budget=25000', f'--user-data-dir={os.path.join(root, "chrome" + version)}',
                                    '--dump-dom', 'file://' + page], capture_output=True, text=True, timeout=120)
-            return re.sub(r'<script.*?</script>', '', done.stdout, flags=re.S)
+            return report_of(done.stdout)
         with open(os.path.join(repo, 'doc.md'), 'a') as f:
             f.write('\n```mermaid\nflowchart TD\n    a[ --> \n```\n')
             f.write('\n```mermaid\nflowchart TD\n    %% nothing to draw\n```\n')
