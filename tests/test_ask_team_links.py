@@ -58,6 +58,16 @@ subject = re.search(r"^2\. \*\*(.+?)\*\*", SKILL.split("### 1. Name the subject"
 check("step 1's second subject is the design subject", bool(subject) and "design" in subject.group(1))
 check("the reader lens names subject 2 in step 1", "subject 2 in step 1" in SKILL)
 
+lens = SKILL.split("also gets a reader lens")[1].split("The reader lens's findings go through step 4")[0]
+check("the reader lens counts its questions", "It asks six things." in lens)
+check("the reader lens lists that many", re.findall(r"^(\d)\. ", lens.split("Questions 3 and 6")[0], re.M) == list("123456"))
+check("the questions it names exist", "Questions 3 and 6 read the words the renderer drew" in lens)
+script = ROOT / "skills/ask-team/scripts/diagram_words.py"
+check("the script the lens runs exists", script.exists())
+for command in ("diagram_words.py page", "diagram_words.py compare"):
+    check(f"the lens and the script agree on {command}", command in lens and command.split()[-1] in script.read_text())
+check("the lens names the words Mermaid draws in a label's place", "Unsupported markdown: list" in lens and "Unsupported markdown" in script.read_text())
+
 for word in ("recommendation", "metric", "price"):
     step6 = SKILL.split("### 6. Post and price")[1].split("## Lens mode")[0]
     check(f"step 6 asks for the {word}", word in step6)
