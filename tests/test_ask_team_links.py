@@ -54,6 +54,20 @@ skill5 = SKILL.split("### 5. Apply what survives")[1].split("### 6. ")[0]
 check("SKILL.md's step 4 names that fix", "whose fix changed to read an existing record" in skill4)
 check("SKILL.md's step 5 sends a fix that adds a record to the round", "a fix that adds a new kind of record or stored state" in skill5)
 
+step1 = ROUND.split("## 1. Write the brief")[1].split("## 2. ")[0]
+step2 = ROUND.split("## 2. Choose the lenses")[1].split("## 3. ")[0]
+step6 = ROUND.split("## 6. Price the round")[1].split("## 7. ")[0]
+check("a later round reads the fix", "the diff from the last round's anchor to the fixing commit" in step1)
+check("a later round seats by the fix", "as applied to the fix rather than to the change" in step2)
+check("a fix of tests or a stated limit starts no round", "adds only tests or only states a limit in prose" in step6)
+check("the session shows those tests fail", "fails on the mutant that raised it" in step6)
+BRIEF = (ROOT / "skills/ask-team/templates/review-brief.md").read_text()
+check("the brief defines the kinds", "## What each kind means" in BRIEF)
+kinds = BRIEF.split("## What each kind means")[1].split("## Out of scope")[0]
+check("each kind the finding format names is defined", all(f"**{word}:**" in kinds for word in ("Veto", "Must fix", "Should fix", "Note")))
+check("the kinds lower no veto or limit", "lowers no veto, no hard limit" in kinds)
+check("a surviving mutant may be confirmed by running it", "a veto that names a surviving mutant" in skill4)
+
 subject = re.search(r"^2\. \*\*(.+?)\*\*", SKILL.split("### 1. Name the subject")[1], re.M)
 check("step 1's second subject is the design subject", bool(subject) and "design" in subject.group(1))
 check("the reader lens names subject 2 in step 1", "subject 2 in step 1" in SKILL)
