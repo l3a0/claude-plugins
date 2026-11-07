@@ -15,18 +15,20 @@ Both commands name three faults that pass a render check.
    and 11.12.0 and 12.2.0 draw the words, so a reader's version decides whether
    this shows. The check reads node text, edge text with a space on each side,
    subgraph titles, state transitions, names, descriptions and one-line notes,
-   and class names, relations and notes. A label in any other form, such as a
-   state note or node label over several lines or a class member, goes unnamed.
+   and class names, relations with a space around the arrow, and notes. A label in
+   any other form, such as a node label over several lines or a class member, goes
+   unnamed, and so does a line of a state note over several lines unless it reads
+   "word: text".
 3. A hash or semicolon that ends a label early. A sequence label stops at a hash
-   or a semicolon inside it, and a semicolon in an unquoted state label draws more
-   states. An entity such as #quot; is exempt.
+   or a semicolon inside it, and a semicolon in a state transition, description or
+   note draws more states. An entity such as #quot; is exempt.
 
 These are checks on what Mermaid reads, by patterns over one line at a time. They
 catch the forms a real restyle produced and do not read Mermaid's whole grammar, so
 a clean result is no proof. A one- or two-space join with no arrow or note, such as
 "acks activate B", reads as a sentence, and only the drawn words show it. A sequence
-label that holds a statement as words, such as "moves pending -> filled: done", is
-named though it draws correctly, as is a semicolon in a state note over several lines.
+or state label that holds a statement as words, such as "moves pending -> filled:
+done", or a word such as "non-xml: bad", is named though it draws correctly.
 
 compare checks that a restyle of a diagram's words changed nothing else. It takes
 every Markdown file that differs between the base commit and the working tree, so
@@ -39,7 +41,8 @@ structure and label, and fails on:
 - on a changed label, a number or code identifier that differs in value or order.
   An identifier is a backticked span, snake_case, camelCase, name() or a name.ext
   with two or more characters on each side. A number written in digits keeps its
-  sign and a percent mark, and becoming a word counts as differing,
+  sign and a percent mark, and becoming a word counts as differing. A hyphen straight
+  after a word is not read as a sign,
 - on a changed label, a term from --terms-file that was lost. A term is matched as
   a lowercase substring, so "journal" also holds "journaled". Build the file from
   the repository's documented vocabulary,
@@ -96,7 +99,7 @@ MERMAID_SHA384 = "sha384-8xUhuLNMjW/cI2Dacg3DR4WliYznvIg0LVG1stctThKD/YVrJFI9TNC
 CDN = f"https://cdn.jsdelivr.net/npm/mermaid@{MERMAID}/dist/mermaid.min.js"
 WRAP = 58
 MAX_BYTES = 5_000_000
-MAX_LINE = 5_000  # Longer than any real label, and the patterns below slow down past it.
+MAX_LINE = 1_000  # Over twice any real line. Time grows faster than length, so this also bounds the run.
 
 # Any indent, so a fence inside a list item is read too.
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})\s*(\S*)")
@@ -105,8 +108,9 @@ ACTORS = rf"{ACTOR}(?:\s*,\s*{ACTOR}|\s+{ACTOR})*"
 SEQ_ARROW = r"(?:<<-->>|<<->>|-->>|->>|-->|->|--x|-x|--\)|-\))"
 SEQ_MSG = re.compile(rf"^({ACTOR}?)\s*({SEQ_ARROW})\s*([+-]?)({ACTOR})\s*:\s*(.*)$")
 SEQ_NOTE = re.compile(rf"^Note\s+(over|left of|right of)\s+({ACTORS})\s*:\s*(.*)$", re.I)
-SEQ_NAME = re.compile(r"^(?:participant|actor)\s+\S+\s+as\s+(.*)$|^title\s*:?\s*(.*)$", re.I)
-SEQ_KEY = re.compile(r"^(loop|alt|else|opt|par|and|critical|option|break|rect)\b\s*(.*)$")
+SEQ_ALIAS = re.compile(r"^(?:participant|actor)\s+\S+\s+as\s+(.*)$", re.I)
+SEQ_TITLE = re.compile(r"^title\b\s*:?\s*(.*)$", re.I)
+SEQ_KEY = re.compile(r"^(loop|alt|else|opt|par|and|critical|option|break)\b\s*(.*)$")
 SEQ_JOIN = re.compile(
     rf"\S {{3,}}\S|(?<![\w-]){ACTOR}\s*{SEQ_ARROW}\s*[+-]?{ACTOR}\s*:|\bNote\s+(?:over|left of|right of)\s+{ACTORS}\s*:",
     re.I,
@@ -120,11 +124,13 @@ STATE_JOIN = re.compile(r"-->\s*\S+\s*(?::.*)?$|\S {3,}\S|\bnote\s+(?:left of|ri
 CLASS_NAME = re.compile(r'^(class\s+\S+?)\["([^"]*)"\](.*)$')
 CLASS_RELATION = re.compile(r'^(\S+(?:\s+"[^"]*")?\s+\S*(?:--|\.\.)\S*(?:\s+"[^"]*")?\s+\S+)\s*:\s*(.*)$')
 CLASS_NOTE = re.compile(r'^(note\b[^"]*)"([^"]*)"\s*$')
-ER_REL = re.compile(r'^(\S+\s+\S+(?:--|\.\.)\S+\s+\S+)\s*:\s*(?:"(.*)"|(\S+))$')
+ER_REL = re.compile(r'^(\S+\s+\S+(?:--|\.\.)\S+\s+\S+)\s*:\s*(?:"([^"]*)"|(\S+))$')
 FLOW_EXACT = re.compile(r"^(?:.*@\{|%%|(?:classDef|class|style|linkStyle|click|direction|end|flowchart|graph)(?=\s|$))")
 FLOW_SUBGRAPH = re.compile(r"subgraph\s+([^\[\"]*)")
+FLOW_QUOTED_SUBGRAPH = re.compile(r'subgraph\s+"([^"]*)"')
+FLOW_LINK = re.compile(r"--|==|-\.")
 FLOW_EDGE = re.compile(r"(?<![-=.])(--|==|-\.)\s+((?:(?!--|==|\.-).)+?)\s+(-->|==>|\.->|---|===|-\.-|--x|--o)(?=\s|$)")
-MARKDOWN_BLOCK = re.compile(r"^\s*`?(?:\d+[.)]|[-+*]|#{1,6}|>)(?:\s|$)|^\s*(?:-{3,}|\*{3,}|_{3,}|~{3,})\s*$")
+MARKDOWN_BLOCK = re.compile(r"^\s*`?(?:\d+[.)]|[-+*]|#{1,6}|>)(?:\s|$)|^\s*(?:-{3,}|\*{3,}|_{3,})\s*$|^\s*(?:~{3,}|`{3,})")
 IDENT = re.compile(r"`[^`]+`|\b\w+\(\)|\b\w+_\w+\b|\b[a-z][a-zA-Z0-9]*[A-Z]\w*\b|\b[A-Z][a-z0-9]+[A-Z]\w*\b|\b[\w-]{2,}\.[A-Za-z]\w+\b")
 NUMBER = re.compile(r"(?:(?<!\w)-|[+−])?\d+(?:\.\d+)?%?")
 ENTITY = re.compile(r"#\w+;")
@@ -149,7 +155,7 @@ def git(repo, *args):
 
 def plain(text):
     """Blank control characters and line breaks, so a diagram's words or a file's name cannot forge a line."""
-    return re.sub(r"[\x00-\x1f\x7f-\x9f]", "?", text)
+    return re.sub(r"[\x00-\x1f\x7f-\x9f\u200e\u200f\u2028-\u202e\u2066-\u2069]", "?", text)
 
 
 def stop(message):
@@ -164,7 +170,7 @@ def split_blocks(text):
     """
     blocks, outside = [], []
     fence, block, start = None, None, 0
-    for number, line in enumerate(text.split("\n"), 1):
+    for number, line in enumerate(re.split(r"\r\n?|\n", text), 1):  # Mermaid breaks a line at a bare return too.
         if fence is None:
             opened = FENCE.match(line)
             if opened and opened[2] == "mermaid":
@@ -238,9 +244,12 @@ def skel_sequence(text):
     found = SEQ_NOTE.match(text)
     if found:
         return ("note", found[1], re.sub(r"\s*,\s*", ",", found[2])), [found[3]]
-    found = SEQ_NAME.match(text)
+    found = SEQ_ALIAS.match(text)
     if found:
-        return ("exact", text), [found[1] or found[2] or ""]
+        return ("exact", text), [found[1]]
+    found = SEQ_TITLE.match(text)
+    if found:
+        return ("title",), [found[1]]
     found = SEQ_KEY.match(text)
     if found:
         return ("key", found[1]), [found[2]]
@@ -250,7 +259,8 @@ def skel_sequence(text):
 def flow_shape(text, start):
     """Return where the node text opening at start closes, or -1."""
     if text[start] == ">":
-        return text.find("]", start)
+        end = text.find("]", start)
+        return -1 if FLOW_LINK.search(text[start : end + 1]) else end
     depth, quoted = 0, False
     for index in range(start, len(text)):
         char = text[index]
@@ -269,7 +279,7 @@ def skel_flow(text):
     """Replace each node's text and each edge label with an empty mark, keeping the shape around it."""
     if not text or FLOW_EXACT.match(text):
         return ("exact", text), []
-    bare = FLOW_SUBGRAPH.fullmatch(text)
+    bare = FLOW_SUBGRAPH.fullmatch(text) or FLOW_QUOTED_SUBGRAPH.fullmatch(text)
     if bare:
         return ("exact", text), [bare[1]]
     out, labels, index = [], [], 0
@@ -339,7 +349,7 @@ def skel_class(text):
 def skel_er(text):
     found = ER_REL.match(text)
     if found:
-        return ("rel", found[1], found[2] is not None), [found[2] if found[2] is not None else found[3]]
+        return ("rel", found[1]), [found[2] if found[2] is not None else found[3]]
     return ("exact", text), []
 
 
@@ -362,14 +372,16 @@ def faults(family, text, labels):
     if NOT_DRAWN.match(text):
         return found
     if family == "sequence":
-        first = None if SEQ_NAME.match(text) else SEQ_STATEMENT.match(text)
+        statement = SEQ_MSG.match(text) or not (SEQ_ALIAS.match(text) or SEQ_TITLE.match(text) or SEQ_KEY.match(text))
+        first = SEQ_STATEMENT.match(text) if statement else None
         body = text[first.end() :] if first else " ".join(labels) or text
         if SEQ_JOIN.search(body):
             found.append(f"second statement suspected on this line: {text}")
     named = family == "state" and STATE_NAME.match(text)
     if family == "state":
-        head, _, label = text.partition(":")
-        if (named and "-->" in text) or head.count("-->") > 1 or STATE_JOIN.search(label):
+        rest = text[named.end() :] if named else text
+        head, _, label = rest.partition(":")
+        if (named and "-->" in rest) or head.count("-->") > 1 or STATE_JOIN.search(label):
             found.append(f"second statement suspected on this line: {text}")
     if family == "sequence" or (family == "state" and not named):
         for label in labels:
@@ -602,10 +614,10 @@ def page(args):
         except ValueError as error:
             stop(f"{path}: {error}")
         for start, lines in parsed:
-            faulted = [f"{path}:{number}: {fault}" for number, fault in block_faults(lines)]
+            faulted = [plain(f"{path}:{number}: {fault}") for number, fault in block_faults(lines)]
             found += faulted
             source = "\n".join(line for _, line in lines)
-            blocks.append({"file": path, "line": start, "src": source, "faults": faulted})
+            blocks.append({"file": plain(path), "line": start, "src": source, "faults": faulted})
     if not blocks:
         print("no Mermaid block in those files", file=sys.stderr)
         return 2
@@ -620,7 +632,7 @@ def page(args):
             }
         )
     print(f"wrote {len(blocks)} blocks to {args.out}, for Mermaid {MERMAID}")
-    print("faults:", *(plain(fault) for fault in found or ["none"]), sep="\n  ")
+    print("faults:", *(found or ["none"]), sep="\n  ")
     return 0
 
 
