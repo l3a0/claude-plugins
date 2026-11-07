@@ -454,8 +454,7 @@ def per_label(pattern, labels):
 def compare_line(path, family, old, new, terms, block_changed, header, report, notes):
     """Compare one line of a block, and return its old and new labels."""
     old_line, new_number, new_line = old[1], new[0], new[1]
-    in_header = old[0] in header
-    skeleton = skel_exact if in_header else SKELETONS.get(family, skel_exact)
+    skeleton = skel_exact if old[0] in header else SKELETONS.get(family, skel_exact)
     old_text, new_text = squeezed(old_line), squeezed(new_line)
     if old_text.startswith("%%") and new_text.startswith("%%") and "%%{" not in old_text + new_text:
         return [], []
@@ -466,7 +465,7 @@ def compare_line(path, family, old, new, terms, block_changed, header, report, n
         report(f"{place}: leading whitespace changed")
     if old_skel != new_skel:
         report(f"{place}: structure changed, old {old_skel}, new {new_skel}")
-    if block_changed and not in_header:
+    if block_changed:
         for fault in faults(family, new_text, new_labels):
             (report if old_line != new_line else notes.append)(f"{place}: {fault}")
     if old_labels == new_labels:
