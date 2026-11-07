@@ -120,6 +120,7 @@ default = re.search(r'^MERMAID = "(.+)"$', script.read_text(), re.M)
 clear = (ROOT / "skills/clear-wall-of-text/SKILL.md").read_text()
 check("clear-wall-of-text names the page's version", bool(default) and f"Mermaid {default.group(1)}, the version GitHub's viewer held" in clear)
 check("clear-wall-of-text sends the page to a new folder", "<new folder>/out.html" in clear)
+check("clear-wall-of-text and the lens count the same faults", "Three faults pass a render check" in clear and "Three faults pass a render check" in lens)
 check("the version the lens calls the page's default is the script's", bool(default) and f"{default.group(1)} that GitHub's viewer held on 2026-11-06, which is the version the page draws with" in lens)
 
 for word in ("recommendation", "metric", "price"):
