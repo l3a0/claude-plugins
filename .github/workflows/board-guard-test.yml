@@ -35,3 +35,5 @@ jobs:
         run: python3 tests/test_agent_cost.py
       - name: book-to-rules script tests
         run: python3 tests/test_book_to_rules.py
+      - name: Test the diagram-words script
+        run: python3 tests/test_diagram_words.py
