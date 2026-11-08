@@ -234,6 +234,53 @@ def test_notebook(d):
     check('extract_highlights downloads by default', r['clicks'] == 1 and r['ret']['downloaded'] == 'DPASIN0001_highlights.json', r)
 
 
+SWEEP_MOCK = r"""
+var SCEN = arguments[1];
+var posted = [];
+var window = this;
+var document = { visibilityState: 'visible', querySelector: function () { return null; }, querySelectorAll: function () { return []; } };
+var localStorage = { getItem: function () { return '{}'; }, setItem: function () {} };
+function fetch(url, o) { posted.push(url); return Promise.resolve({ text: function () { return Promise.resolve('saved'); } }); }
+load(arguments[0]);
+var K = window.__kh, page = 0, captured = 0;
+K.FLIP_WAIT_MS = 0;
+K.sleep = function () { return Promise.resolve(); };
+K.label = function () { return 'screen ' + page; };
+K.imgSrc = function () { return 'blob:' + page; };
+K.next = function () { if (page < 5) page++; };
+K.capture = function (name) {
+  captured++;
+  if (SCEN === 'stopped' && captured === 2) K.stopSweep();
+  if (SCEN === 'hidden' && captured === 2) document.visibilityState = 'hidden';
+  return Promise.resolve({ label: K.label() });
+};
+var n = SCEN === 'count' ? 3 : 50;
+K.sweep(1, n, 'b').then(function (r) {
+  print(JSON.stringify({ end: r, logged: K.sweepLog.length, captured: captured, posted: posted, sweeping: K.sweeping }));
+});
+"""
+
+
+def test_sweep(d):
+    (d / 'sweep.js').write_text(SWEEP_MOCK)
+    def run(scen):
+        r = subprocess.run([JSC, str(d / 'sweep.js'), '--', str(SCRIPTS / 'reader_capture.js'), scen], capture_output=True, text=True)
+        try:
+            return json.loads(r.stdout.strip().splitlines()[-1])
+        except (IndexError, ValueError):
+            return {'error': r.stdout + r.stderr}
+    r = run('end')
+    # Five screens change the page, then END_AFTER (3) flips leave it unchanged.
+    check('sweep stops itself after three unchanged flips at the end', r.get('end', {}).get('why') == 'end' and r['logged'] == 8 and not r['sweeping'], r)
+    check('sweep posts its log when it stops', r.get('posted') == ['http://127.0.0.1:8931/json?name=b-sweeplog.json'] and r['end'].get('saved') == 'saved', r)
+    r = run('count')
+    check('sweep stops after n screens and says so', r.get('end', {}).get('why') == 'count' and r['logged'] == 3, r)
+    r = run('stopped')
+    check('stopSweep ends a sweep after the screen it is on', r.get('end', {}).get('why') == 'stopped' and r['logged'] == 2, r)
+    r = run('hidden')
+    check('sweep stops when the tab goes hidden', r.get('end', {}).get('why') == 'hidden' and r['logged'] == 2, r)
+
+
 def test_cjs_guard(d):
     guard = re.search(r"^GUARD='(.*)'$", (SCRIPTS / 'cjs.sh').read_text(), re.M).group(1)
     for origin, ok in (('https://read.amazon.com', True), ('https://read.amazon.com.evil.example', False),
@@ -250,7 +297,7 @@ with tempfile.TemporaryDirectory() as t:
         (t / name).mkdir()
         fn(t / name)
     if os.path.exists(JSC):
-        for name, fn in (('notebook', test_notebook), ('cjs', test_cjs_guard)):
+        for name, fn in (('notebook', test_notebook), ('cjs', test_cjs_guard), ('sweep', test_sweep)):
             (t / name).mkdir()
             fn(t / name)
     else:

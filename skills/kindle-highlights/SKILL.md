@@ -525,11 +525,17 @@ Scalability* this way.
    book's screen count. The sixth run captured its first three screens, then ran `__kh.sweep(3, 700, 'b')`.
    The 493 captures, from location 487 to 13,121 of 13,134, took about 16 minutes, 12 of them on the book's
    own screens and the rest flipping past its end.
-4. **Save the log, then stop the sweep.** The loop does not notice the end of the book. Past the last screen
-   each flip leaves the image unchanged, and only a reload stops the loop, since it lives in the page. The
-   reload also wipes `__kh.sweepLog`, the only record of each capture's `err` and `changed` fields, so save it
-   first: `fetch(__kh.RX + '/json?name=sweeplog.json', {method: 'POST', body: JSON.stringify(__kh.sweepLog)})`.
-   A log entry with an `err`, or with `changed: false` before the end, marks a capture to check.
+4. **Wait for the sweep to stop itself, then read why.** Past the last screen each flip leaves the image
+   unchanged, so the loop stops after `__kh.END_AFTER` flips in a row that change nothing, three by default. It
+   also stops when the tab goes hidden, after `__kh.stopSweep()`, or after `n` screens. Whichever it is, it posts
+   `__kh.sweepLog` to the receiver as `pages/<prefix>-sweeplog.json` before it returns, and sets
+   `__kh.sweepEnd` to `{why, last, label}`, with `why` one of `end`, `hidden`, `stopped` or `count`. So poll
+   `JSON.stringify(__kh.sweepEnd)` until it is not null, and read `why`. Anything but `end` on a full-book sweep
+   means the book is not finished: `hidden` asks for the tab to be made visible and the sweep resumed under a
+   new prefix, and `count` asks for a larger `n`. A log entry with an `err`, or with `changed: false` before the
+   last three, marks a capture to check. Until this check existed the loop never noticed the end, and only a
+   reload stopped it. The 2026-11-08 run of *The Evaluation and Optimization of Trading Strategies* reached its
+   186th and last screen and kept flipping, with nothing to tell the session it had finished.
 5. **Stitch.** From the run directory, with `swiftc` installed as for Step 5's other paths:
 
    ```
