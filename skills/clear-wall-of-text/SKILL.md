@@ -1,6 +1,6 @@
 ---
 name: clear-wall-of-text
-description: Turn a dense passage in a design doc, architecture doc, charter or README into text a reader follows on one read, with every fact kept. Gives each question a subheading, breaks steps into a numbered list, puts conditions into a titled table, draws a mechanism as a diagram, and states each cited rule in plain words. Use when asked to make a wall of text easier to understand, to break up a dense paragraph, or to add diagrams or sketch notes to a passage of one of those documents. Not for a blog post, whose review and sketch notes belong to `review-post` and `sketch-notes` in the repository that holds the post.
+description: Turn a dense passage in a design doc, architecture doc, charter or README into text a reader follows on one read, with every fact kept. Gives each question a subheading, breaks steps into a numbered list, puts conditions into a titled table, draws a mechanism as a Mermaid diagram or a sketch, and states each cited rule in plain words. Use when asked to make a wall of text easier to understand, to break up a dense paragraph, or to add diagrams or sketch notes to a passage of one of those documents. Not for a blog post, whose review and sketch notes belong to `review-post` and `sketch-notes` in the repository that holds the post.
 ---
 
 # Clear a wall of text
@@ -43,13 +43,22 @@ Pick the form by what the content is, and use the least that serves.
 | Steps in order | A numbered list, each item one step |
 | A counted set, such as "two workers" | A numbered list after the sentence that counts it |
 | A choice that depends on a condition, or several cases with the same outcomes | A table with a title line, one row per case |
-| A mechanism with several actors or steps | A Mermaid sequence diagram or flowchart |
+| A mechanism with several actors or steps, such as a flow, a sequence of calls or a set of states | A Mermaid sequence diagram, flowchart or state diagram |
+| What boxes and arrows cannot show, such as a level that fills and drains, a quantity drawn to scale, or a physical picture like a bucket of tokens | A sketch, an animated whiteboard GIF |
 | A data type | A UML class diagram |
 | One claim with its reason | A short paragraph, unchanged in form |
 
-A diagram sits beside the list it draws and keeps that list's order. Mermaid's layout reorders nodes to cut crossings, and GitHub's version can differ from a local render. So force the order with `direction TB` and invisible `~~~` links inside a subgraph, draw edges to the subgraph rather than to its nodes, and check the picture on GitHub as well. Show what the diagram leaves out in the text, such as a resize or a retry. Do not draw what a table already says, because two surfaces drift.
+Pick the figure a reader understands fastest, not Mermaid by default. Mermaid suits a flow, a sequence of calls, a set of states or a data type, because its source sits in the document and changes with the text. A sketch suits what boxes and arrows cannot show. So a request for sketch notes on a design doc gets whichever of the two shows the passage's idea. A figure never repeats what a table beside it already says, and the text says what the figure leaves out, such as a resize or a retry.
 
-A request for sketch notes on a design doc gets a Mermaid diagram, because a Mermaid block lives in the document and moves with its text.
+A draft of l3a0/ithildin-runtime's architecture doc shows the difference. A Mermaid flowchart drafted for its rate limit section showed which request goes to which bucket, which the table beside it already gave, and not the buckets themselves. Draft animated sketches of each bucket refilling and holding at most 10 tokens replace that flowchart, and are not yet committed.
+
+Draw a sketch in the style of the sketch notes on l3a0/quantitative-trading's blog: an animated GIF drawn stroke by stroke as if on a whiteboard. A scene module, a Python module that lists its strokes and labels in drawing order, draws it with the shared whiteboard helpers in l3a0/ithildin-core, and tests pin its words, colours and figures. A sketch sits right after the text it draws, embedded as an image whose alt text says what it draws, and changes in the same commit as that text. A figure drawn to scale reads its numbers from the source the text quotes, never typed twice.
+
+No repository copies those helpers. [l3a0/ithildin-core#24](https://github.com/l3a0/ithildin-core/issues/24) moves them into l3a0/ithildin-core, and until it lands they live only in l3a0/quantitative-trading, where a sketch for another repository's doc can be drafted, and that sketch waits for the issue before it is committed.
+
+That repository's [`sketch-notes` skill](https://github.com/l3a0/quantitative-trading/blob/main/.claude/skills/sketch-notes/SKILL.md) describes the scene, its tests and how to draft one, and its section `## What a sketch's tests hold` lists what each test shows. Its steps on drafting, placing and pinning a sketch apply to a design doc. The rest of its loop is written for a blog post, such as its figure-embed sweep, its Substack sync, its rule for a published post and its post's tracking issue, so the design doc's own repository decides how its pull request is shown and reviewed.
+
+A Mermaid diagram sits beside the list it draws and keeps that list's order. Mermaid's layout reorders nodes to cut crossings, and GitHub's version can differ from a local render. So force the order with `direction TB` and invisible `~~~` links inside a subgraph, draw edges to the subgraph rather than to its nodes, and check the picture on GitHub as well.
 
 The words in a diagram follow the same rules as the prose. A label says what happens, in a phrase with a verb and a clear actor, and one that only names a component or a participant needs no verb. Spell out shorthand, hold one idea in a label, and wrap a long one.
 
@@ -71,13 +80,15 @@ Change only the shape. New words appear only in the opening, headings, table cel
 
 ### 6. Render it and look
 
-A diagram that renders can still be wrong, so read what it drew. Three faults pass a render check, and `ask-team`'s `scripts/diagram_words.py` looks for all three.
+A Mermaid diagram that renders can still be wrong, so read what it drew. Three faults pass a render check, and `ask-team`'s `scripts/diagram_words.py` looks for all three.
 
 1. A flowchart, state or class label that starts like a Markdown block, such as "1. Refit" or "- Refit". Mermaid 11.4.1 draws "Unsupported markdown: list" in the box. Start the label with a word, such as "Step 1:".
 2. Two statements joined on one line, which still parse because a sequence message runs to the end of its line. The arrow disappears into a label. In a scripted edit, match leading spaces with `[ \t]+`, never `\s+`, which also matches a newline and pulls the next statement onto the line.
 3. A hash or a semicolon that ends a label early. A sequence label such as "order #4 is filled" draws "order". Write the entity, `#35;` for a hash or `#59;` for a semicolon.
 
 Run `python3 <this plugin>/skills/ask-team/scripts/diagram_words.py page <repo> <new folder>/out.html`, which prints each fault it finds, serve that folder with `python3 -m http.server <port> --bind 127.0.0.1 --directory <new folder>`, open the page in a browser and read each diagram's listed words. The page needs a connection to the CDN that serves Mermaid. It draws with Mermaid 12.2.0, the version GitHub's viewer held on 2026-11-06, which draws the first fault's words, so the printed list rather than the words names that fault. Where the rewrite rewords an existing diagram, `diagram_words.py compare <repo> <base commit>` checks that its structure did not change. Run the repository's lint and tests too.
+
+A sketch has no parser to name a fault, so draw it with `draft.py`, the draft script `sketch-notes` describes, which prints every rule the scene breaks, then look at its last frame. The script runs where the helpers are installed, which until the move lands is l3a0/quantitative-trading. Read every label against the text it draws and against the rules for a diagram's words in step 3, and the embed's alt text against the picture.
 
 ### 7. Have a fresh reader check the meaning
 
