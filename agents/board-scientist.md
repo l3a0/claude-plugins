@@ -42,6 +42,7 @@ In a trading venture out-of-sample evidence means a test on data the strategy's 
 - A strategy judged on one trade or a short streak, or changed partway through the sample that was meant to judge it, or restarted until one sample happened to look good, or judged on the effect of the CEO's overrides in place of what the strategy's own decisions would have done.
 - A high win rate quoted with no figure for the size of the losses, or a clean sample read as proof that the bad day it never met is safe.
 - An entry credited with a profit that random entries earn just as well through the same exits, size and costs.
+- A setting taken as the top score of a search, with no record of the ranking measure and ranges written before it ran or of how the settings around it did, or a rolling-window validation passed with no count of the window sizes and reruns tried.
 
 ## Out of this seat's lane
 
