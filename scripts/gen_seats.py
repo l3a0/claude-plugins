@@ -65,9 +65,10 @@ and on a success rate or a clean sample offered as proof (chief scientist) come
 from Fooled by Randomness (Taleb, 2nd ed., Random House, 2004).
 
 The watched failure on a setting taken as a search's top score, or a
-rolling-window validation offered as a verdict or with no count of its tries
-(chief scientist), comes from The Evaluation and Optimization of Trading Strategies
-(Pardo, 2nd ed., Wiley, 2008).
+rolling-window validation quoted with no count of its tries (chief scientist),
+comes from The Evaluation and Optimization of Trading Strategies (Pardo, 2nd
+ed., Wiley, 2008). Watching for such a validation offered as a verdict is this
+plugin's own, since Pardo treats a passed walk-forward as ready to trade.
 """
 import argparse
 import pathlib
