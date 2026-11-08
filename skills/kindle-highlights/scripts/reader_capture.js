@@ -130,14 +130,17 @@
       still = changed ? 0 : still + 1;
       if (still >= K.END_AFTER) { why = 'end'; break; }
     }
+    // Build the result first and publish it only once the log's post has settled, so a session that acts on a
+    // non-null sweepEnd, such as by reloading, cannot lose the log.
     const last = K.sweepLog[K.sweepLog.length - 1];
-    K.sweepEnd = { why, last: last ? last.name : null, label: last ? last.label : null };
+    const end = { why, last: last ? last.name : null, label: last ? last.label : null };
     try {
       const r = await fetch(K.RX + '/json?name=' + (prefix || 's') + '-sweeplog.json', { method: 'POST', body: JSON.stringify(K.sweepLog) });
-      K.sweepEnd.saved = await r.text();
-    } catch (e) { K.sweepEnd.saveErr = String(e); }
+      end.saved = await r.text();
+    } catch (e) { end.saveErr = String(e); }
+    K.sweepEnd = end;
     K.sweeping = false;
-    return K.sweepEnd;
+    return end;
   };
   // Display settings: write localStorage and reload (the transient Aa panel did not persist slider changes on one run).
   // fontSizeIndex 4 (17.6 px) + two columns is the verified OCR-friendly layout; restore from K.snapshot afterwards.
