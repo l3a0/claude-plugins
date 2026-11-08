@@ -238,14 +238,20 @@ SWEEP_MOCK = r"""
 // Drives reader_capture.js's sweep against a mocked book on a fake clock. A flip renders RENDER_MS after the click,
 // later than the 1.3 s settle, so the sweep only sees it if it waits. SCEN picks the book and what goes wrong.
 var SCEN = arguments[1], PLAN = arguments[2] ? JSON.parse(readFile(arguments[2])) : null;
-var posted = [], now = 0, RENDER_MS = 2000;
+var posted = [], bodies = [], now = 0, RENDER_MS = 2000;
 Date.now = function () { return now; };
 var window = this;
 var document = { visibilityState: 'visible', querySelector: function () { return null; }, querySelectorAll: function () { return []; } };
 var localStorage = { getItem: function () { return '{}'; }, setItem: function () {} };
-function fetch(url, o) { posted.push(url); return Promise.resolve({ text: function () { return Promise.resolve('saved'); } }); }
+function fetch(url, o) {
+  posted.push(url); bodies.push(o.body);
+  if (SCEN === 'postfail') return Promise.reject(new Error('receiver down'));
+  return Promise.resolve({ text: function () { return Promise.resolve('saved'); } });
+}
 load(arguments[0]);
-var K = window.__kh, page = 0, pending = null, flips = 0, captured = 0, out = {};
+var K = window.__kh;
+if (SCEN === 'slow') { K.END_AFTER = 4; K.FLIP_WAIT_MS = 3000; }
+var page = 0, pending = null, flips = 0, captured = 0, out = {};
 var LAST = PLAN ? PLAN.filter(function (x) { return x.changed; }).length : 5;
 K.sleep = function (ms) { now += ms; return Promise.resolve(); };
 K.label = function () { return 'screen ' + page; };
@@ -263,7 +269,10 @@ K.capture = function (name) {
   return Promise.resolve({ label: K.label() });
 };
 function report(r) {
+  var body = bodies.length ? JSON.parse(bodies[bodies.length - 1]) : [];
   return { end: r, logged: K.sweepLog.length, posted: posted.slice(), sweeping: K.sweeping, page: page,
+           bodyLen: body.length, bodyLast: body.length ? body[body.length - 1].name : null,
+           unchangedWaits: K.sweepLog.filter(function (x) { return !x.changed; }).map(function (x) { return x.waited; }),
            errs: K.sweepLog.filter(function (x) { return x.err; }).map(function (x) { return x.name; }) };
 }
 var n = SCEN === 'count' ? 3 : 500;
@@ -272,7 +281,7 @@ out.endWhileRunning = K.sweepEnd;
 run.then(function (r) {
   out.first = report(r);
   if (SCEN !== 'twice') { print(JSON.stringify(out.first)); return; }
-  posted = []; K.sweepLog = [];
+  posted = []; bodies = [];
   var again = K.sweep(100, 500, 'c');
   out.endAtSecondStart = K.sweepEnd;
   return again.then(function (r2) { out.second = report(r2); print(JSON.stringify(out)); });
@@ -285,8 +294,11 @@ SWEEP_FIXTURE = pathlib.Path(__file__).parent / 'fixtures' / 'sweeplog-2026-11-0
 def test_sweep(d):
     (d / 'sweep.js').write_text(SWEEP_MOCK)
     def run(scen, plan=''):
-        r = subprocess.run([JSC, str(d / 'sweep.js'), '--', str(SCRIPTS / 'reader_capture.js'), scen, str(plan)],
-                           capture_output=True, text=True)
+        try:
+            r = subprocess.run([JSC, str(d / 'sweep.js'), '--', str(SCRIPTS / 'reader_capture.js'), scen, str(plan)],
+                               capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            return {'error': 'timed out: the sweep never ended'}
         try:
             return json.loads(r.stdout.strip().splitlines()[-1])
         except (IndexError, ValueError):
@@ -295,11 +307,21 @@ def test_sweep(d):
     def ended(r, why, logged, last):
         e = r.get('end') or {}
         return (e.get('why') == why and r.get('logged') == logged and e.get('last') == last
-                and r.get('posted') == [log] and e.get('saved') == 'saved' and r.get('sweeping') is False)
+                and r.get('posted') == [log] and e.get('saved') == 'saved' and r.get('sweeping') is False
+                and r.get('bodyLen') == logged and r.get('bodyLast') == last)
     r = run('end')
     # Five flips render the five screens, each 2 s after the click, then three flips change nothing.
     check('sweep waits for each render and stops after three unchanged flips', ended(r, 'end', 8, 'b008') and r['page'] == 5
           and r['end'].get('label') == 'screen 5', r)
+    # An unchanged flip waits the full six seconds for a render, then the 1.3-second settle.
+    check('an unchanged flip waits FLIP_WAIT_MS for a render', r.get('unchangedWaits') == [7300, 7300, 7300], r)
+    r = run('slow')
+    check('raising END_AFTER gives the sweep more unchanged flips', ended(r, 'end', 9, 'b009'), r)
+    check('lowering FLIP_WAIT_MS shortens the wait on an unchanged flip', r.get('unchangedWaits') == [4300] * 4, r)
+    r = run('postfail')
+    e = r.get('end') or {}
+    check('a log post that fails is reported and the sweep still ends', e.get('why') == 'end' and 'receiver down' in (e.get('saveErr') or '')
+          and 'saved' not in e and r.get('sweeping') is False, r)
     r = run('stall')
     # The second flip renders nothing, then the book carries on: one unchanged flip mid-book does not end it.
     check('one unchanged flip mid-book resets once the page changes', ended(r, 'end', 9, 'b009') and r['page'] == 5, r)
@@ -316,6 +338,10 @@ def test_sweep(d):
     check('a second sweep starts with sweepEnd cleared', r.get('endAtSecondStart') is None, r)
     check('a stop from the first sweep does not stop the second', (r.get('first') or {}).get('end', {}).get('why') == 'stopped'
           and (r.get('second') or {}).get('end', {}).get('why') == 'end', r)
+    # The first sweep logs two screens before its stop. The second picks up at screen 2 and adds screens 3 to 5 and three
+    # unchanged flips, so its log holds eight entries, and six if each sweep started a fresh log.
+    f, g = r.get('first') or {}, r.get('second') or {}
+    check('the log stays cumulative across sweeps in one page load', f.get('logged') == 2 and g.get('logged') == 8 and g.get('bodyLen') == 8, r)
     plan = json.loads(SWEEP_FIXTURE.read_text())
     tail = next(k for k, x in enumerate(plan) if not x['changed'])
     r = run('replay', SWEEP_FIXTURE)
@@ -343,7 +369,7 @@ with tempfile.TemporaryDirectory() as t:
         for name, fn in (('notebook', test_notebook), ('cjs', test_cjs_guard), ('sweep', test_sweep)):
             (t / name).mkdir()
             fn(t / name)
-    elif os.environ.get('REQUIRE_JSC'):
+    elif os.environ.get('REQUIRE_JSC') == '1':
         check('jsc exists, as REQUIRE_JSC asks', False, JSC)
     else:
         print('skip JavaScript checks: no jsc at ' + JSC)
