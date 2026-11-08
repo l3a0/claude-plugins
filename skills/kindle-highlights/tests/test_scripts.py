@@ -244,12 +244,18 @@ Date.now = function () { return now; };
 var window = this;
 var document = { visibilityState: 'visible', querySelector: function () { return null; }, querySelectorAll: function () { return []; } };
 var localStorage = { getItem: function () { return '{}'; }, setItem: function () {} };
+// The post and its reply each settle on a later timer, and the state is recorded as each settles, so code that
+// publishes sweepEnd between starting the post and reading its reply is caught.
+function settle(f) {
+  return new Promise(function (res, rej) {
+    setTimeout(function () { atPost.push({ endNull: K.sweepEnd === null, sweeping: K.sweeping }); f(res, rej); }, 0);
+  });
+}
 function fetch(url, o) {
   posted.push(url); bodies.push(o.body);
-  atPost.push({ endNull: K.sweepEnd === null, sweeping: K.sweeping });
-  if (SCEN === 'postfail') return Promise.reject(new Error('receiver down'));
+  if (SCEN === 'postfail') return settle(function (res, rej) { rej(new Error('receiver down')); });
   var reply = 'saved ' + url.split('name=')[1] + ' ' + o.body.length;
-  return Promise.resolve({ text: function () { return Promise.resolve(reply); } });
+  return settle(function (res) { res({ text: function () { return settle(function (r2) { r2(reply); }); } }); });
 }
 load(arguments[0]);
 var K = window.__kh;
@@ -316,7 +322,7 @@ def test_sweep(d):
         return (e.get('why') == why and r.get('logged') == logged and e.get('last') == last
                 and r.get('posted') == [log] and e.get('saved') == 'saved b-sweeplog.json %d' % r.get('bodyBytes', -1)
                 and r.get('published') is True and r.get('sweeping') is False
-                and r.get('atPost') == [{'endNull': True, 'sweeping': True}]
+                and r.get('atPost') == [{'endNull': True, 'sweeping': True}] * 2
                 and r.get('bodyLen') == logged and r.get('bodyLast') == last)
     r = run('end')
     # Five flips render the five screens, each 2 s after the click, then three flips change nothing.
@@ -335,7 +341,8 @@ def test_sweep(d):
     r = run('postfail')
     e = r.get('end') or {}
     check('a log post that fails is reported and the sweep still ends', e.get('why') == 'end' and 'receiver down' in (e.get('saveErr') or '')
-          and 'saved' not in e and r.get('sweeping') is False, r)
+          and 'saved' not in e and r.get('sweeping') is False and r.get('published') is True
+          and r.get('atPost') == [{'endNull': True, 'sweeping': True}], r)
     r = run('stall')
     # The second flip renders nothing, then the book carries on: one unchanged flip mid-book does not end it.
     check('one unchanged flip mid-book resets once the page changes', ended(r, 'end', 9, 'b009') and r['page'] == 5, r)
@@ -362,6 +369,10 @@ def test_sweep(d):
     # The 2026-11-08 sweep's own sequence of changed and unchanged flips: it stops three flips past the last change.
     check('the recorded 2026-11-08 sweep would stop three flips past its last screen',
           (r.get('end') or {}).get('why') == 'end' and r.get('logged') == tail + 3, {'tail': tail, 'r': r})
+    (d / 'empty.json').write_text('[]')
+    r = run('replay', d / 'empty.json')
+    # A sweep started on the last screen: its first three flips change nothing, so it stops at the third.
+    check('a sweep started at the end stops after END_AFTER flips', ended(r, 'end', 3, 'b003'), r)
 
 
 def test_cjs_guard(d):

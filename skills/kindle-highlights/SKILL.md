@@ -530,7 +530,7 @@ Scalability* this way.
    unchanged, so the loop stops after `__kh.END_AFTER` flips in a row that change nothing, three by default. It
    also stops when the tab goes hidden, after `__kh.stopSweep()`, or after `n` screens. Whichever it is, it posts
    `__kh.sweepLog` to the receiver as `pages/<prefix>-sweeplog.json` before it returns, and only once that post has settled sets
-   `__kh.sweepEnd` to `{why, last, label}`, with `why` one of `end`, `hidden`, `stopped` or `count`. So poll
+   `__kh.sweepEnd` to `{why, last, label}`, with `why` one of `end`, `hidden`, `stopped` or `count`, and with `saved`, the receiver's reply, or `saveErr` when the post failed. A `saveErr` means the log is not on disk, so post `__kh.sweepLog` again before any reload. So poll
    `JSON.stringify(__kh.sweepEnd)` until it is not null, and read `why`. Anything but `end` on a full-book sweep
    means the book is not finished: `hidden` asks for the tab to be made visible and the sweep resumed under a
    new prefix, and `count` asks for a larger `n`. Check `end` too, by comparing `__kh.sweepEnd.label` with the
