@@ -246,9 +246,13 @@ var document = { visibilityState: 'visible', querySelector: function () { return
 var localStorage = { getItem: function () { return '{}'; }, setItem: function () {} };
 // The post and its reply each settle on a later timer, and the state is recorded as each settles, so code that
 // publishes sweepEnd between starting the post and reading its reply is caught.
+// inflight counts the post's promises not yet settled. A setter on sweepEnd records it at the moment of publishing,
+// whatever order the timers fire in.
+var inflight = 0, publishes = [];
 function settle(f) {
+  inflight++;
   return new Promise(function (res, rej) {
-    setTimeout(function () { atPost.push({ endNull: K.sweepEnd === null, sweeping: K.sweeping }); f(res, rej); }, 0);
+    setTimeout(function () { inflight--; atPost.push({ endNull: K.sweepEnd === null, sweeping: K.sweeping }); f(res, rej); }, 0);
   });
 }
 function fetch(url, o) {
@@ -259,6 +263,11 @@ function fetch(url, o) {
 }
 load(arguments[0]);
 var K = window.__kh;
+var publishedEnd = K.sweepEnd;
+Object.defineProperty(K, 'sweepEnd', { get: function () { return publishedEnd; }, set: function (v) {
+  if (v !== null) publishes.push({ inflight: inflight, hasReply: !!v && ('saved' in v || 'saveErr' in v) });
+  publishedEnd = v;
+} });
 if (SCEN === 'slow') { K.END_AFTER = 4; K.FLIP_WAIT_MS = 3000; }
 var page = 0, pending = null, flips = 0, captured = 0, out = {};
 var LAST = PLAN ? PLAN.filter(function (x) { return x.changed; }).length : 5;
@@ -284,7 +293,7 @@ function report(r) {
            bodyLen: body.length, bodyLast: body.length ? body[body.length - 1].name : null,
            unchangedWaits: K.sweepLog.filter(function (x) { return !x.changed; }).map(function (x) { return x.waited; }),
            changedWaits: K.sweepLog.filter(function (x) { return x.changed; }).map(function (x) { return x.waited; }),
-           atPost: atPost.slice(), published: JSON.stringify(K.sweepEnd) === JSON.stringify(r),
+           atPost: atPost.slice(), publishes: publishes.slice(), published: JSON.stringify(K.sweepEnd) === JSON.stringify(r),
            bodyBytes: bodies.length ? bodies[bodies.length - 1].length : 0,
            errs: K.sweepLog.filter(function (x) { return x.err; }).map(function (x) { return x.name; }) };
 }
@@ -294,7 +303,7 @@ out.endNullWhileRunning = K.sweepEnd === null;
 run.then(function (r) {
   out.first = report(r);
   if (SCEN !== 'twice') { print(JSON.stringify(out.first)); return; }
-  posted = []; bodies = []; atPost = [];
+  posted = []; bodies = []; atPost = []; publishes = [];
   var again = K.sweep(100, 500, 'c');
   out.endNullAtSecondStart = K.sweepEnd === null;
   return again.then(function (r2) { out.second = report(r2); print(JSON.stringify(out)); });
@@ -316,11 +325,13 @@ def test_sweep(d):
             return json.loads(r.stdout.strip().splitlines()[-1])
         except (IndexError, ValueError):
             return {'error': r.stdout + r.stderr}
-    log = 'http://127.0.0.1:8931/json?name=b-sweeplog.json'
-    def ended(r, why, logged, last):
+    settled = [{'inflight': 0, 'hasReply': True}]
+    def ended(r, why, logged, last, prefix='b'):
         e = r.get('end') or {}
+        log = 'http://127.0.0.1:8931/json?name=%s-sweeplog.json' % prefix
         return (e.get('why') == why and r.get('logged') == logged and e.get('last') == last
-                and r.get('posted') == [log] and e.get('saved') == 'saved b-sweeplog.json %d' % r.get('bodyBytes', -1)
+                and r.get('posted') == [log] and e.get('saved') == 'saved %s-sweeplog.json %d' % (prefix, r.get('bodyBytes', -1))
+                and r.get('publishes') == settled
                 and r.get('published') is True and r.get('sweeping') is False
                 and r.get('atPost') == [{'endNull': True, 'sweeping': True}] * 2
                 and r.get('bodyLen') == logged and r.get('bodyLast') == last)
@@ -342,7 +353,7 @@ def test_sweep(d):
     e = r.get('end') or {}
     check('a log post that fails is reported and the sweep still ends', e.get('why') == 'end' and 'receiver down' in (e.get('saveErr') or '')
           and 'saved' not in e and r.get('sweeping') is False and r.get('published') is True
-          and r.get('atPost') == [{'endNull': True, 'sweeping': True}], r)
+          and r.get('atPost') == [{'endNull': True, 'sweeping': True}] and r.get('publishes') == settled, r)
     r = run('stall')
     # The second flip renders nothing, then the book carries on: one unchanged flip mid-book does not end it.
     check('one unchanged flip mid-book resets once the page changes', ended(r, 'end', 9, 'b009') and r['page'] == 5, r)
@@ -363,6 +374,8 @@ def test_sweep(d):
     # unchanged flips, so its log holds eight entries, and six if each sweep started a fresh log.
     f, g = r.get('first') or {}, r.get('second') or {}
     check('the log stays cumulative across sweeps in one page load', f.get('logged') == 2 and g.get('logged') == 8 and g.get('bodyLen') == 8, r)
+    check('each of two sweeps in one page load posts its own log before publishing', ended(f, 'stopped', 2, 'b002')
+          and ended(g, 'end', 8, 'c105', prefix='c'), r)
     plan = json.loads(SWEEP_FIXTURE.read_text())
     tail = next(k for k, x in enumerate(plan) if not x['changed'])
     r = run('replay', SWEEP_FIXTURE)
