@@ -65,8 +65,8 @@ and on a success rate or a clean sample offered as proof (chief scientist) come
 from Fooled by Randomness (Taleb, 2nd ed., Random House, 2004).
 
 The watched failure on a setting taken as a search's top score, or a
-rolling-window validation passed with no count of its tries (chief
-scientist), comes from The Evaluation and Optimization of Trading Strategies
+rolling-window validation offered as a verdict or with no count of its tries
+(chief scientist), comes from The Evaluation and Optimization of Trading Strategies
 (Pardo, 2nd ed., Wiley, 2008).
 """
 import argparse
@@ -282,7 +282,7 @@ SEATS = [
             "A strategy judged on one trade or a short streak, or changed partway through the sample that was meant to judge it, or restarted until one sample happened to look good, or judged on the effect of the CEO's overrides in place of what the strategy's own decisions would have done.",
             "A high win rate quoted with no figure for the size of the losses, or a clean sample read as proof that the bad day it never met is safe.",
             "An entry credited with a profit that random entries earn just as well through the same exits, size and costs.",
-            "A setting taken as the top score of a search, with no record of the ranking measure and ranges written before it ran or of how the settings around it did, or a rolling-window validation passed with no count of the window sizes and reruns tried.",
+            "A setting taken as the top score of a search, with no record of the ranking measure and ranges written before it ran or of how the settings around it did, or a rolling-window validation offered as a verdict, or quoted with no count of the window sizes and reruns tried.",
         ],
         lane=[
             "Whether live trading reproduces the backtest: board-cto.",
