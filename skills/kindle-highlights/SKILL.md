@@ -267,8 +267,8 @@ Reader mechanics (hard-won):
   hidden tab. Give it its own Chrome **window** (`osascript`: `make new window`) so other tabs
   and sessions don't freeze it; the window may sit behind others but must not be minimized.
   A locked screen (or full occlusion) flips `document.visibilityState` to `hidden`: renders
-  freeze AND in-page `setTimeout` chains throttle to ~1/min, so a batched sweep silently
-  crawls instead of erroring. When a batch stalls, probe visibility first; resume when
+  freeze AND in-page `setTimeout` chains throttle to ~1/min, so a batched sweep crawls instead of erroring. The sweep stops when it sees the tab hidden, with
+  `__kh.sweepEnd.why` set to `hidden`, but a visible tab that is merely throttled still crawls. When a batch stalls, probe visibility first; resume when
   `visible`, or drive each cycle externally (one JS call per flip survives throttling).
 - **macOS full-screen Spaces are the usual reason the tab is hidden.** If the user's Chrome
   window is in macOS full-screen, `make new window` inherits full-screen on its own Space. The
@@ -313,8 +313,8 @@ Reader mechanics (hard-won):
   `document`, `document.body`, `.kg-client-root`, `ion-app` — one target alone is unreliable,
   and the chevron `.click()` does nothing. **A leftover modal/panel silently swallows the keys**
   (a stuck Go-to-Page modal is the classic wedge; the OPEN annotations panel does it too — after
-  every panel-jump, close the panel before flipping, or the sweep re-captures the same screen
-  forever; when flips die and no overlay is open, reload
+  every panel-jump, close the panel before flipping, or the flips change nothing, and after three of them the sweep stops with `why: 'end'` as if the book had
+  ended; when flips die and no overlay is open, reload
   the tab and reinstall your helpers). Keyboard-independent fallback (works after Aa-panel
   interactions kill the arrows): dispatch `mousedown` + `mouseup` MouseEvents at the center of
   `[aria-label="Next page"]` / `"Previous page"` — exactly one viewport per pair. Do NOT add
@@ -370,7 +370,8 @@ the method trustworthy on the blocked ones. Reproduce both numbers from the app 
 file, without the captures.
 
 1. **Sweep once, continuously.** Jump to the first blocked highlight (`__kh.jump(startPos)`),
-   then `__kh.sweep(1, 25)` in batches, polling `__kh.sweepLog`, until the last blocked token
+   then `__kh.sweep(1, 25)` in batches, numbering each batch's `from` past the last, polling `__kh.sweepLog` for progress
+   and `__kh.sweepEnd` for each batch's end, as the full-book path's step 4 says, until the last blocked token
    has appeared and then left the screen. Budget ~5,500 characters per two-column screen at
    font index 4 (`align_extents.py` prints the estimate). One continuous sweep of ~100 screens
    beats per-cluster jumps once the blocked span covers most of the book. If the sweep has to
@@ -532,7 +533,11 @@ Scalability* this way.
    `__kh.sweepEnd` to `{why, last, label}`, with `why` one of `end`, `hidden`, `stopped` or `count`. So poll
    `JSON.stringify(__kh.sweepEnd)` until it is not null, and read `why`. Anything but `end` on a full-book sweep
    means the book is not finished: `hidden` asks for the tab to be made visible and the sweep resumed under a
-   new prefix, and `count` asks for a larger `n`. A log entry with an `err`, or with `changed: false` before the
+   new prefix, and `count` asks for a larger `n`. Check `end` too, by comparing `__kh.sweepEnd.label` with the
+   book's last location or page, because three flips swallowed by an open panel or a stuck reader look the same
+   as the end. A reader slower than the six-second wait for each render can do the same, and raising
+   `__kh.END_AFTER` before the sweep gives it more flips. The log is cumulative within a page load, so each
+   post replaces the last with a longer copy, and a new page load starts a new log under a new prefix. A log entry with an `err`, or with `changed: false` before the
    last three, marks a capture to check. Until this check existed the loop never noticed the end, and only a
    reload stopped it. The 2026-11-08 run of *The Evaluation and Optimization of Trading Strategies* reached its
    186th and last screen and kept flipping, with nothing to tell the session it had finished.
