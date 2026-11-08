@@ -81,9 +81,11 @@ A repo drifts when two surfaces describe the same thing and only one gets update
   3. The receiver gotcha under Step 2 of `skills/kindle-highlights/SKILL.md`.
 - **The form of a question for the owner** sits in step 6 of `skills/ask-team/SKILL.md` and in `skills/ask-team/templates/review-comment.md`, and `review-round.md` points at the first. `tests/test_ask_team_links.py` holds the links between them.
 - **The rules on a diagram's words and on number chains** sit in three places here: `## Writing style` above, the reader lens's questions 1 and 6 in `skills/ask-team/SKILL.md`, and steps 3 and 4 of `skills/clear-wall-of-text/SKILL.md`. The owner's global file wins over all three, so a change there reaches each.
-- **The rule on choosing between a Mermaid diagram and a sketch** sits in two places, and the owner's global file wins over both, so a change there reaches each. `tests/test_ask_team_links.py` holds the pointers between them. This file's `## Writing style` leaves the rule out, because this repository holds no design doc.
+- **The rule on choosing between a Mermaid diagram and a sketch** sits in two places, and `tests/test_ask_team_links.py` holds the pointers between them.
   1. Step 3 of `skills/clear-wall-of-text/SKILL.md` states it, and its step 6 says how to check a sketch.
-  2. The reader lens in `skills/ask-team/SKILL.md` points at both steps. Its question 1 points at step 3 and its question 3 at step 6, and its question 6 reads a sketch's labels by its own rules for a diagram's words.
+  2. The reader lens in `skills/ask-team/SKILL.md` points at both steps, and its question 3 also states the rule's clauses on a figure drawn to scale and on the tests that pin a sketch, so an edit to step 3 checks question 3 too. Its question 1 points at step 3 and its question 3 at step 6, and its question 6 holds a sketch's labels to the rules it sets for a diagram's words.
+
+  The owner's global file wins over both, so a change there reaches each. This file's `## Writing style` leaves the rule out, because it governs how a design doc draws a figure, and this repository holds no design doc.
 - **The blog post** in `blog/how-to-take-back-your-kindle-highlights.md` is also published on Substack, and nothing syncs the two copies.
 
 Before reporting a change done, sweep the prose surfaces for what the change could have invalidated, and end the response with a short **Consistency sweep** note listing what was checked, what was updated, and what is still stale. For a pure-internal refactor that changes no observable behavior, say "no prose-facing surfaces affected" so it is clear the check was considered rather than forgotten.
