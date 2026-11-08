@@ -50,7 +50,7 @@ Pick the form by what the content is, and use the least that serves.
 
 Pick the figure a reader understands fastest, not Mermaid by default. Mermaid suits a flow, a sequence of calls, a set of states or a data type, because its source sits in the document and changes with the text. A sketch suits what boxes and arrows cannot show. So a request for sketch notes on a design doc gets whichever of the two shows the passage's idea. A figure never repeats what a table beside it already says, and the text says what the figure leaves out, such as a resize or a retry.
 
-The rate limit section of l3a0/ithildin-runtime's architecture doc shows the difference. A Mermaid flowchart drawn first showed which request goes to which bucket, which the table beside it already gave, and not the buckets themselves. Sketches of each bucket refilling and holding at most 10 tokens replaced it.
+The rate limit section of l3a0/ithildin-runtime's architecture doc shows the difference. A Mermaid flowchart drafted first showed which request goes to which bucket, which the table beside it already gave, and not the buckets themselves. Sketches of each bucket refilling and holding at most 10 tokens took its place before it was committed.
 
 Draw a sketch in the style of the blog's sketch notes: an animated GIF drawn stroke by stroke as if on a whiteboard. A scene module, a Python module that lists its strokes and labels in drawing order, draws it with the shared whiteboard helpers in l3a0/ithildin-core, and tests pin its words, colours and figures. l3a0/quantitative-trading's `sketch-notes` skill describes the scene, its tests and how to draft one. A sketch sits right after the text it draws, embedded as an image whose alt text says what it draws, and changes in the same commit as that text. A figure drawn to scale reads its numbers from the source the text quotes, never typed twice.
 
@@ -84,7 +84,7 @@ A Mermaid diagram that renders can still be wrong, so read what it drew. Three f
 
 Run `python3 <this plugin>/skills/ask-team/scripts/diagram_words.py page <repo> <new folder>/out.html`, which prints each fault it finds, serve that folder with `python3 -m http.server <port> --bind 127.0.0.1 --directory <new folder>`, open the page in a browser and read each diagram's listed words. The page needs a connection to the CDN that serves Mermaid. It draws with Mermaid 12.2.0, the version GitHub's viewer held on 2026-11-06, which draws the first fault's words, so the printed list rather than the words names that fault. Where the rewrite rewords an existing diagram, `diagram_words.py compare <repo> <base commit>` checks that its structure did not change. Run the repository's lint and tests too.
 
-A sketch has no parser to name a fault, so draw it with the draft check the `sketch-notes` skill describes, which prints every rule the scene breaks, then look at its last frame. Read every label against the text it draws, and the embed's alt text against the picture.
+A sketch has no parser to name a fault, so draw it with the draft check the `sketch-notes` skill describes, which prints every rule the scene breaks, then look at its last frame. Read every label against the text it draws and against the rules for a diagram's words in step 3, and the embed's alt text against the picture.
 
 ### 7. Have a fresh reader check the meaning
 

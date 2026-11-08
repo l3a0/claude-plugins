@@ -197,7 +197,7 @@ Its `pg.py` says whether each cited phrase is on its page, names the right page 
 
 ### clear-wall-of-text
 
-Turns a dense passage in a design doc, an architecture doc, a charter or a README into text a reader follows on one read. Each question gets a subheading, steps get a numbered list, conditions get a titled table, and a mechanism gets a diagram. The skill states each cited rule in plain words, and it proves every fact survived before it reads the rendered result.
+Turns a dense passage in a design doc, an architecture doc, a charter or a README into text a reader follows on one read. Each question gets a subheading, steps get a numbered list, conditions get a titled table, and a mechanism gets a Mermaid diagram or a sketch. The skill states each cited rule in plain words, and it proves every fact survived before it reads the rendered result.
 
 ## License
 
