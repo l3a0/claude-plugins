@@ -131,7 +131,10 @@ check("the lens points at clear-wall-of-text's step 6 for checking a sketch", "a
 check("the lens reads a sketch's labels by the rules for a diagram's words", "A sketch's labels meet the same rules" in lens and "The words in a diagram follow the same rules as the prose" in step3)
 check("clear-wall-of-text no longer sends every sketch note to Mermaid", "gets a Mermaid diagram, because" not in clear and "gets whichever of the two shows the passage's idea" in step3)
 check("the lens holds a sketch to numbers read from its source and to tests that pin it", "A sketch drawn to scale whose numbers are typed into its scene rather than read from the source the text quotes is a finding" in lens and "a sketch that no test pins by its words, colours and figures" in lens and "never typed twice" in clear)
-check("clear-wall-of-text says no repository copies the whiteboard helpers before the move lands", "No repository copies those helpers" in step3 and "ithildin-core/issues/24" in step3 and "live only in l3a0/quantitative-trading" in step3 and "before it is committed" in step3)
+check("clear-wall-of-text names the whiteboard helpers' modules in ithildin-core", "`ithildincore.whiteboard`" in step3 and "`ithildincore.palette`" in step3)
+check("clear-wall-of-text says a repository installs the helpers at an exact commit and copies none", "`ithildincore[whiteboard]`, pinned at an exact commit" in step3 and "copies none of the helpers" in step3)
+check("clear-wall-of-text commits a sketch where its doc lives", "committed in the repository whose doc it explains" in step3)
+check("clear-wall-of-text no longer waits on the move", "ithildin-core/issues/24" not in clear and "live only in l3a0/quantitative-trading" not in clear)
 
 for word in ("recommendation", "metric", "price"):
     step6 = SKILL.split("### 6. Post and price")[1].split("## Lens mode")[0]
