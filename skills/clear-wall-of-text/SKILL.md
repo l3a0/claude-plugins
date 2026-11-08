@@ -1,6 +1,6 @@
 ---
 name: clear-wall-of-text
-description: Turn a dense passage in a design doc, architecture doc, charter or README into text a reader follows on one read, with every fact kept. Gives each question a subheading, breaks steps into a numbered list, puts conditions into a titled table, draws a mechanism as a diagram, and states each cited rule in plain words. Use when asked to make a wall of text easier to understand, to break up a dense paragraph, or to add diagrams or sketch notes to a passage of one of those documents. Not for a blog post, whose review and sketch notes belong to `review-post` and `sketch-notes` in the repository that holds the post.
+description: Turn a dense passage in a design doc, architecture doc, charter or README into text a reader follows on one read, with every fact kept. Gives each question a subheading, breaks steps into a numbered list, puts conditions into a titled table, draws a mechanism as a Mermaid diagram or a sketch, and states each cited rule in plain words. Use when asked to make a wall of text easier to understand, to break up a dense paragraph, or to add diagrams or sketch notes to a passage of one of those documents. Not for a blog post, whose review and sketch notes belong to `review-post` and `sketch-notes` in the repository that holds the post.
 ---
 
 # Clear a wall of text
@@ -43,13 +43,23 @@ Pick the form by what the content is, and use the least that serves.
 | Steps in order | A numbered list, each item one step |
 | A counted set, such as "two workers" | A numbered list after the sentence that counts it |
 | A choice that depends on a condition, or several cases with the same outcomes | A table with a title line, one row per case |
-| A mechanism with several actors or steps | A Mermaid sequence diagram or flowchart |
+| A mechanism with several actors or steps, such as a flow, a sequence of calls or a set of states | A Mermaid sequence diagram, flowchart or state diagram |
+| What boxes and arrows cannot show, such as a level that fills and drains, a quantity drawn to scale, or a physical picture like a bucket of tokens | A sketch, kept as an SVG file beside the document |
 | A data type | A UML class diagram |
 | One claim with its reason | A short paragraph, unchanged in form |
 
-A diagram sits beside the list it draws and keeps that list's order. Mermaid's layout reorders nodes to cut crossings, and GitHub's version can differ from a local render. So force the order with `direction TB` and invisible `~~~` links inside a subgraph, draw edges to the subgraph rather than to its nodes, and check the picture on GitHub as well. Show what the diagram leaves out in the text, such as a resize or a retry. Do not draw what a table already says, because two surfaces drift.
+Pick the figure a reader understands fastest, not Mermaid by default. Mermaid suits a flow, a sequence of calls, a set of states or a data type, because its source sits in the document and changes with the text. A sketch suits what boxes and arrows cannot show. So a request for sketch notes on a design doc gets whichever of the two shows the passage's idea. A figure never repeats what a table beside it already says, and the text says what the figure leaves out, such as a resize or a retry.
 
-A request for sketch notes on a design doc gets a Mermaid diagram, because a Mermaid block lives in the document and moves with its text.
+The rate limit section of l3a0/ithildin-runtime's architecture doc shows the difference. A Mermaid flowchart drawn first showed which request goes to which bucket, which the table beside it already gave, and not the buckets themselves. [Commit 418d8c8](https://github.com/l3a0/ithildin-runtime/commit/418d8c8) replaced it with [a sketch](https://github.com/l3a0/ithildin-runtime/blob/418d8c8/docs/figures/rate-limit-buckets.svg) of two buckets, each refilling and holding at most 10 tokens.
+
+A sketch meets four conditions, so it moves with its text the way a Mermaid block does.
+
+1. It is kept as text, such as an SVG file in a `figures` folder beside the document, so its source diffs like the prose.
+2. It has a background of its own, a filled shape covering the whole canvas, so it reads in a dark theme. An SVG with no background draws dark ink on GitHub's dark page.
+3. It sits right after the text it draws, embedded as an image whose alt text says what it draws.
+4. It changes in the same commit as that text.
+
+A Mermaid diagram sits beside the list it draws and keeps that list's order. Mermaid's layout reorders nodes to cut crossings, and GitHub's version can differ from a local render. So force the order with `direction TB` and invisible `~~~` links inside a subgraph, draw edges to the subgraph rather than to its nodes, and check the picture on GitHub as well.
 
 The words in a diagram follow the same rules as the prose. A label says what happens, in a phrase with a verb and a clear actor, and one that only names a component or a participant needs no verb. Spell out shorthand, hold one idea in a label, and wrap a long one.
 
@@ -71,13 +81,17 @@ Change only the shape. New words appear only in the opening, headings, table cel
 
 ### 6. Render it and look
 
-A diagram that renders can still be wrong, so read what it drew. Three faults pass a render check, and `ask-team`'s `scripts/diagram_words.py` looks for all three.
+A Mermaid diagram that renders can still be wrong, so read what it drew. Three faults pass a render check, and `ask-team`'s `scripts/diagram_words.py` looks for all three.
 
 1. A flowchart, state or class label that starts like a Markdown block, such as "1. Refit" or "- Refit". Mermaid 11.4.1 draws "Unsupported markdown: list" in the box. Start the label with a word, such as "Step 1:".
 2. Two statements joined on one line, which still parse because a sequence message runs to the end of its line. The arrow disappears into a label. In a scripted edit, match leading spaces with `[ \t]+`, never `\s+`, which also matches a newline and pulls the next statement onto the line.
 3. A hash or a semicolon that ends a label early. A sequence label such as "order #4 is filled" draws "order". Write the entity, `#35;` for a hash or `#59;` for a semicolon.
 
 Run `python3 <this plugin>/skills/ask-team/scripts/diagram_words.py page <repo> <new folder>/out.html`, which prints each fault it finds, serve that folder with `python3 -m http.server <port> --bind 127.0.0.1 --directory <new folder>`, open the page in a browser and read each diagram's listed words. The page needs a connection to the CDN that serves Mermaid. It draws with Mermaid 12.2.0, the version GitHub's viewer held on 2026-11-06, which draws the first fault's words, so the printed list rather than the words names that fault. Where the rewrite rewords an existing diagram, `diagram_words.py compare <repo> <base commit>` checks that its structure did not change. Run the repository's lint and tests too.
+
+A sketch has no parser to name a fault, so open it and look. Serve the folder that holds it with the same `http.server` command, open the SVG in a browser, and read every label against the text it draws. Then open it on a dark page, such as a page in a new folder that shows it in an `<img>` on GitHub's dark background, `#0d1117`, and confirm its own background holds. Read the embed's alt text against the picture too.
+
+Looking caught one fault in the first sketch. A rough-line filter, `feTurbulence` feeding `feDisplacementMap`, erased every perfectly horizontal line. A filter's region defaults to the element's bounding box, and a horizontal line's box has zero height, so the line drew nothing. Give the filter `filterUnits="userSpaceOnUse"` and a region covering the whole canvas, as the example's `rough` filter does.
 
 ### 7. Have a fresh reader check the meaning
 
