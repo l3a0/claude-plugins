@@ -64,8 +64,9 @@ The watched failures on a loss called too rare to plan for (chief risk officer)
 and on a success rate or a clean sample offered as proof (chief scientist) come
 from Fooled by Randomness (Taleb, 2nd ed., Random House, 2004).
 
-The watched failure on a setting taken as a search's top score (chief
-scientist) comes from The Evaluation and Optimization of Trading Strategies
+The watched failure on a setting taken as a search's top score, or a
+rolling-window validation passed with no count of its tries (chief
+scientist), comes from The Evaluation and Optimization of Trading Strategies
 (Pardo, 2nd ed., Wiley, 2008).
 """
 import argparse
