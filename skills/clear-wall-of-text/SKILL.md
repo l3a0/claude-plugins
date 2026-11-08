@@ -44,20 +44,15 @@ Pick the form by what the content is, and use the least that serves.
 | A counted set, such as "two workers" | A numbered list after the sentence that counts it |
 | A choice that depends on a condition, or several cases with the same outcomes | A table with a title line, one row per case |
 | A mechanism with several actors or steps, such as a flow, a sequence of calls or a set of states | A Mermaid sequence diagram, flowchart or state diagram |
-| What boxes and arrows cannot show, such as a level that fills and drains, a quantity drawn to scale, or a physical picture like a bucket of tokens | A sketch, kept as an SVG file beside the document |
+| What boxes and arrows cannot show, such as a level that fills and drains, a quantity drawn to scale, or a physical picture like a bucket of tokens | A sketch, an animated whiteboard GIF |
 | A data type | A UML class diagram |
 | One claim with its reason | A short paragraph, unchanged in form |
 
 Pick the figure a reader understands fastest, not Mermaid by default. Mermaid suits a flow, a sequence of calls, a set of states or a data type, because its source sits in the document and changes with the text. A sketch suits what boxes and arrows cannot show. So a request for sketch notes on a design doc gets whichever of the two shows the passage's idea. A figure never repeats what a table beside it already says, and the text says what the figure leaves out, such as a resize or a retry.
 
-The rate limit section of l3a0/ithildin-runtime's architecture doc shows the difference. A Mermaid flowchart drawn first showed which request goes to which bucket, which the table beside it already gave, and not the buckets themselves. [Commit 418d8c8](https://github.com/l3a0/ithildin-runtime/commit/418d8c8) replaced it with [a sketch](https://github.com/l3a0/ithildin-runtime/blob/418d8c8/docs/figures/rate-limit-buckets.svg) of two buckets, each refilling and holding at most 10 tokens.
+The rate limit section of l3a0/ithildin-runtime's architecture doc shows the difference. A Mermaid flowchart drawn first showed which request goes to which bucket, which the table beside it already gave, and not the buckets themselves. Sketches of each bucket refilling and holding at most 10 tokens replaced it.
 
-A sketch meets four conditions, so it moves with its text the way a Mermaid block does.
-
-1. It is kept as text, such as an SVG file in a `figures` folder beside the document, so its source diffs like the prose.
-2. It has a background of its own, a filled shape covering the whole canvas, so it reads in a dark theme. An SVG with no background draws dark ink on GitHub's dark page.
-3. It sits right after the text it draws, embedded as an image whose alt text says what it draws.
-4. It changes in the same commit as that text.
+Draw a sketch in the style of the blog's sketch notes: an animated GIF drawn stroke by stroke as if on a whiteboard. A scene module, a Python module that lists its strokes and labels in drawing order, draws it with the shared whiteboard helpers in l3a0/ithildin-core, and tests pin its words, colours and figures. l3a0/quantitative-trading's `sketch-notes` skill describes the scene, its tests and how to draft one. A sketch sits right after the text it draws, embedded as an image whose alt text says what it draws, and changes in the same commit as that text. A figure drawn to scale reads its numbers from the source the text quotes, never typed twice.
 
 A Mermaid diagram sits beside the list it draws and keeps that list's order. Mermaid's layout reorders nodes to cut crossings, and GitHub's version can differ from a local render. So force the order with `direction TB` and invisible `~~~` links inside a subgraph, draw edges to the subgraph rather than to its nodes, and check the picture on GitHub as well.
 
@@ -89,9 +84,7 @@ A Mermaid diagram that renders can still be wrong, so read what it drew. Three f
 
 Run `python3 <this plugin>/skills/ask-team/scripts/diagram_words.py page <repo> <new folder>/out.html`, which prints each fault it finds, serve that folder with `python3 -m http.server <port> --bind 127.0.0.1 --directory <new folder>`, open the page in a browser and read each diagram's listed words. The page needs a connection to the CDN that serves Mermaid. It draws with Mermaid 12.2.0, the version GitHub's viewer held on 2026-11-06, which draws the first fault's words, so the printed list rather than the words names that fault. Where the rewrite rewords an existing diagram, `diagram_words.py compare <repo> <base commit>` checks that its structure did not change. Run the repository's lint and tests too.
 
-A sketch has no parser to name a fault, so open it and look. Serve the folder that holds it with the same `http.server` command, open the SVG in a browser, and read every label against the text it draws. Then open it on a dark page, such as a page in a new folder that shows it in an `<img>` on GitHub's dark background, `#0d1117`, and confirm its own background holds. Read the embed's alt text against the picture too.
-
-Looking caught one fault in the first sketch. A rough-line filter, `feTurbulence` feeding `feDisplacementMap`, erased every perfectly horizontal line. A filter's region defaults to the element's bounding box, and a horizontal line's box has zero height, so the line drew nothing. Give the filter `filterUnits="userSpaceOnUse"` and a region covering the whole canvas, as the example's `rough` filter does.
+A sketch has no parser to name a fault, so draw it with the draft check the `sketch-notes` skill describes, which prints every rule the scene breaks, then look at its last frame. Read every label against the text it draws, and the embed's alt text against the picture.
 
 ### 7. Have a fresh reader check the meaning
 
