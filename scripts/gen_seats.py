@@ -69,7 +69,8 @@ closing-order backtest at a price no auction printed (chief scientist) comes
 from Algorithmic Trading (Chan, Wiley, 2013).
 
 The watched failure on a hit rate or a count of positions taken over fills or
-legs, or a picked result whose search kept only summary figures (chief scientist), comes from Advances in Financial Machine Learning
+legs, or a picked result whose search kept only summary figures (chief
+scientist), comes from Advances in Financial Machine Learning
 (López de Prado, Wiley, 2018).
 
 The watched failure on a setting taken as a search's top score, or a
