@@ -68,9 +68,8 @@ The watched failure on a significance figure with no null hypothesis and a
 closing-order backtest at a price no auction printed (chief scientist) comes
 from Algorithmic Trading (Chan, Wiley, 2013).
 
-The watched failure on a hit rate or a standard error counted over fills or
-legs rather than bets, or a picked result whose search kept only summary
-figures (chief scientist), comes from Advances in Financial Machine Learning
+The watched failure on a hit rate or a count of positions taken over fills or
+legs, or a picked result whose search kept only summary figures (chief scientist), comes from Advances in Financial Machine Learning
 (López de Prado, Wiley, 2018).
 
 The watched failure on a setting taken as a search's top score, or a
@@ -300,7 +299,7 @@ SEATS = [
             "A setting taken as the top score of a search, with no record of the ranking measure and ranges written before it ran or of how the settings around it did, or a rolling-window validation offered as a verdict, or quoted with no count of the window sizes and reruns tried.",
             "A pair or spread trade justified by the correlation of its returns, or by a test of reversion run until one library agreed, with no record of its settings and window written before it ran.",
             "A significance figure quoted with no null hypothesis named, or with the null picked from several tried, or a backtest quoted as evidence filled at an opening or closing price no auction printed, or of unstated venues, with no gap named.",
-            "A hit rate or a standard error counted over fills, orders or legs rather than bets, or a result picked from a search whose record kept only each setting's summary figures, so it cannot be read against the spread of all its trials.",
+            "A hit rate or a count of positions taken over fills, orders or legs rather than positions held from flat to flat, or a result picked from a search whose settings kept only summary figures, so it cannot be read against the spread of all its trials.",
         ],
         lane=[
             "Whether live trading reproduces the backtest: board-cto.",
