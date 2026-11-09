@@ -108,8 +108,8 @@ check("step 1's second subject is the design subject", bool(subject) and "design
 check("the reader lens names subject 2 in step 1", "subject 2 in step 1" in SKILL)
 
 lens = SKILL.split("also gets a reader lens")[1].split("The reader lens's findings go through step 4")[0]
-check("the reader lens counts its questions", "It asks six things." in lens)
-check("the reader lens lists that many", re.findall(r"^(\d)\. ", lens.split("Questions 3 and 6")[0], re.M) == list("123456"))
+check("the reader lens counts its questions", "It asks seven things." in lens)
+check("the reader lens lists that many", re.findall(r"^(\d)\. ", lens.split("Questions 3 and 6")[0], re.M) == list("1234567"))
 check("the questions it names exist", "Questions 3 and 6 read the words the renderer drew" in lens)
 check("a label that only names something needs no verb", "only names a component or a participant needs no verb" in lens)
 script = ROOT / "skills/ask-team/scripts/diagram_words.py"
@@ -129,6 +129,8 @@ step6c = clear.split("### 6. Render it and look")[1].split("### 7.")[0]
 check("the lens points at clear-wall-of-text's step 3 for the form of a figure", "Step 3 of `clear-wall-of-text` says which form suits what" in lens and "Pick the figure a reader understands fastest" in step3)
 check("the lens points at clear-wall-of-text's step 6 for checking a sketch", "as step 6 of `clear-wall-of-text` says" in lens and "A sketch has no parser" in step6c)
 check("the lens reads a sketch's labels by the rules for a diagram's words", "A sketch's labels meet the same rules" in lens and "The words in a diagram follow the same rules as the prose" in step3)
+step2c = clear.split("### 2.")[1].split("### 3.")[0]
+check("the lens points at clear-wall-of-text's steps 2 and 3 for the four standards", "Steps 2 and 3 of `clear-wall-of-text` say where each kind goes" in lens and "The arc42 section it answers" in step2c and "The Diátaxis kind it is" in step2c and "the C4 model" in step3)
 check("clear-wall-of-text no longer sends every sketch note to Mermaid", "gets a Mermaid diagram, because" not in clear and "gets whichever of the two shows the passage's idea" in step3)
 check("the lens holds a sketch to numbers read from its source and to tests that pin it", "A sketch drawn to scale whose numbers are typed into its scene rather than read from the source the text quotes is a finding" in lens and "a sketch that no test pins by its words, colours and figures" in lens and "never typed twice" in clear)
 check("clear-wall-of-text names the whiteboard helpers' modules in ithildin-core", "`ithildincore.whiteboard`" in step3 and "`ithildincore.palette`" in step3)
