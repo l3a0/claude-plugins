@@ -240,6 +240,67 @@ class WorkingOrders(unittest.TestCase):
         self.assertIn("uncovered short calls if every working sell order fills", out)
         self.assertNotIn("FREE CASH", out)
 
+    def test_a_working_sale_that_leaves_a_spread_holds_its_width(self):
+        # A held long 590 put covers a working sale to open of the 600 put,
+        # so the fill adds a $10-wide spread: $1,000.
+        code, out = run(
+            account(
+                options={"QQQ   261120P00590000": 1},
+                working_orders={"options": {"QQQ   261120P00600000": -1}},
+            )
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("they hold $1,000.00 more", out)
+        self.assertIn("with every working sell order filled): $99,000.00", out)
+
+    def test_share_count_uses_the_figure_with_every_order_filled(self):
+        # $100,000 less the working 600 put's $60,000 buys 400 shares at $100.
+        code, out = run(
+            account(
+                working_orders={"options": {"QQQ   261120P00600000": -1}},
+                buy={"price": 100.00},
+            )
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("At $100.00 (price): 400 shares, $40,000.00, $0.00 left", out)
+
+    def test_thinkorswim_that_holds_the_working_order_is_not_charged_twice(self):
+        # Option BP already holds the working 700 put's $70,000, so the gap is
+        # exactly that, and the figure from thinkorswim stays at $30,000.
+        code, out = run(
+            account(
+                working_orders={"options": {"QQQ   261120P00700000": -1}},
+                tos={
+                    "margin_equity": 100000.00,
+                    "maintenance_requirement": 0,
+                    "option_buying_power": 30000.00,
+                    "long_marginable_value": 0,
+                },
+            )
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("thinkorswim holds the working sell orders already: $70,000.00", out)
+        self.assertNotIn("MISMATCH", out)
+        self.assertIn("If no working sell order fills: $100,000.00", out)
+        self.assertIn("with every working sell order filled): $30,000.00", out)
+
+    def test_thinkorswim_that_does_not_hold_the_working_order_is_charged(self):
+        code, out = run(
+            account(
+                working_orders={"options": {"QQQ   261120P00700000": -1}},
+                tos={
+                    "margin_equity": 100000.00,
+                    "maintenance_requirement": 0,
+                    "option_buying_power": 100000.00,
+                    "long_marginable_value": 0,
+                },
+            )
+        )
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("holds the working sell orders already", out)
+        self.assertIn("Option BP $100,000.00 - loan value $0.00 = $100,000.00", out)
+        self.assertIn("with every working sell order filled): $30,000.00", out)
+
     def test_no_working_orders_changes_nothing(self):
         code, out = run(account(working_orders={}))
         self.assertEqual(code, 0, out)
@@ -282,6 +343,26 @@ class Refusals(unittest.TestCase):
             account(working_orders={"option": {}}),
             "working_orders holds only",
         ),
+        (
+            "working buy of shares",
+            account(working_orders={"stocks": {"QQQ": 100}}),
+            "must be below zero",
+        ),
+        (
+            "half a working contract",
+            account(working_orders={"options": {"QQQ   261120P00600000": -0.5}}),
+            "whole number below zero",
+        ),
+        (
+            "zero working contracts",
+            account(working_orders={"options": {"QQQ   261120P00600000": 0}}),
+            "whole number below zero",
+        ),
+        (
+            "working options not an object",
+            account(working_orders={"options": []}),
+            "must be an object",
+        ),
     ]
 
     def test_input_that_would_drop_a_hold_is_refused(self):
@@ -314,6 +395,15 @@ class LatestFills(unittest.TestCase):
                 "execution_price": "2.5000",
             },
             {"time_executed": None, "action": "BUY", "universal_symbol": {"symbol": "XLF"}},
+            {
+                # A partial fill: one of five contracts filled.
+                "time_executed": "2026-01-06T00:00:00Z",
+                "action": "SELL_OPEN",
+                "filled_quantity": "1",
+                "total_quantity": "5",
+                "option_symbol": {"ticker": "QQQ   260116P00590000"},
+                "execution_price": "1.0000",
+            },
         ]
     }
 
@@ -331,17 +421,29 @@ class LatestFills(unittest.TestCase):
 
     def test_newest_first_from_the_wrapped_result(self):
         lines = self.fills(True)
-        self.assertEqual(lines[0], "3 orders in the file, 3 kept, 3 shown, newest first")
+        self.assertEqual(lines[0], "4 orders in the file, 4 kept, 4 shown, newest first")
         self.assertIn("2026-01-07  SELL_OPEN", lines[1])
         self.assertIn("QQQ   260116P00600000", lines[1])
-        self.assertIn("at 2.5", lines[1])
-        self.assertIn("2026-01-05  BUY", lines[2])
-        self.assertIn("10  SGOV", lines[2])
+        self.assertTrue(lines[1].endswith("at 2.5"), lines[1])
+        self.assertIn("2026-01-06  SELL_OPEN", lines[2])
+        self.assertIn("2026-01-05  BUY", lines[3])
+        self.assertIn("10  SGOV", lines[3])
 
-    def test_since_keeps_the_later_fills(self):
+    def test_a_partial_fill_shows_what_filled(self):
+        line = self.fills(False)[2]
+        self.assertRegex(line, r"SELL_OPEN\s+1  QQQ   260116P00590000")
+
+    def test_since_keeps_fills_on_and_after_the_date(self):
         lines = self.fills(False, "--since", "2026-01-06")
-        self.assertEqual(lines[0], "3 orders in the file, 1 kept, 1 shown, newest first")
+        self.assertEqual(lines[0], "4 orders in the file, 2 kept, 2 shown, newest first")
+        self.assertEqual(len(lines), 3)
+        self.assertIn("2026-01-06", lines[2])
+
+    def test_limit_caps_the_lines_shown(self):
+        lines = self.fills(False, "--limit", "1")
+        self.assertEqual(lines[0], "4 orders in the file, 4 kept, 1 shown, newest first")
         self.assertEqual(len(lines), 2)
+        self.assertIn("2026-01-07", lines[1])
 
 
 if __name__ == "__main__":

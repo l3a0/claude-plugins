@@ -92,3 +92,9 @@ exact access). Reports of particular interest:
   where book text or a reader's notes steer a `gh` action, and any path that
   carries more than a short phrase of the book into a tracked file or a
   comment. `scripts/overlap.py` is the check for the second.
+- `find-free-cash` reads the user's brokerage balances, positions and orders
+  through the SnapTrade tools, which expose reads only, and writes them to an
+  input file in the session's scratchpad. Its scripts make no network call
+  and place no order. In scope is any path that carries an account's figures
+  into a tracked file, an issue or a comment, and any way the skill could
+  lead a session to place, change or cancel an order.

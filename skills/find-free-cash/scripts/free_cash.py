@@ -39,16 +39,28 @@ part of the JSON, so leave them out of the file:
 
 The first four fields are required, because a field left out would read as
 nothing held and overstate the free cash. The script stops with an error on
-an unknown or repeated field, a contract count that is not a whole number, a
-negative share count or order reserve, and an uncovered short call.
+any of these:
+
+- an unknown or repeated field;
+- a contract count that is not a whole number;
+- a negative share count or order reserve;
+- a working order count of zero or above, or a working sale of more shares
+  than are held;
+- an uncovered short call, now or once every working sell order fills;
+- a negative loan value from thinkorswim's figures.
 
 `working_orders` holds the change each working sell order makes to the
-positions if it fills. A sell to open adds a short, written below zero, and a
-sell to close of a long or of shares removes a cover, also written below
-zero. The free cash is worked out as if every one of them fills, because a
-fill after the owner spends the figure would otherwise borrow. A fill can only
-add holds, so every order filled is the worst case. The figure with none
-filled is printed beside it.
+positions if it fills, from the order's `open_quantity`. A sell to open adds
+a short, written below zero, and a sell to close of a long or of shares
+removes a cover, also written below zero. A working spread is written as its
+short leg only, because a buy leg would let a lone buy lower the holds, so
+the script holds that leg at its full strike rather than the spread's width.
+The free cash is worked out as if every one of them fills, because a fill
+after the owner spends the figure would otherwise borrow. A fill can only add
+holds, so every order filled is the worst case. The figure with none filled
+is printed beside it. When thinkorswim's gap equals exactly what the working
+orders add, its Option BP already holds them, so they are not subtracted from
+that figure a second time.
 """
 
 import json
@@ -299,6 +311,10 @@ def main(path):
         print()
         show(f_lines, f_naked, " if every working sell order fills")
         extra = f_put + f_spread - put_reserve - spread_req
+        if extra < 0:
+            # A fill can only add holds, so this means the input carries a
+            # working buy, which load() should have refused.
+            sys.exit("STOP: working orders would lower the holds, so the input is wrong")
 
     order_reserve = round(data["open_order_reserve"] * 100)
     held = put_reserve + spread_req + order_reserve
@@ -327,6 +343,8 @@ def main(path):
                 " that explains it, and name it in the report."
             )
 
+    # Candidates whose figure already holds what working sell orders add.
+    nets_working = set()
     tos = data.get("tos")
     if tos:
         me = round(tos["margin_equity"] * 100)
@@ -336,6 +354,16 @@ def main(path):
         stock_maint = maint - spread_req
         loan_value = lmv - stock_maint
         residual = me - maint - put_reserve - order_reserve - obp
+        if extra and residual == extra:
+            # Option BP is net of open orders, and here a gap of exactly what
+            # the working sell orders add shows it holds those too. Counting
+            # them again would subtract them twice.
+            print(
+                "\nthinkorswim holds the working sell orders already:"
+                f" ${extra / 100:,.2f}, exactly what they add if they fill."
+            )
+            nets_working.add("thinkorswim")
+            residual = 0
         print("\nthinkorswim reconciliation:")
         share = f" ({stock_maint / lmv:.1%} of long marginable value)" if lmv else ""
         print(f"  Stock maintenance = maintenance - spreads = ${stock_maint / 100:,.2f}{share}")
@@ -372,14 +400,16 @@ def main(path):
                 f" broker cash by ${(cash - implied) / 100:,.2f}"
             )
 
+    if extra:
+        unfilled = {k: v + (extra if k in nets_working else 0) for k, v in candidates.items()}
+        candidates = {k: v - (0 if k in nets_working else extra) for k, v in candidates.items()}
+        print(
+            f"\nIf no working sell order fills: ${min(unfilled.values()) / 100:,.2f}."
+            f" If every one fills, they hold ${extra / 100:,.2f} more."
+        )
     source = min(candidates, key=candidates.get)
     free = candidates[source]
     if extra:
-        print(
-            f"\nIf no working sell order fills: ${free / 100:,.2f}."
-            f" If every one fills, they hold ${extra / 100:,.2f} more."
-        )
-        free -= extra
         source += ", with every working sell order filled"
     print(f"\nFREE CASH (lower figure, from {source}): ${free / 100:,.2f}")
 

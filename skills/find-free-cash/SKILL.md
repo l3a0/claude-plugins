@@ -20,10 +20,14 @@ The examples in this skill use invented balances and trades. The repository is p
 Use the SnapTrade tools, which are read-only. Load them in one `ToolSearch` call.
 
 1. **Ask which account is in question,** unless the request names one or asks for all of them. `snaptrade_list_accounts` names the accounts, so match the answer by the last digits in an account's name.
-2. `snaptrade_get_balance` gives the cash and the broker's buying power.
-3. `snaptrade_get_positions` gives the stock holdings and a current price for any of them.
-4. `snaptrade_get_option_positions` gives every option as an OCC ticker with signed contracts, short below zero.
-5. `snaptrade_get_orders` with status `open` gives working orders. Put the cost of open buy orders in `open_order_reserve`. Put every working sell order in `working_orders`, as the change it makes to the positions if it fills. A sale to open a put or a spread adds a short, and a sale to close a long option or shares removes a cover. The script works out the free cash as if every one fills, because a fill after the owner spends the figure would borrow. It prints the figure with none filled beside it, so name both in the report.
+2. **`snaptrade_get_orders` with status `open` gives working orders.** Read them before the positions. A sale that fills between the two reads then shows twice, which holds too much, rather than in neither, which holds too little.
+3. `snaptrade_get_balance` gives the cash and the broker's buying power.
+4. `snaptrade_get_positions` gives the stock holdings and a current price for any of them.
+5. `snaptrade_get_option_positions` gives every option as an OCC ticker with signed contracts, short below zero.
+
+Put the cost of open buy orders in `open_order_reserve`. Put every working sell order in `working_orders`, as the change it makes to the positions if its `open_quantity`, the part still working, fills. A sale to open a put adds a short, and a sale to close a long option or shares removes a cover. Write a working spread as its short leg only, because the script refuses a buy leg. It then holds that leg at its full strike rather than the spread's width, so the report names how much that overstates the hold. The script works out the free cash as if every working sell order fills, because a fill after the owner spends the figure would borrow. It prints the figure with none filled beside it, so name both in the report.
+
+The orders tool returns only the last 30 days of orders. A pull of a years-old account's history came back with only its last 28 days. So a good-till-cancelled sale placed earlier and still working can be missing. Say so in the report, and check the broker's list of working orders when the owner places such orders.
 
 ### Judge how fresh each account is
 
@@ -38,7 +42,7 @@ Pull everything again on every run, because the owner trades between runs. Free 
 
 ### Read the latest fills
 
-`snaptrade_get_orders` with status `executed` returns the account's whole history, close to a million characters for an active account, so it lands in a file. `scripts/latest_fills.py` reads that file, sorts the fills on `time_executed` and prints the latest ones, with `--since` to keep only fills from a date on.
+`snaptrade_get_orders` with status `executed` returns the last 30 days of orders, close to a million characters for an active account, so it lands in a file. `scripts/latest_fills.py` reads that file, sorts the fills on `time_executed` and prints the latest ones, with `--since` to keep only fills from a date on.
 
 ```bash
 python3 -I <skill base directory>/scripts/latest_fills.py <saved file> --since <YYYY-MM-DD>
@@ -75,6 +79,8 @@ The script pairs every short option with the long option or 100-share lot that c
 
 The thinkorswim check has to come out to $0.00. Margin equity minus maintenance minus what short puts and orders hold back must equal Option Buying Power. A nonzero gap means the script's put or order holds differ from thinkorswim's, so find the difference before giving a figure. The gap can be $0.00 while the cash itself differs by a few hundred dollars between SnapTrade and thinkorswim, and the script keeps the lower figure for that reason.
 
+A working sell order can also show here. Option Buying Power is already net of open orders, so when thinkorswim holds a working sale too, the gap equals exactly what the working orders add if they fill. The script then says so, counts the gap as $0.00, and takes nothing more off thinkorswim's figure.
+
 The check cannot see spreads, because they sit inside the maintenance figure. A spread thinkorswim pairs more expensively than the script does shows up instead as stock maintenance larger than the stocks it is charged on. The script stops when that makes the loan value negative. Short of that, compare the stock maintenance's share of Long Marginable Value, which the script prints, with the broker's house rate for those holdings.
 
 ### Explain a gap in the broker's buying power
@@ -93,8 +99,8 @@ For a share count, put the quoted price in `buy.price` and a limit price in `buy
 
 ## Report it
 
-Lead with the free cash and the share count. Then list what holds cash back, one line per short put, spread and open order, and say which source the figure came from. Name anything that will change it soon, such as a short put expiring this week, which frees its hold if it expires worthless and spends it if it is assigned. Measure a short option's distance from its strike with the freshest price of the underlying across all accounts, never with the frozen account's own quote.
+Lead with the free cash and the share count. Then list what holds cash back, one line per short put, spread, open buy order and working sell order, and say which source the figure came from. Where sell orders are working, give the free cash both if every one fills, which is the figure to spend, and if none does. Name anything that will change it soon, such as a short put expiring this week, which frees its hold if it expires worthless and spends it if it is assigned. Measure a short option's distance from its strike with the freshest price of the underlying across all accounts, never with the frozen account's own quote.
 
-The script stops without a figure when it finds an uncovered short call, because a naked call has no cash limit on its loss. Say so in the report, and give no free-cash figure for that account. It also stops on input that would drop a hold, such as a missing field or half a contract, so fix the input rather than work around the error.
+The script stops without a figure when it finds an uncovered short call, because a naked call has no cash limit on its loss. That includes a call a working sale would leave uncovered once it fills. Say so in the report, and give no free-cash figure for that account. It also stops on input that would drop a hold, such as a missing field or half a contract, so fix the input rather than work around the error.
 
 Never place, change or cancel an order. The owner places trades, and the ticket should show the order uses no margin before it is sent.
