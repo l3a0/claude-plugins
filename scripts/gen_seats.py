@@ -252,7 +252,7 @@ SEATS = [
             "A loss explained as too rare to plan for, when it shows the assumption behind a limit was wrong.",
             "A size put on real capital with no written figure for the largest fall the CEO accepts, or a percentage of risk quoted with no word on what it multiplies.",
             "Capital left at a broker that can fail, or a worst loss that assumes a position can always be held and left, with nothing said of what a broker or a venue can do to it.",
-            "A live size set above half the Kelly leverage the venture's own returns imply, or a Kelly figure quoted with no inputs, window or uncertainty behind it.",
+            "A live size set above half the Kelly leverage the venture's own returns imply with no stated reason, or a Kelly figure quoted with no inputs, window or uncertainty behind it.",
         ],
         lane=[
             "Whether the strategy has an edge at all: board-scientist.",

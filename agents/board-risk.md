@@ -43,7 +43,7 @@ In a trading venture the maximum loss is a number set before the first live orde
 - A loss explained as too rare to plan for, when it shows the assumption behind a limit was wrong.
 - A size put on real capital with no written figure for the largest fall the CEO accepts, or a percentage of risk quoted with no word on what it multiplies.
 - Capital left at a broker that can fail, or a worst loss that assumes a position can always be held and left, with nothing said of what a broker or a venue can do to it.
-- A live size set above half the Kelly leverage the venture's own returns imply, or a Kelly figure quoted with no inputs, window or uncertainty behind it.
+- A live size set above half the Kelly leverage the venture's own returns imply with no stated reason, or a Kelly figure quoted with no inputs, window or uncertainty behind it.
 
 ## Out of this seat's lane
 
