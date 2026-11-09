@@ -32,6 +32,30 @@ List what a reader with none of the context would ask, in the order they would a
 
 Open with why the passage matters, in one or two sentences, and put the claim before the mechanics. Keep sibling headings distinct, and leave existing headings alone so their anchors still resolve. Add each new heading to the document's Contents where it lists that level.
 
+Before shaping anything, place each part of the passage on the page it belongs on, because a passage that mixes kinds of content stays hard to follow however well it is shaped. Two standards decide the page.
+
+1. **The arc42 section it answers.** [arc42](https://arc42.org/overview) is a template for architecture docs whose sections each answer one kind of question, and a large architecture doc keeps one page per section. Its decisions section is the document's one decisions section. Its glossary holds the project's documented vocabulary, and each term still gets its gloss where it first appears.
+2. **The Diátaxis kind it is.** [Diátaxis](https://diataxis.fr/) keeps each page to one kind of writing: a tutorial, a how-to, reference or explanation. A design doc is mostly explanation. Operator steps, such as a runbook or a drill, are a how-to, and they live on a page apart from the reasoning that explains them.
+
+**Table:** The question each arc42 section answers
+
+| Section | The question it answers |
+| --- | --- |
+| Introduction and goals | What must the system do, for whom, and which quality goals matter most? |
+| Constraints | What limits the design that the team cannot change? |
+| Context and scope | What is inside the system, and which people and systems does it talk to? |
+| Solution strategy | Which few choices shape the whole design? |
+| Building blocks | Which parts make up the system, and what does each do? |
+| Runtime | How do the parts work together in each scenario that matters? |
+| Deployment | Which machines and environments run each part? |
+| Crosscutting concepts | Which rules and patterns hold across many parts, such as logging or error handling? |
+| Decisions | What was decided, when, and why? |
+| Quality requirements | How is each quality goal measured? |
+| Risks and technical debt | What could go wrong, and what was left to fix later? |
+| Glossary | What does each term of the project's vocabulary mean? |
+
+Content that belongs on another page, by either standard, moves there, and a link to it stays where it was. It is not reshaped to fit the page it was on. Step 5's walk then ticks a moved clause on the page it moved to.
+
 ### 3. Give each kind of content its form
 
 Pick the form by what the content is, and use the least that serves.
@@ -59,6 +83,8 @@ Those helpers are [`ithildincore.whiteboard`](https://github.com/l3a0/ithildin-c
 l3a0/quantitative-trading's [`sketch-notes` skill](https://github.com/l3a0/quantitative-trading/blob/main/.claude/skills/sketch-notes/SKILL.md) describes the scene, its tests and how to draft one, and its section `## What a sketch's tests hold` lists what each test shows. Its steps on drafting, placing and pinning a sketch apply to a design doc. The rest of its loop is written for a blog post, such as its figure-embed sweep, its Substack sync, its rule for a published post and its post's tracking issue, so the design doc's own repository decides how its pull request is shown and reviewed.
 
 A Mermaid diagram sits beside the list it draws and keeps that list's order. Mermaid's layout reorders nodes to cut crossings, and GitHub's version can differ from a local render. So force the order with `direction TB` and invisible `~~~` links inside a subgraph, draw edges to the subgraph rather than to its nodes, and check the picture on GitHub as well.
+
+Give each architecture diagram one zoom level of [the C4 model](https://c4model.com/), and name that level in its caption, the line of text beside it. The levels are system context, container, component and code, and the supplementary views are a dynamic diagram of one scenario and a deployment diagram. In C4 a container is a part that runs or stores data on its own, such as a service or a database, rather than a Docker container. A caption reads like "Container diagram: the processes the runtime runs and the stores they write". A diagram that needs two levels is split into two. A sketch that draws a quantity rather than the system's structure names no level.
 
 The words in a diagram follow the same rules as the prose. A label says what happens, in a phrase with a verb and a clear actor, and one that only names a component or a participant needs no verb. Spell out shorthand, hold one idea in a label, and wrap a long one.
 
@@ -92,4 +118,11 @@ A sketch has no parser to name a fault, so draw it with `draft.py`, the draft sc
 
 ### 7. Have a fresh reader check the meaning
 
-Send the diff to a general-purpose agent that has read none of the conversation, with this question: does the new text keep every fact, and would a reader with none of the context follow it on one read? On a design doc, `ask-team`'s reader lens adds the checks on structure. A review of the loss stop section found that "Held" cell, and a diagram label whose "its" did not say whose send it meant. Apply what survives. Where no such reader read the final commit, say so in the pull request comment.
+Send the diff to a general-purpose agent that has read none of the conversation. Ask whether the new text keeps every fact, and ask the questions of [ISO 24495-1:2023](https://www.iso.org/standard/78907.html), the international plain-language standard, one for each of its principles.
+
+1. Does the reader get what they need?
+2. Can the reader find it from the contents alone?
+3. Can they understand it on one read?
+4. Can they act on it?
+
+On a design doc, `ask-team`'s reader lens adds the checks on structure. A review of the loss stop section found that "Held" cell, and a diagram label whose "its" did not say whose send it meant. Apply what survives. Where no such reader read the final commit, say so in the pull request comment.

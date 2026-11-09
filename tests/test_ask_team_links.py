@@ -108,8 +108,8 @@ check("step 1's second subject is the design subject", bool(subject) and "design
 check("the reader lens names subject 2 in step 1", "subject 2 in step 1" in SKILL)
 
 lens = SKILL.split("also gets a reader lens")[1].split("The reader lens's findings go through step 4")[0]
-check("the reader lens counts its questions", "It asks six things." in lens)
-check("the reader lens lists that many", re.findall(r"^(\d)\. ", lens.split("Questions 3 and 6")[0], re.M) == list("123456"))
+check("the reader lens counts its questions", "It asks seven things." in lens)
+check("the reader lens lists that many", re.findall(r"^(\d)\. ", lens.split("Questions 3 and 6")[0], re.M) == list("1234567"))
 check("the questions it names exist", "Questions 3 and 6 read the words the renderer drew" in lens)
 check("a label that only names something needs no verb", "only names a component or a participant needs no verb" in lens)
 script = ROOT / "skills/ask-team/scripts/diagram_words.py"
