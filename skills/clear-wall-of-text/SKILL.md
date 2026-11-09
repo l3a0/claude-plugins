@@ -35,7 +35,7 @@ Open with why the passage matters, in one or two sentences, and put the claim be
 Before shaping anything, place each part of the passage on the page it belongs on, because a passage that mixes kinds of content stays hard to follow however well it is shaped. Two standards decide the page.
 
 1. **The arc42 section it answers.** [arc42](https://arc42.org/overview) is a template for architecture docs whose sections each answer one kind of question, and a large architecture doc keeps one page per section. Its decisions section is the document's one decisions section. Its glossary holds the project's documented vocabulary, and each term still gets its gloss where it first appears.
-2. **The Diátaxis kind it is.** [Diátaxis](https://diataxis.fr/) keeps each page to one kind of writing: a tutorial, a how-to, reference or explanation. A design doc is mostly explanation. Operator steps, such as a runbook or a drill, are a how-to, and they live on a page apart from the reasoning that explains them.
+2. **The Diátaxis kind it is.** [Diátaxis](https://diataxis.fr/) keeps each page to one kind of writing: a tutorial, a how-to, reference or explanation. A design doc is mostly explanation. Operator steps, such as a runbook or a drill, are how-to or reference, and they live on an operator's page with a link to the reasoning that explains them.
 
 **Table:** The question each arc42 section answers
 
@@ -54,7 +54,7 @@ Before shaping anything, place each part of the passage on the page it belongs o
 | Risks and technical debt | What could go wrong, and what was left to fix later? |
 | Glossary | What does each term of the project's vocabulary mean? |
 
-Content that belongs on another page, by either standard, moves there, and a link to it stays where it was. It is not reshaped to fit the page it was on. Step 5's walk then ticks a moved clause on the page it moved to.
+Content that belongs on another page, by either standard, moves there, and a link to it stays where it was. Where the repository has no test that fails a relative link whose file or heading is gone, say so in the pull request, because a heading renamed on one page then breaks a link on another with nothing red. It is not reshaped to fit the page it was on. Step 5's walk then ticks a moved clause on the page it moved to.
 
 ### 3. Give each kind of content its form
 
@@ -84,7 +84,7 @@ l3a0/quantitative-trading's [`sketch-notes` skill](https://github.com/l3a0/quant
 
 A Mermaid diagram sits beside the list it draws and keeps that list's order. Mermaid's layout reorders nodes to cut crossings, and GitHub's version can differ from a local render. So force the order with `direction TB` and invisible `~~~` links inside a subgraph, draw edges to the subgraph rather than to its nodes, and check the picture on GitHub as well.
 
-Give each architecture diagram one zoom level of [the C4 model](https://c4model.com/), and name that level in its caption, the line of text beside it. The levels are system context, container, component and code, and the supplementary views are a dynamic diagram of one scenario and a deployment diagram. In C4 a container is a part that runs or stores data on its own, such as a service or a database, rather than a Docker container. A caption reads like "Container diagram: the processes the runtime runs and the stores they write". A diagram that needs two levels is split into two. A sketch that draws a quantity rather than the system's structure names no level.
+Give each architecture diagram one zoom level of [the C4 model](https://c4model.com/), and name that level in the sentence or caption before it. The levels are system context, container, component and code, and the supplementary views are a dynamic diagram of one scenario and a deployment diagram. In C4 a container is a part that runs or stores data on its own, such as a service or a database, rather than a Docker container. A caption reads like "Container diagram: the processes the runtime runs and the stores they write". A diagram that needs two levels is split into two. A sketch that draws a quantity rather than the system's structure names no level.
 
 The words in a diagram follow the same rules as the prose. A label says what happens, in a phrase with a verb and a clear actor, and one that only names a component or a participant needs no verb. Spell out shorthand, hold one idea in a label, and wrap a long one.
 

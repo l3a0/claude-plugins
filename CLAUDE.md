@@ -43,10 +43,12 @@ Clarity comes first. Write plain sentences a reader understands on one read. Pre
 
 **Shape a design or architecture doc by four standards (owner directive, 2026-11-09).** Each answers a different question a reader has about a page: where to look, what kind of page it is, how far a diagram zooms in, and whether the words work. The owner asked how to apply them to the docs, then said "update agent instructions and skills to do this as well".
 
-1. [arc42](https://arc42.org/overview) places each part of an architecture doc in the section of its template that answers that kind of question, such as context and scope, runtime, deployment or decisions. A large doc keeps one page per section.
-2. [The C4 model](https://c4model.com/) gives each diagram one zoom level: system context, container, component or code, or a supplementary dynamic or deployment view. The caption names the level, and a diagram that needs two levels is split.
-3. [Diátaxis](https://diataxis.fr/) keeps each page to one kind of writing: a tutorial, a how-to, reference or explanation. Operator steps such as a runbook or a drill are a how-to, and they live apart from the reasoning that explains them.
+1. [arc42](https://arc42.org/overview) places each part of an architecture doc in the section of its template that answers that kind of question, such as context and scope, runtime, deployment or decisions. A large doc keeps one page per section, with an index that maps all twelve sections to their pages. A section the design doc already holds is linked from the index rather than copied, and a section that names a price is listed under risks.
+2. [The C4 model](https://c4model.com/) gives each diagram one zoom level: system context, container, component or code, or a supplementary dynamic or deployment view. The sentence or caption before it names the level, and a diagram that needs two levels is split.
+3. [Diátaxis](https://diataxis.fr/) keeps each page to one kind of writing: a tutorial, a how-to, reference or explanation. Operator steps such as a runbook or a drill are how-to or reference, and they live on an operator's page with a link to the reasoning that explains them.
 4. [ISO 24495-1:2023](https://www.iso.org/standard/78907.html), the plain-language standard, asks that readers get what they need, can find it, can understand it and can act on it.
+
+Docs split into pages this way also need a test that fails any relative link whose file or heading is gone, because pages that link across each other break silently when a heading is renamed.
 
 **Restyle an existing file in a change of its own.** `README.md` and `skills/kindle-highlights/SKILL.md` predate these rules and still carry em dashes and the second person. An edit to one line follows the rules for that line and leaves the rest of the file alone, since a restyle swept into an unrelated change hides the change it rode in with.
 
@@ -92,7 +94,7 @@ A repo drifts when two surfaces describe the same thing and only one gets update
   1. Step 3 of `skills/clear-wall-of-text/SKILL.md` states it, and its step 6 says how to check a sketch.
   2. The reader lens in `skills/ask-team/SKILL.md` points at both steps, and its question 3 also states the rule's clauses on a figure drawn to scale and on the tests that pin a sketch, so an edit to step 3 checks question 3 too. Its question 1 points at step 3 and its question 3 at step 6, and its question 6 holds a sketch's labels to the rules it sets for a diagram's words.
 
-  The owner's global file wins over both, so a change there reaches each. This file's `## Writing style` leaves the rule out, because it governs how a design doc draws a figure, and this repository holds no design doc.
+  The owner's global file wins over both, so a change there reaches each. This file's `## Writing style` leaves the rule out, because it governs how a design doc draws a figure, and this repository holds no design doc. The four standards above sit in `## Writing style` all the same, because the skills here apply them to other repositories' design docs, and the reader lens's question 7 points at them.
 - **The four standards for a design or architecture doc** sit in three places here: `## Writing style` above, the reader lens's question 7 in `skills/ask-team/SKILL.md`, and steps 2, 3 and 7 of `skills/clear-wall-of-text/SKILL.md`. A change to one reaches the other two.
 - **The blog post** in `blog/how-to-take-back-your-kindle-highlights.md` is also published on Substack, and nothing syncs the two copies.
 

@@ -129,6 +129,8 @@ step6c = clear.split("### 6. Render it and look")[1].split("### 7.")[0]
 check("the lens points at clear-wall-of-text's step 3 for the form of a figure", "Step 3 of `clear-wall-of-text` says which form suits what" in lens and "Pick the figure a reader understands fastest" in step3)
 check("the lens points at clear-wall-of-text's step 6 for checking a sketch", "as step 6 of `clear-wall-of-text` says" in lens and "A sketch has no parser" in step6c)
 check("the lens reads a sketch's labels by the rules for a diagram's words", "A sketch's labels meet the same rules" in lens and "The words in a diagram follow the same rules as the prose" in step3)
+step2c = clear.split("### 2.")[1].split("### 3.")[0]
+check("the lens points at clear-wall-of-text's steps 2 and 3 for the four standards", "Steps 2 and 3 of `clear-wall-of-text` say where each kind goes" in lens and "The arc42 section it answers" in step2c and "The Diátaxis kind it is" in step2c and "the C4 model" in step3)
 check("clear-wall-of-text no longer sends every sketch note to Mermaid", "gets a Mermaid diagram, because" not in clear and "gets whichever of the two shows the passage's idea" in step3)
 check("the lens holds a sketch to numbers read from its source and to tests that pin it", "A sketch drawn to scale whose numbers are typed into its scene rather than read from the source the text quotes is a finding" in lens and "a sketch that no test pins by its words, colours and figures" in lens and "never typed twice" in clear)
 check("clear-wall-of-text names the whiteboard helpers' modules in ithildin-core", "`ithildincore.whiteboard`" in step3 and "`ithildincore.palette`" in step3)
