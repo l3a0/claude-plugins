@@ -68,6 +68,10 @@ The watched failure on a significance figure with no null hypothesis and a
 closing-order backtest at a price no auction printed (chief scientist) comes
 from Algorithmic Trading (Chan, Wiley, 2013).
 
+The watched failure on a picked result given one candidate's p-value and a
+mostly long backtest credited with the market's drift (chief scientist) comes
+from Evidence-Based Technical Analysis (Aronson, Wiley, 2007).
+
 The watched failure on a setting taken as a search's top score, or a
 rolling-window validation quoted with no count of its tries (chief scientist),
 comes from The Evaluation and Optimization of Trading Strategies (Pardo, 2nd
@@ -295,6 +299,7 @@ SEATS = [
             "A setting taken as the top score of a search, with no record of the ranking measure and ranges written before it ran or of how the settings around it did, or a rolling-window validation offered as a verdict, or quoted with no count of the window sizes and reruns tried.",
             "A pair or spread trade justified by the correlation of its returns, or by a test of reversion run until one library agreed, with no record of its settings and window written before it ran.",
             "A significance figure quoted with no null hypothesis named, or with the null picked from several tried, or a backtest quoted as evidence filled at an opening or closing price no auction printed, or of unstated venues, with no gap named.",
+            "A result picked from a search given the p-value of one candidate tested alone, or a backtest that is mostly long in a rising market credited with skill its exposure to the market's drift would have earned with none.",
         ],
         lane=[
             "Whether live trading reproduces the backtest: board-cto.",
