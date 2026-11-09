@@ -37,3 +37,5 @@ jobs:
         run: python3 tests/test_book_to_rules.py
       - name: Test the diagram-words script
         run: python3 tests/test_diagram_words.py
+      - name: find-free-cash script tests
+        run: python3 tests/test_free_cash.py

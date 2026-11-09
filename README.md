@@ -199,6 +199,10 @@ Its `pg.py` says whether each cited phrase is on its page, names the right page 
 
 Turns a dense passage in a design doc, an architecture doc, a charter or a README into text a reader follows on one read. Each question gets a subheading, steps get a numbered list, conditions get a titled table, and a mechanism gets a Mermaid diagram or a sketch. The skill states each cited rule in plain words, and it proves every fact survived before it reads the rendered result.
 
+### find-free-cash
+
+Works out how much cash in a linked brokerage account is free to spend without margin, and how many shares of something that cash buys. A broker's cash balance counts money already promised elsewhere. An uncovered short put holds its strike times 100, a credit spread holds its width times 100, and an open buy order holds its cost. A margin account's buying power also adds borrowing against the holdings. The skill reads the account through the read-only SnapTrade tools, judges whether each account's data is live by its prices, and runs `skills/find-free-cash/scripts/free_cash.py`. That script pairs every short option with its cheapest cover, counts every working sell order as filled, and reports the lowest of the broker's cash minus holds, the broker's own buying power and a thinkorswim screenshot's figure. It stops without a figure on an uncovered short call or on input that would drop a hold. The skill never places, changes or cancels an order.
+
 ## License
 
 [MIT](LICENSE)
