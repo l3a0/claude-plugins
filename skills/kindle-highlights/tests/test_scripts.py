@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Check hlmap.py, locmap.py, notebook_pages.js, extract_highlights.js and cjs.sh's in-page guard.
+"""Check hlmap.py, locmap.py, notebook_pages.js, extract_highlights.js, cjs.sh's in-page guard and the reader sweep.
 
 Every input is made up here, so no book text enters the repository. The JavaScript checks run the scripts
-against a small DOM mock under macOS's built-in JavaScriptCore shell, `jsc`, and skip where it is missing.
+against a small DOM mock under macOS's built-in JavaScriptCore shell, `jsc`, and skip where it is missing,
+unless `REQUIRE_JSC=1`, which makes a missing `jsc` fail.
 
     python3 skills/kindle-highlights/tests/test_scripts.py
 
@@ -234,6 +235,159 @@ def test_notebook(d):
     check('extract_highlights downloads by default', r['clicks'] == 1 and r['ret']['downloaded'] == 'DPASIN0001_highlights.json', r)
 
 
+SWEEP_MOCK = r"""
+// Drives reader_capture.js's sweep against a mocked book on a fake clock. A flip renders RENDER_MS after the click,
+// later than the 1.3 s settle, so the sweep only sees it if it waits. SCEN picks the book and what goes wrong.
+var SCEN = arguments[1], PLAN = arguments[2] ? JSON.parse(readFile(arguments[2])) : null;
+var posted = [], bodies = [], atPost = [], now = 0, RENDER_MS = 2000;
+Date.now = function () { return now; };
+var window = this;
+var document = { visibilityState: 'visible', querySelector: function () { return null; }, querySelectorAll: function () { return []; } };
+var localStorage = { getItem: function () { return '{}'; }, setItem: function () {} };
+// The post and its reply each settle on a later timer, and the state is recorded as each settles, so code that
+// publishes sweepEnd between starting the post and reading its reply is caught.
+// inflight counts the post's promises not yet settled. A setter on sweepEnd records it at the moment of publishing,
+// whatever order the timers fire in.
+var inflight = 0, publishes = [];
+function settle(f) {
+  inflight++;
+  return new Promise(function (res, rej) {
+    setTimeout(function () { inflight--; atPost.push({ endNull: K.sweepEnd === null, sweeping: K.sweeping }); f(res, rej); }, 0);
+  });
+}
+function fetch(url, o) {
+  posted.push(url); bodies.push(o.body);
+  if (SCEN === 'postfail') return settle(function (res, rej) { rej(new Error('receiver down')); });
+  var reply = 'saved ' + url.split('name=')[1] + ' ' + o.body.length;
+  return settle(function (res) { res({ text: function () { return settle(function (r2) { r2(reply); }); } }); });
+}
+load(arguments[0]);
+var K = window.__kh;
+var publishedEnd = K.sweepEnd;
+Object.defineProperty(K, 'sweepEnd', { get: function () { return publishedEnd; }, set: function (v) {
+  if (v !== null) publishes.push({ inflight: inflight, hasReply: !!v && ('saved' in v || 'saveErr' in v) });
+  publishedEnd = v;
+} });
+if (SCEN === 'slow') { K.END_AFTER = 4; K.FLIP_WAIT_MS = 3000; }
+var page = 0, pending = null, flips = 0, captured = 0, out = {};
+var LAST = PLAN ? PLAN.filter(function (x) { return x.changed; }).length : 5;
+K.sleep = function (ms) { now += ms; return Promise.resolve(); };
+K.label = function () { return 'screen ' + page; };
+K.imgSrc = function () { if (pending && now >= pending.at) { page = pending.to; pending = null; } return 'blob:' + page; };
+K.next = function () {
+  flips++;
+  var moves = PLAN ? (PLAN[flips - 1] || { changed: false }).changed
+    : page < LAST && !(SCEN === 'stall' && flips === 2) && !(SCEN === 'slowstart' && flips <= 2);
+  if (moves) pending = { at: now + RENDER_MS, to: page + 1 };
+};
+K.capture = function (name) {
+  captured++;
+  if ((SCEN === 'stopped' || SCEN === 'twice') && captured === 2) K.stopSweep();
+  if (SCEN === 'hidden' && captured === 2) document.visibilityState = 'hidden';
+  if (SCEN === 'err' && captured === 2) return Promise.reject(new Error('canvas failed'));
+  return Promise.resolve({ label: K.label() });
+};
+function report(r) {
+  var body = bodies.length ? JSON.parse(bodies[bodies.length - 1]) : [];
+  return { end: r, logged: K.sweepLog.length, posted: posted.slice(), sweeping: K.sweeping, page: page,
+           bodyLen: body.length, bodyLast: body.length ? body[body.length - 1].name : null,
+           unchangedWaits: K.sweepLog.filter(function (x) { return !x.changed; }).map(function (x) { return x.waited; }),
+           changedWaits: K.sweepLog.filter(function (x) { return x.changed; }).map(function (x) { return x.waited; }),
+           atPost: atPost.slice(), publishes: publishes.slice(), published: JSON.stringify(K.sweepEnd) === JSON.stringify(r),
+           bodyBytes: bodies.length ? bodies[bodies.length - 1].length : 0,
+           errs: K.sweepLog.filter(function (x) { return x.err; }).map(function (x) { return x.name; }) };
+}
+var n = SCEN === 'count' ? 3 : 500;
+var run = K.sweep(1, n, 'b');
+out.endNullWhileRunning = K.sweepEnd === null;
+run.then(function (r) {
+  out.first = report(r);
+  if (SCEN !== 'twice') { print(JSON.stringify(out.first)); return; }
+  posted = []; bodies = []; atPost = []; publishes = [];
+  var again = K.sweep(100, 500, 'c');
+  out.endNullAtSecondStart = K.sweepEnd === null;
+  return again.then(function (r2) { out.second = report(r2); print(JSON.stringify(out)); });
+});
+"""
+
+SWEEP_FIXTURE = pathlib.Path(__file__).parent / 'fixtures' / 'sweeplog-2026-11-08.json'
+
+
+def test_sweep(d):
+    (d / 'sweep.js').write_text(SWEEP_MOCK)
+    def run(scen, plan=''):
+        try:
+            r = subprocess.run([JSC, str(d / 'sweep.js'), '--', str(SCRIPTS / 'reader_capture.js'), scen, str(plan)],
+                               capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            return {'error': 'timed out: the sweep never ended'}
+        try:
+            return json.loads(r.stdout.strip().splitlines()[-1])
+        except (IndexError, ValueError):
+            return {'error': r.stdout + r.stderr}
+    settled = [{'inflight': 0, 'hasReply': True}]
+    def ended(r, why, logged, last, prefix='b'):
+        e = r.get('end') or {}
+        log = 'http://127.0.0.1:8931/json?name=%s-sweeplog.json' % prefix
+        return (e.get('why') == why and r.get('logged') == logged and e.get('last') == last
+                and r.get('posted') == [log] and e.get('saved') == 'saved %s-sweeplog.json %d' % (prefix, r.get('bodyBytes', -1))
+                and r.get('publishes') == settled
+                and r.get('published') is True and r.get('sweeping') is False
+                and r.get('atPost') == [{'endNull': True, 'sweeping': True}] * 2
+                and r.get('bodyLen') == logged and r.get('bodyLast') == last)
+    r = run('end')
+    # Five flips render the five screens, each 2 s after the click, then three flips change nothing.
+    check('sweep waits for each render and stops after three unchanged flips', ended(r, 'end', 8, 'b008') and r['page'] == 5
+          and r['end'].get('label') == 'screen 5', r)
+    # An unchanged flip waits the full six seconds for a render, then the 1.3-second settle.
+    check('an unchanged flip waits FLIP_WAIT_MS for a render', r.get('unchangedWaits') == [7300, 7300, 7300], r)
+    # A flip whose page changes stops waiting at the next 150 ms poll after the 2 s render, then settles 1.3 s.
+    check('a flip that changes the page stops waiting once it renders', r.get('changedWaits') == [3400] * 5, r)
+    r = run('slowstart')
+    # Two unchanged flips at the start, one short of END_AFTER, then the book turns: the sweep goes on.
+    check('two unchanged flips at the start do not end the sweep', ended(r, 'end', 10, 'b010') and r['page'] == 5, r)
+    r = run('slow')
+    check('raising END_AFTER gives the sweep more unchanged flips', ended(r, 'end', 9, 'b009'), r)
+    check('lowering FLIP_WAIT_MS shortens the wait on an unchanged flip', r.get('unchangedWaits') == [4300] * 4, r)
+    r = run('postfail')
+    e = r.get('end') or {}
+    check('a log post that fails is reported and the sweep still ends', e.get('why') == 'end' and 'receiver down' in (e.get('saveErr') or '')
+          and 'saved' not in e and r.get('sweeping') is False and r.get('published') is True
+          and r.get('atPost') == [{'endNull': True, 'sweeping': True}] and r.get('publishes') == settled, r)
+    r = run('stall')
+    # The second flip renders nothing, then the book carries on: one unchanged flip mid-book does not end it.
+    check('one unchanged flip mid-book resets once the page changes', ended(r, 'end', 9, 'b009') and r['page'] == 5, r)
+    r = run('count')
+    check('sweep stops after n screens and posts its log', ended(r, 'count', 3, 'b003'), r)
+    r = run('stopped')
+    check('stopSweep ends a sweep after the screen it is on and posts its log', ended(r, 'stopped', 2, 'b002'), r)
+    r = run('hidden')
+    check('sweep stops when the tab goes hidden and posts its log', ended(r, 'hidden', 2, 'b002'), r)
+    r = run('err')
+    check('a capture that fails is logged with its error and the sweep goes on', ended(r, 'end', 8, 'b008') and r['errs'] == ['b002'], r)
+    r = run('twice')
+    check('sweepEnd is null while a sweep runs', r.get('endNullWhileRunning') is True, r)
+    check('a second sweep starts with sweepEnd cleared', r.get('endNullAtSecondStart') is True, r)
+    check('a stop from the first sweep does not stop the second', (r.get('first') or {}).get('end', {}).get('why') == 'stopped'
+          and (r.get('second') or {}).get('end', {}).get('why') == 'end', r)
+    # The first sweep logs two screens before its stop. The second picks up at screen 2 and adds screens 3 to 5 and three
+    # unchanged flips, so its log holds eight entries, and six if each sweep started a fresh log.
+    f, g = r.get('first') or {}, r.get('second') or {}
+    check('the log stays cumulative across sweeps in one page load', f.get('logged') == 2 and g.get('logged') == 8 and g.get('bodyLen') == 8, r)
+    check('each of two sweeps in one page load posts its own log before publishing', ended(f, 'stopped', 2, 'b002')
+          and ended(g, 'end', 8, 'c105', prefix='c'), r)
+    plan = json.loads(SWEEP_FIXTURE.read_text())
+    tail = next(k for k, x in enumerate(plan) if not x['changed'])
+    r = run('replay', SWEEP_FIXTURE)
+    # The 2026-11-08 sweep's own sequence of changed and unchanged flips: it stops three flips past the last change.
+    check('the recorded 2026-11-08 sweep would stop three flips past its last screen',
+          (r.get('end') or {}).get('why') == 'end' and r.get('logged') == tail + 3, {'tail': tail, 'r': r})
+    (d / 'empty.json').write_text('[]')
+    r = run('replay', d / 'empty.json')
+    # A sweep started on the last screen: its first three flips change nothing, so it stops at the third.
+    check('a sweep started at the end stops after END_AFTER flips', ended(r, 'end', 3, 'b003'), r)
+
+
 def test_cjs_guard(d):
     guard = re.search(r"^GUARD='(.*)'$", (SCRIPTS / 'cjs.sh').read_text(), re.M).group(1)
     for origin, ok in (('https://read.amazon.com', True), ('https://read.amazon.com.evil.example', False),
@@ -250,9 +404,11 @@ with tempfile.TemporaryDirectory() as t:
         (t / name).mkdir()
         fn(t / name)
     if os.path.exists(JSC):
-        for name, fn in (('notebook', test_notebook), ('cjs', test_cjs_guard)):
+        for name, fn in (('notebook', test_notebook), ('cjs', test_cjs_guard), ('sweep', test_sweep)):
             (t / name).mkdir()
             fn(t / name)
+    elif os.environ.get('REQUIRE_JSC') == '1':
+        check('jsc exists, as REQUIRE_JSC asks', False, JSC)
     else:
         print('skip JavaScript checks: no jsc at ' + JSC)
 print(f'{len(failed)} failed' if failed else 'all passed')

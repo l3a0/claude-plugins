@@ -13,6 +13,8 @@
  *   __kh.capture('s000').then(r => __kh.last = r)   // capture the current screen; poll __kh.last
  *   __kh.sweep(1, 25, 's')                      // 25 × (next page → wait for the new render → capture 's001'..'s025')
  *   JSON.stringify(__kh.sweepLog.slice(-5))     // poll progress: [i, changed, label, tokens] per screen
+ *   JSON.stringify(__kh.sweepEnd)               // null while sweeping; then {why: 'end'|'hidden'|'stopped'|'count', ...}
+ *   __kh.stopSweep()                            // ask a running sweep to stop after the screen it is on
  *
  * Each capture POSTs two files to the localhost receiver (scripts/receiver.py):
  *   pages/<name>.png   the page render(s) drawn into a canvas with a 64 px white border (Vision clips glyphs at the
@@ -102,21 +104,43 @@
     await K.sleep(1500);
     return { jumped: pos, label: K.label() };
   };
-  // Flip → wait until the page <img> blob URL changes (new render) → settle → capture. Stops if the tab goes hidden.
+  // Flip → wait until the page <img> blob URL changes (new render) → settle → capture. The loop ends on its own in
+  // four cases, and K.sweepEnd.why names which: 'end' after K.END_AFTER flips in a row leave the page unchanged,
+  // which is the end of the book; 'hidden' when the tab goes hidden; 'stopped' after __kh.stopSweep(); and
+  // 'count' after n screens. Whichever it is, the loop posts K.sweepLog to the receiver as <prefix>-sweeplog.json
+  // before it returns, so nothing needs a reload to stop it or to keep the log.
+  K.END_AFTER = 3;
+  K.FLIP_WAIT_MS = 6000;
+  K.stopSweep = () => { K.stopRequested = true; return 'stopping after the current screen'; };
   K.sweep = async (from, n, prefix) => {
-    K.sweeping = true; K.sweepLog = K.sweepLog || [];
+    K.sweeping = true; K.stopRequested = false; K.sweepEnd = null; K.sweepLog = K.sweepLog || [];
+    let still = 0, why = 'count';
     for (let i = from; i < from + n; i++) {
+      if (K.stopRequested) { why = 'stopped'; break; }
       const before = K.imgSrc(), lb = K.label();
       K.next();
       const t0 = Date.now();
-      while (K.imgSrc() === before && Date.now() - t0 < 6000) await K.sleep(150);
+      while (K.imgSrc() === before && Date.now() - t0 < K.FLIP_WAIT_MS) await K.sleep(150);
       await K.sleep(1300);
       const name = (prefix || 's') + String(i).padStart(3, '0');
       let r; try { r = await K.capture(name); } catch (e) { r = { err: String(e) }; }
-      K.sweepLog.push({ i, name, changed: K.imgSrc() !== before, waited: Date.now() - t0, fromLabel: lb, label: r.label, toks: r.toks, nRects: r.nRects, err: r.err, vis: document.visibilityState });
-      if (document.visibilityState !== 'visible') break;
+      const changed = K.imgSrc() !== before;
+      K.sweepLog.push({ i, name, changed, waited: Date.now() - t0, fromLabel: lb, label: r.label, toks: r.toks, nRects: r.nRects, err: r.err, vis: document.visibilityState });
+      if (document.visibilityState !== 'visible') { why = 'hidden'; break; }
+      still = changed ? 0 : still + 1;
+      if (still >= K.END_AFTER) { why = 'end'; break; }
     }
+    // Build the result first and publish it only once the log's post has settled, so a session that acts on a
+    // non-null sweepEnd, such as by reloading, cannot lose the log.
+    const last = K.sweepLog[K.sweepLog.length - 1];
+    const end = { why, last: last ? last.name : null, label: last ? last.label : null };
+    try {
+      const r = await fetch(K.RX + '/json?name=' + (prefix || 's') + '-sweeplog.json', { method: 'POST', body: JSON.stringify(K.sweepLog) });
+      end.saved = await r.text();
+    } catch (e) { end.saveErr = String(e); }
+    K.sweepEnd = end;
     K.sweeping = false;
+    return end;
   };
   // Display settings: write localStorage and reload (the transient Aa panel did not persist slider changes on one run).
   // fontSizeIndex 4 (17.6 px) + two columns is the verified OCR-friendly layout; restore from K.snapshot afterwards.
