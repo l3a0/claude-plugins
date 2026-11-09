@@ -71,7 +71,7 @@ ed., Wiley, 2008). Watching for such a validation offered as a verdict is this
 plugin's own, since Pardo treats a passed walk-forward as ready to trade.
 
 The watched failures on a spread trade resting on correlation (chief scientist)
-and a live size near half the Kelly leverage (chief risk officer) come from
+and a live size above half the Kelly leverage (chief risk officer) come from
 Quantitative Trading (Chan, 2nd ed., Wiley, 2021).
 """
 import argparse
@@ -252,7 +252,7 @@ SEATS = [
             "A loss explained as too rare to plan for, when it shows the assumption behind a limit was wrong.",
             "A size put on real capital with no written figure for the largest fall the CEO accepts, or a percentage of risk quoted with no word on what it multiplies.",
             "Capital left at a broker that can fail, or a worst loss that assumes a position can always be held and left, with nothing said of what a broker or a venue can do to it.",
-            "A live size set near or above half the Kelly leverage the venture's own returns imply, or a Kelly figure quoted with no inputs, window or uncertainty behind it.",
+            "A live size set above half the Kelly leverage the venture's own returns imply, or a Kelly figure quoted with no inputs, window or uncertainty behind it.",
         ],
         lane=[
             "Whether the strategy has an edge at all: board-scientist.",
