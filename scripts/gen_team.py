@@ -152,6 +152,16 @@ null down first for a registered test, reporting every null tried, the seed and
 count of runs, and where each check applies are this plugin's own, not the
 book's.
 
+The checks on a backtest's position bias, a picked result's p-value against the
+best of its search, a resampled null, an interval beside an average and a
+held-out window spent once (quant researcher), and the test of the significance
+code on data whose answer is known (test engineer) come from Evidence-Based
+Technical Analysis (Aronson, Wiley, 2007), as ithildin-runtime's docs/design.md
+adopts it with Kindle locations. Extending the position bias to sized and flat
+positions, stating the false-discovery-rate figure beside the best-of-search
+test, counting an inverse as a try, recording a held-out window's reads, and
+where each check applies are this plugin's own, not the book's.
+
 The checks on trying what already exists, a neighbour's contract, a machine
 that holds no state and the workload a product is heading for (architect), and
 on one convention per kind of value (data engineer) come from the owner's
@@ -284,6 +294,9 @@ ROLES = [
             "Where a backtest quoted as evidence fills an order in an opening or closing auction, check that it fills at that auction's print, or names the gap when it reads a price consolidated across venues or one whose venues are unstated, never taking an unstated price for the auction print, since a few shares traded elsewhere at an outlying price flatter a strategy that buys what looks cheap. A signal that reads a period's high or low consolidated across venues, or of unstated venues, names the same.",
             "Where a process bets that a gap between instruments closes, check that its test of reversion reads the prices of the instruments it actually trades, never a spot price or an index standing in for one, with its level written down before it runs, and that a fund holding futures is named as one whose price carries the roll return.",
             "Where the change quotes a p-value or a significance level, check that it names the null hypothesis it tests and the distribution it assumed or the simulation that produced it, with the count of runs and the seed, and that every null tested is reported beside the count of tries, because different nulls give one result different significance. A figure a process commits before a registered test has its null written down before the run, and a figure reproduced from a source names that source's null.",
+            "Where a backtest of a process that holds positions is quoted as evidence, check that it states its average signed exposure to each instrument it holds and what that exposure earns from the instrument's average change with no skill, and that a test of whether its return beats zero reads returns with that average taken out, which touches only how a result is scored and never a signal, a size or a live path, since a process that is mostly long in a rising sample looks skilled for no reason.",
+            "Where the change quotes a p-value for a result picked from a search, check that it comes from the distribution of the best of the same search with no edge, never from one candidate's own null, stated beside any declared false-discovery-rate figure and never in its place, that a candidate tested beside its inverse counts both as tries, and that a resampled null takes each candidate's mean out first, keeps the sample's length, and draws the same dates or pairings for every candidate.",
+            "Where the change quotes an average return, a ratio or a hit rate as evidence, check that the average carries a confidence interval with its level and method, that a ratio such as the Sharpe ratio is tested against a distribution built for that ratio rather than borrowed from the mean, and that a hit rate states how often the outcome came with no signal. Where it quotes a result against held-out data, check that a window that has already judged any candidate is treated as data already read.",
         ],
     },
     {
@@ -396,6 +409,7 @@ ROLES = [
             "Check that a test which fails intermittently leaves the gate only as a skip whose reason links an issue, and is fixed or replaced by a smaller one, that a test guarding a hard rule leaves only once its replacement passes, and that no job reruns a build until it passes. A team that reruns until green learns to accept failures. Check too that tests which run the whole system stay a short, named list of journeys, with many more tests at each level below them.",
             "Check that a test or release check that starts something waits on a readiness check with a timeout rather than a fixed sleep, and that a wait that expires fails the check. Where a release takes over work from a running one, check that the checks run against it after the switch are the suite run before it with only its target changed, or the checks the design names in its place, and that each failure at deploy time has a test beside its drill.",
             "Where an outside write carries a direction, such as a buy or a sell, check that a test starts from the decision and runs through every guard and record the path has to the stand-in, covers each direction opening and closing and a write that crosses zero, wherever the system can do them, and asserts the direction, how a guard classed it and each amount it moves, and that a flipped sign fails it. Where the adapter has contract tests, check that they hold the same assertion.",
+            "Where code computes a significance figure, check for a test on candidates with no edge, where it rejects at about its stated level over a stated count of seeded runs, and one on a planted edge, where it finds it, and check that a resampler that skips taking out the mean or draws a different length fails a test.",
         ],
     },
     {

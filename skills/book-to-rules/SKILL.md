@@ -5,9 +5,9 @@ description: Turn a book into rules for an engineering team and design principle
 
 # Book to rules
 
-Thirteen books went through this pipeline in eight days, ending on 2026-11-09 UTC. The first four, *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*, each worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them. The fifth, *Building Microservices*, ran with this skill and still took eight review rounds, which step 7 prices. Step 4's list of what other work owns is the lesson of that run. The sixth, *Trading in the Zone*, took fourteen, most of them on mechanics a rule stated rather than pointed to.
+Fourteen books went through this pipeline in eight days, ending on 2026-11-09 UTC. The first four, *The Art of Scalability*, *Designing Data-Intensive Applications*, *Code Complete* and *Rapid Development*, each worked out the same steps again, at about 15 to 32 US dollars a book. This skill holds those steps, the scripts that check citations, the reader brief and the book's part of the review brief as templates, and the checks the review rounds taught. A later run fills in the templates and runs the checks instead of rediscovering them. The fifth, *Building Microservices*, ran with this skill and still took eight review rounds, which step 7 prices. Step 4's list of what other work owns is the lesson of that run. The sixth, *Trading in the Zone*, took fourteen, most of them on mechanics a rule stated rather than pointed to.
 
-The worked examples are the thirteen sets of pull requests. The first four ran before any rule on rounds and stopped after one or two. Two later runs under the rule that a review goes on until nothing significant is left, [l3a0/ithildin-runtime PR #29](https://github.com/l3a0/ithildin-runtime/pull/29) and [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31), had reached seven and six rounds on 2026-11-04 UTC with more to follow, so the jump to eight is not all the cost of skipping step 4's list.
+The worked examples are the fourteen sets of pull requests. The first four ran before any rule on rounds and stopped after one or two. Two later runs under the rule that a review goes on until nothing significant is left, [l3a0/ithildin-runtime PR #29](https://github.com/l3a0/ithildin-runtime/pull/29) and [PR #31](https://github.com/l3a0/ithildin-runtime/pull/31), had reached seven and six rounds on 2026-11-04 UTC with more to follow, so the jump to eight is not all the cost of skipping step 4's list.
 
 **Table:** The books run so far, and their pull requests
 
@@ -26,6 +26,7 @@ The worked examples are the thirteen sets of pull requests. The first four ran b
 | *The Evaluation and Optimization of Trading Strategies* | [PR #56](https://github.com/l3a0/ithildin-runtime/pull/56) | [PR #90](https://github.com/l3a0/claude-plugins/pull/90) | none | 10 |
 | *Quantitative Trading* | [PR #58](https://github.com/l3a0/ithildin-runtime/pull/58) | [PR #91](https://github.com/l3a0/claude-plugins/pull/91) | none | 3 |
 | *Algorithmic Trading* | [PR #61](https://github.com/l3a0/ithildin-runtime/pull/61) | [PR #93](https://github.com/l3a0/claude-plugins/pull/93) | none | 2 |
+| *Evidence-Based Technical Analysis* | [PR #64](https://github.com/l3a0/ithildin-runtime/pull/64) | [PR #95](https://github.com/l3a0/claude-plugins/pull/95) | none | 1 |
 
 Read the review comment on the *Code Complete* project pull request first. Its round is the one the `ask-team` skill's review round and comment template were drawn from.
 
@@ -96,7 +97,7 @@ Get the highlights either way. They are how the owner says which points matter, 
 
 ### 2. Split the text into parts and map the highlights
 
-Pick part boundaries at chapter starts, from the table of contents, so no reader starts mid-argument. The first ten runs and Chan's two books used five to ten parts of about 6,500 to 69,000 words each.
+Pick part boundaries at chapter starts, from the table of contents, so no reader starts mid-argument. The first ten runs, Chan's two books and Aronson's used five to ten parts of about 6,500 to 69,000 words each.
 
 ```bash
 python3 -I "$SKILL/scripts/split_parts.py" "$RUN/book_pages.txt" "$RUN/parts" \
