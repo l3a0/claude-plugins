@@ -64,6 +64,10 @@ The watched failures on a loss called too rare to plan for (chief risk officer)
 and on a success rate or a clean sample offered as proof (chief scientist) come
 from Fooled by Randomness (Taleb, 2nd ed., Random House, 2004).
 
+The watched failure on a significance figure with no null hypothesis and a
+closing-order backtest at a price no auction printed (chief scientist) comes
+from Algorithmic Trading (Chan, Wiley, 2013).
+
 The watched failure on a setting taken as a search's top score, or a
 rolling-window validation quoted with no count of its tries (chief scientist),
 comes from The Evaluation and Optimization of Trading Strategies (Pardo, 2nd
@@ -290,6 +294,7 @@ SEATS = [
             "An entry credited with a profit that random entries earn just as well through the same exits, size and costs.",
             "A setting taken as the top score of a search, with no record of the ranking measure and ranges written before it ran or of how the settings around it did, or a rolling-window validation offered as a verdict, or quoted with no count of the window sizes and reruns tried.",
             "A pair or spread trade justified by the correlation of its returns, or by a test of reversion run until one library agreed, with no record of its settings and window written before it ran.",
+            "A significance figure quoted with no null hypothesis named, or with the null picked from several tried, or a backtest quoted as evidence filled at an opening or closing price no auction printed, or of unstated venues, with no gap named.",
         ],
         lane=[
             "Whether live trading reproduces the backtest: board-cto.",
