@@ -69,6 +69,10 @@ rolling-window validation quoted with no count of its tries (chief scientist),
 comes from The Evaluation and Optimization of Trading Strategies (Pardo, 2nd
 ed., Wiley, 2008). Watching for such a validation offered as a verdict is this
 plugin's own, since Pardo treats a passed walk-forward as ready to trade.
+
+The watched failures on a spread trade resting on correlation (chief scientist)
+and a live size near the Kelly leverage (chief risk officer) come from
+Quantitative Trading (Chan, 2nd ed., Wiley, 2021).
 """
 import argparse
 import pathlib
@@ -248,6 +252,7 @@ SEATS = [
             "A loss explained as too rare to plan for, when it shows the assumption behind a limit was wrong.",
             "A size put on real capital with no written figure for the largest fall the CEO accepts, or a percentage of risk quoted with no word on what it multiplies.",
             "Capital left at a broker that can fail, or a worst loss that assumes a position can always be held and left, with nothing said of what a broker or a venue can do to it.",
+            "A live size set near or above the Kelly leverage the venture's own returns imply, or a Kelly figure quoted with no inputs or window behind it.",
         ],
         lane=[
             "Whether the strategy has an edge at all: board-scientist.",
@@ -284,6 +289,7 @@ SEATS = [
             "A high win rate quoted with no figure for the size of the losses, or a clean sample read as proof that the bad day it never met is safe.",
             "An entry credited with a profit that random entries earn just as well through the same exits, size and costs.",
             "A setting taken as the top score of a search, with no record of the ranking measure and ranges written before it ran or of how the settings around it did, or a rolling-window validation offered as a verdict, or quoted with no count of the window sizes and reruns tried.",
+            "A pair or spread trade justified by the correlation of its returns, or by a test of reversion whose library, settings and window nobody recorded.",
         ],
         lane=[
             "Whether live trading reproduces the backtest: board-cto.",
