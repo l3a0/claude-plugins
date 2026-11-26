@@ -251,13 +251,29 @@ with tempfile.TemporaryDirectory() as BIN:
     for label, body in (('a loose list', '1. `eeeeeee`, round 1\'s fixes.\n\n2. `ccccccc`, the merge of main.'),
                         ('a bulleted list', '- `eeeeeee`, round 1\'s fixes.\n- `ccccccc`, the merge of main.'),
                         ('a list item with an indented paragraph',
-                         '1. `eeeeeee`, round 1\'s fixes.\n\n   Detail of the fix.\n\n2. `ccccccc`, the merge of main.')):
+                         '1. `eeeeeee`, round 1\'s fixes.\n\n   Detail of the fix.\n\n2. `ccccccc`, the merge of main.'),
+                        ('a list item with a tab-indented paragraph',
+                         '1. `eeeeeee`, round 1\'s fixes.\n\n\tDetail of the fix.\n\n2. `ccccccc`, the merge of main.')):
         shaped = R2.replace('over two lines.', 'over two lines:\n\n' + body)
         code, out = nxt(brief('shaped.md', shaped), 'shaped-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
         so = read(os.path.join(SCRATCH, 'shaped-out.md')) if code == 0 else ''
         os.remove(os.path.join(SCRATCH, 'shaped-out.md')) if code == 0 else None
         check(f'--next replaces {label} under the paragraph', code == 0 and 'merge of main' not in so
               and 'Detail' not in so and 'Review the head commit' in so)
+        check(f'--next names every line of {label} it replaced', 'merge of main' in out
+              and ('Detail' not in body or 'Detail of the fix' in out))
+
+    tight = R2.replace('over two lines.', 'over two lines:\n1. `eeeeeee`, round 1\'s fixes.\n\n   Detail of the fix.')
+    code, out = nxt(brief('tight.md', tight), 'tight-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    to = read(os.path.join(SCRATCH, 'tight-out.md')) if code == 0 else ''
+    check('--next replaces a list written with no blank line above it, and its indented paragraph', code == 0
+          and 'round 1\'s fixes.\n' not in to and 'Detail' not in to and 'Review the head commit' in to)
+    check('--next names a list written with no blank line above it', 'round 1\'s fixes.' in out and 'Detail of the fix' in out)
+
+    note = R2.replace('over two lines.', 'over two lines.\n\n   Kept note.')
+    code, out = nxt(brief('note.md', note), 'note-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    check('--next keeps an indented line under the paragraph when no list comes first', code == 0
+          and 'Kept note.' in read(os.path.join(SCRATCH, 'note-out.md')) and 'replaced with' not in out)
 
     above = R2[:R2.index('\n\nThis round reads round 1')] + R2[R2.index('\n\nReview the head'):]
     above = above.replace('## Subject and anchors\n\n', '## Subject and anchors\n\nThis round reads the fixes.\n\n')

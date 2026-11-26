@@ -29,8 +29,9 @@ changes four things and keeps every other line.
 3. Every `archive <commit>` that names a pull request's old head names its new
    one. One that names another commit stops the run.
 4. The paragraph that starts `This round reads`, with any list right under
-   it, is replaced by a blank, in angle brackets, for the session to fill.
-   Each list line it replaces is named on standard error. A
+   it and the indented lines inside that list, is replaced by a blank, in
+   angle brackets, for the session to fill. Each of those list lines is named
+   on standard error. A
    brief with no such paragraph gets the blank after its items, which ends at
    the first line that is neither blank nor indented.
 
@@ -206,16 +207,19 @@ def next_brief(previous, out, specs):
              "angle brackets.>")
     start = next((i for i, line in enumerate(lines) if line.startswith(READS)), None)
     if start is not None:
-        first = end = paragraph_end(lines, start)
-        # A list right under the paragraph, such as the commits it read, belongs to it, with any indented lines
-        # inside the list. Each line taken this way is named on standard error, since it may have been meant to stay.
+        end = paragraph_end(lines, start)
+        # A list right under the paragraph, such as the commits it read, belongs to it, with or without a blank
+        # line above it, and so do the indented lines inside that list. Each list line is named on standard error,
+        # since it may have been meant to stay.
+        first = next((k for k in range(start + 1, end) if LIST_LINE.match(lines[k])), end)
+        listed = first < end
         while True:
             after = end
             while after < len(lines) and not lines[after].strip():
                 after += 1
             if after < len(lines) and not ITEM.match(lines[after]) and (
-                    LIST_LINE.match(lines[after]) or (end > first and lines[after][0] in " \t")):
-                end = paragraph_end(lines, after)
+                    LIST_LINE.match(lines[after]) or (listed and lines[after][0] in " \t")):
+                end, listed = paragraph_end(lines, after), True
             else:
                 break
         for line in lines[first:end]:
