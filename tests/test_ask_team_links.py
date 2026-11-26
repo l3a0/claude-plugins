@@ -59,14 +59,10 @@ step2 = ROUND.split("## 2. Choose the lenses")[1].split("## 3. ")[0]
 step6 = ROUND.split("## 6. Price the round")[1].split("## 7. ")[0]
 check("a later round reads the fix", "the diff from the last round's anchor to the fixing commit" in step1)
 check("a later round seats by the fix", "as applied to the fix rather than to the change" in step2)
-check("only tests or statements end the rounds", "every veto and must-fix it confirmed claims only a missing test or only a false or missing statement" in step6)
-check("every fix must be of that kind", "every fix for them only adds that test or corrects that statement" in step6)
-check("the session shows those tests fail", "failing on the mutant that raised it" in step6)
-exception = step6.split("The exception never covers")[1].split("The first round that confirms neither")[0]
-for clause in ("a wrong result or a weakened guarantee", "any other veto", "any rule the subject writes"):
-    check(f"the exception leaves out {clause}", clause in exception)
-check("the exception turns on the vetoes and must-fixes confirmed", "every veto and must-fix it confirmed" in step6)
-check("the exception needs a subject with no irreversible path", "applies only where the brief says the subject has no path to an irreversible action" in step6)
+check("every commit after a round gets a round of its own", "Every commit pushed after a round's lenses read the change gets a round of its own" in step6)
+check("no fix is left unread", "no fix is left for no lens to read" in step6)
+check("the review ends only when a round leaves nothing to push", "leaves nothing to push" in step6)
+check("the missing-test exception is gone", "starts no successor" not in step6 and "That exception is gone" in step6)
 check("the risk engineer confirms the brief's line", "the risk engineer confirms that line in round 1" in step1)
 check("the risk engineer sits unless the line says none", "in every later round unless that line says none" in step2)
 check("the risk engineer sits in round 1", "sits in round 1 to confirm the brief's line" in step2)
@@ -101,7 +97,7 @@ check("a verifier gets the kinds", "A verifier's prompt carries" in skill4)
 check("step 5 keeps a limit on what a role protects in review", "A limit on anything a role protects stays in review" in step5)
 check("a surviving mutant may be confirmed by running it", "a veto that names a surviving mutant" in skill4)
 check("a mutant that dies goes to a verifier", "A run where the mutant dies goes to a verifier" in skill4)
-check("the comment names roles that sat out and fixes that start no round", "Roles that sat out" in TEMPLATE and "starts no round for" in TEMPLATE)
+check("the comment names roles that sat out and sends its fixes to the next round", "Roles that sat out" in TEMPLATE and "the next round reads them" in TEMPLATE and "starts no round for" not in TEMPLATE)
 
 subject = re.search(r"^2\. \*\*(.+?)\*\*", SKILL.split("### 1. Name the subject")[1], re.M)
 check("step 1's second subject is the design subject", bool(subject) and "design" in subject.group(1))
