@@ -165,6 +165,7 @@ with tempfile.TemporaryDirectory() as BIN:
     check('--next names a line that still holds the old head', 'still names round 2\'s head eeeeeee' in out
           and 'risk engineer reads it' in out)
     check('--next does not name a line it moved', 'archive' not in out)
+    check('--next names only the line it left alone', out.count('still names') == 1)
 
     before = read(os.path.join(SCRATCH, 'r3.md'))
     code, out = nxt(r2, 'r3.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
@@ -207,6 +208,8 @@ with tempfile.TemporaryDirectory() as BIN:
     check('--next keeps the item numbers', '\n2. **o/s PR #6**' in t2)
     check('--next writes <checkout> in the blank where the item names none', 'git -C <checkout> diff 1111111 1111111' in t2)
 
+    check('--next names no line for a pull request whose head did not move', 'still names' not in out)
+
     code, out = nxt(r1b, 'two-bare.md', 'eeeeeee5555')
     check('--next refuses a bare head for two pull requests', code != 0 and 'bare HEAD' in out)
     code, out = nxt(r1b, 'two-short.md', 'o/r#5=eeeeeee5555')
@@ -217,6 +220,40 @@ with tempfile.TemporaryDirectory() as BIN:
     check('--next refuses a head that is not a commit', code != 0 and 'not OWNER/REPO#N=HEAD' in out)
     code, out = run('--next', r1b)
     check('--next without --out shows its usage', code != 0 and '--out NEW_BRIEF' in out)
+
+    first = items.split('\n')[0]
+    inline = R1.replace(first, first.replace(' Diff:', ' Changes `stress.py`. Diff:'))
+    code, out = nxt(brief('inline.md', inline), 'inline-out.md', 'eeeeeee5555', STUB_SHA='eeeeeee5555', STUB_LOCAL='eeeeeee5555')
+    check('--next stops on text written on an item\'s first line, and writes nothing', code != 0
+          and 'did not print' in out and 'line 5' in out and not os.path.exists(os.path.join(SCRATCH, 'inline-out.md')))
+
+    TEMPLATE_LINE = ('<From round 2 on, `brief_anchors.py --next` writes this paragraph as a blank. Fill it.\n'
+                     'Delete this line in round 1.>')
+    kept = R1.replace('Review the head commit', TEMPLATE_LINE + '\n\nReview the head commit')
+    code, out = nxt(brief('kept.md', kept), 'kept-out.md', 'eeeeeee5555', STUB_SHA='eeeeeee5555', STUB_LOCAL='eeeeeee5555')
+    k2 = read(os.path.join(SCRATCH, 'kept-out.md')) if code == 0 else ''
+    check('--next replaces the template\'s own round 2 line', code == 0 and 'From round 2 on' not in k2
+          and k2.count('<This round reads') == 1)
+
+    code, out = nxt(os.path.join(SCRATCH, 'r2.md'), 'rerun-r3.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    rr = read(os.path.join(SCRATCH, 'rerun-r3.md')) if code == 0 else ''
+    check('--next replaces a blank the last round left unfilled', code == 0 and rr.count('This round reads') == 1
+          and 'diff eeeeeee fffffff' in rr)
+
+    listed = R2.replace('over two lines.', 'over two lines:\n\n1. `eeeeeee`, round 1\'s fixes.\n2. `ccccccc`, the merge of main.')
+    code, out = nxt(brief('listed.md', listed), 'listed-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    lo = read(os.path.join(SCRATCH, 'listed-out.md')) if code == 0 else ''
+    check('--next replaces the list under the paragraph on what the last round read', code == 0
+          and 'merge of main' not in lo and 'Review the head commit' in lo and '1. **o/r PR #5**' in lo)
+
+    code, out = nxt(brief('dup.md', R1.replace(items, items + '\n\n' + items)), 'dup-out.md', 'eeeeeee5555')
+    check('--next stops on a brief that lists one pull request twice', code != 0 and 'listed twice' in out)
+
+    swapped = R2.replace(', round 2\n', ', round 3\n').replace(
+        'Earlier rounds read round 1 `aaaaaaa`.', 'Earlier rounds read round 2 `aaaaaaa`, round 1 `aaaaaaa`.')
+    code, out = nxt(brief('swapped.md', swapped), 'swapped-out.md', 'fffffff6666', STUB_SHA='fffffff6666')
+    check('--next stops on earlier anchors out of order', code != 0 and 'earlier rounds 2, 1' in out
+          and not os.path.exists(os.path.join(SCRATCH, 'swapped-out.md')))
 
 print('all passed' if not failures else f'{failures} failed')
 sys.exit(1 if failures else 0)

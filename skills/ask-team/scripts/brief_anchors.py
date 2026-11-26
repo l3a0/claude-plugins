@@ -28,11 +28,14 @@ changes four things and keeps every other line.
    the round just finished and its head.
 3. Every `archive <commit>` that names a pull request's old head names its new
    one. One that names another commit stops the run.
-4. The paragraph that starts `This round reads` is replaced by a blank, in
-   angle brackets, for the session to fill. A brief with no such paragraph
-   gets the blank after its items.
+4. The paragraph that starts `This round reads`, with any list right under
+   it, is replaced by a blank, in angle brackets, for the session to fill. A
+   brief with no such paragraph gets the blank after its items, which ends at
+   the first line that is neither blank nor indented.
 
-It writes nothing when it stops, and refuses a NEW_BRIEF that already exists,
+It also stops on an item's first line that holds anything it did not print,
+such as a description an older version put there, because a reprint would
+drop it. It writes nothing when it stops, and refuses a NEW_BRIEF that already exists,
 so a rerun cannot overwrite a brief the session has filled. On standard error
 it names each other line that still names an old head, for the session to
 read.
@@ -53,7 +56,17 @@ CHECKOUT = re.compile(r" Checkout: `(?P<checkout>[^`]+)` \(branch ")
 EARLIER = re.compile(r" Earlier rounds read (?P<list>round \d+ `[0-9a-f]{7,40}`(?:, round \d+ `[0-9a-f]{7,40}`)*)\.\s*$")
 EARLIER_ITEM = re.compile(r"round (\d+) `([0-9a-f]{7,40})`")
 ARCHIVE = re.compile(r"\barchive\s+([0-9a-f]{7,40})\b")
-READS = ("This round reads", "<This round reads", "<From round 2 on, what this round reads")
+READS = ("This round reads", "<This round reads", "<From round 2 on,")
+LIST_LINE = re.compile(r"^\s*(\d+[.)]|[-*+])\s")
+REF_FORM = r"(?:`[\w./-]+`|\*\*unusual branch name .+?\*\*)"
+# The whole first line as anchor() prints it, with the list --next adds. Anything else on it is the session's text,
+# which a reprint would drop.
+PRINTED = re.compile(
+    rf"^\d+\. \*\*[\w.-]+/[\w.-]+ PR #\d+\*\*, head `[0-9a-f]{{7}}`, base `[0-9a-f]{{7}}` on {REF_FORM}\."
+    rf"(?: Checkout: `[^`]+` \(branch {REF_FORM}\)\.(?: \*\*Checkout HEAD is `[0-9a-f]{{7}}`, not the head\. "
+    rf"Update it first\.\*\*)?| Branch {REF_FORM}, no checkout given\.)(?: \*\*State: [A-Z_]+\.\*\*)?"
+    rf" Diff: `git diff [0-9a-f]{{7}} [0-9a-f]{{7}}`\."
+    rf"(?: Earlier rounds read round \d+ `[0-9a-f]{{7,40}}`(?:, round \d+ `[0-9a-f]{{7,40}}`)*\.)?\s*$")
 
 
 def ref(name):
@@ -156,6 +169,12 @@ def next_brief(previous, out, specs):
     if missing:
         sys.exit(f"name the head for every pull request the brief lists. Missing: {', '.join(missing)}")
 
+    for i, it in items:
+        if not PRINTED.match(lines[i]):
+            sys.exit(f"{previous}: line {i + 1} holds text the script did not print, such as a description written "
+                     f"on {it['repo']} PR #{it['num']}'s first line, which a reprint would drop. Move that text to an "
+                     f"indented paragraph under the item, then rerun. Writing nothing")
+
     moves = []
     for i, it in items:
         old = it["head"]
@@ -186,10 +205,20 @@ def next_brief(previous, out, specs):
              "angle brackets.>")
     start = next((i for i, line in enumerate(lines) if line.startswith(READS)), None)
     if start is not None:
-        lines[start:paragraph_end(lines, start)] = [blank]
+        end = paragraph_end(lines, start)
+        # A list right under the paragraph, such as the commits it read, belongs to it.
+        while True:
+            after = end
+            while after < len(lines) and not lines[after].strip():
+                after += 1
+            if after < len(lines) and LIST_LINE.match(lines[after]) and not ITEM.match(lines[after]):
+                end = paragraph_end(lines, after)
+            else:
+                break
+        lines[start:end] = [blank]
     else:
         at = items[-1][0] + 1
-        while at < len(lines) and (not lines[at].strip() or lines[at][0] in " \t" or ITEM.match(lines[at])):
+        while at < len(lines) and (not lines[at].strip() or lines[at][0] in " \t"):
             at += 1
         while at > items[-1][0] + 1 and not lines[at - 1].strip():
             at -= 1
