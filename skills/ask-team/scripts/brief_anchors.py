@@ -31,9 +31,9 @@ changes four things and keeps every other line.
 4. The paragraph that starts `This round reads`, with any list right under
    it and the indented lines inside that list, is replaced by a blank, in
    angle brackets, for the session to fill. It reads the Markdown by pattern
-   rather than with a parser, so each line it replaces that is a list line, or
-   comes after the list's first line, is named on standard error, where a
-   misread shows. It never replaces an item line. A
+   rather than with a parser, so each line it replaces from the first one that
+   starts like a list item on is named on standard error, where a misread
+   shows. It never replaces an item line. A
    brief with no such paragraph gets the blank after its items, which ends at
    the first line that is neither blank nor indented.
 
@@ -222,9 +222,10 @@ def next_brief(previous, out, specs):
     if start is not None:
         end = block_end(lines, start)
         # A list right under the paragraph, such as the commits it read, belongs to it, with or without a blank
-        # line above it, and so do the indented lines inside that list. Every line replaced that is a list line or
-        # follows one is named on standard error, since it may have been meant to stay.
+        # line above it, and so do the indented lines inside that list. Every line replaced from the first one that
+        # starts like a list item on is named on standard error, since it may have been meant to stay.
         first = next((k for k in range(start + 1, end) if LIST_IN_PARAGRAPH.match(lines[k])), end)
+        named = next((k for k in range(start + 1, end) if LIST_LINE.match(lines[k])), end)
         listed = first < end
         while True:
             after = end
@@ -235,9 +236,8 @@ def next_brief(previous, out, specs):
                 end, listed = block_end(lines, after), True
             else:
                 break
-        for k in range(start + 1, end):
-            line = lines[k]
-            if line.strip() and (k >= first or LIST_LINE.match(line)):
+        for line in lines[named:end]:
+            if line.strip():
                 print(f"replaced with the paragraph on what round {finished} read: {line.strip()}", file=sys.stderr)
         lines[start:end] = [blank]
     else:

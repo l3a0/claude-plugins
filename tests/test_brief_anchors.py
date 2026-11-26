@@ -284,8 +284,18 @@ with tempfile.TemporaryDirectory() as BIN:
 
     year = R2.replace('over two lines.', 'over\n2026. It also reads more.\n\n   Kept command.')
     code, out = nxt(brief('year.md', year), 'year-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
-    check('--next reads a wrapped line that starts with a year as prose', code == 0
-          and 'Kept command.' in read(os.path.join(SCRATCH, 'year-out.md')))
+    check('--next keeps an indented line under a wrapped line that starts with a year, and names that line', code == 0
+          and 'Kept command.' in read(os.path.join(SCRATCH, 'year-out.md')) and '2026. It also reads more.' in out)
+
+    for label, tail in (('a 2. line', 'over two lines:\n2. `ccccccc`, the second fix.\n   Glued detail.'),
+                        ('a year line', 'over\n2026. It also reads more,\nwrapped onto a glued line.')):
+        glued_tail = R2.replace('over two lines.', tail)
+        code, out = nxt(brief('tail.md', glued_tail), 'tail-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+        last = tail.split('\n')[-1].strip()
+        check(f'--next names a line glued under {label} that it replaced', code == 0 and last in out
+              and last not in read(os.path.join(SCRATCH, 'tail-out.md')))
+        if code == 0:
+            os.remove(os.path.join(SCRATCH, 'tail-out.md'))
 
     digit = R2.replace('over two lines.', 'over\n2. It also reads more.\n\n   Kept command.')
     code, out = nxt(brief('digit.md', digit), 'digit-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
