@@ -33,7 +33,7 @@ Every repository with a board runs one setup. A short caller, `.github/workflows
 | Repository | Pin | Inputs |
 | --- | --- | --- |
 | l3a0/repo-template | `main` | none |
-| l3a0/ithildin-runtime | `fd8317e537a3d85423757c56c034ace623878a81` | `icon`, `settled-rollup` |
+| l3a0/ithildin-runtime | `fd8317e537a3d85423757c56c034ace623878a81` | `icon`, `review-heading`, `settled-rollup` |
 | l3a0/quantitative-trading | `cf2959a3e48aeec3d71a6ade5fc9641fc9e82073` | `title`, `data-label` |
 | l3a0/marketlake | `fd8317e537a3d85423757c56c034ace623878a81` | `title`, `icon`, `subtitle`, `note`, `default-branch-head`, `milestone-default`, `ranking`, `owner-body-lines`, `review-heading`, `settled-rollup`, `sort-labels`, `label-colors` |
 
@@ -104,7 +104,7 @@ From `14656aa` on, every input the workflow declares carries a type. `bde82a9` c
 | Repository | Pinned at | Formats that pin reads | Caller read at |
 | --- | --- | --- | --- |
 | l3a0/repo-template | `main` | everything this skill states, at `9e3c160` when this was checked, whose generator, workflows and page are `fd8317e`'s | `9e3c160` |
-| l3a0/ithildin-runtime | `fd8317e537a3d85423757c56c034ace623878a81` | everything this skill states | `745b926` |
+| l3a0/ithildin-runtime | `fd8317e537a3d85423757c56c034ace623878a81` | everything this skill states | the head of l3a0/ithildin-runtime PR #226, which a squash merge leaves off `main` |
 | l3a0/quantitative-trading | `cf2959a3e48aeec3d71a6ade5fc9641fc9e82073` | the formats of `9c6d7e2` plus the `data-label` input, without the fixes listed below | `f1c4c0b` |
 | l3a0/marketlake | `fd8317e537a3d85423757c56c034ace623878a81` | everything this skill states | `b53be9d` |
 
@@ -397,6 +397,7 @@ gh workflow run board.yml --repo l3a0/quantitative-trading
 ### l3a0/ithildin-runtime
 
 - **The page** is <https://l3a0.github.io/ithildin-runtime/>, and it deploys only from `main`. Its caller pins the template at `fd8317e537a3d85423757c56c034ace623878a81` and serves its own tab icon, `.github/board/favicon.ico`, through the `icon` input. It also passes `settled-rollup`, because its `aws` and `tofu apply (test)` jobs run only on `main` and so show as skipped on every pull request. Without the input, the page read every pull request there as not green, and the owner's review column never filled.
+- **The review heading** is `## Review complete`, which its `review-heading` input carries, so a push after the last review round holds a pull request out of the owner's column. The `ask-team` skill's review comment already writes that heading.
 - **What each band means** is set by `## Keep the build board current` in that repository's `CLAUDE.md`, under its ranking directive. That section is the one place the meaning is written, so read it there rather than from a copy here.
 
 ### l3a0/marketlake
