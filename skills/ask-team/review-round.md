@@ -35,11 +35,27 @@ Fill the subject list with the script beside this file, one argument per pull re
 python3 <this skill>/scripts/brief_anchors.py l3a0/ithildin-runtime#27=<checkout> l3a0/claude-plugins#48=<checkout>
 ```
 
-It prints each pull request's head commit and the merge base its diff starts from, which it reads from GitHub's compare API rather than the base branch's tip. It flags a checkout whose `HEAD` is not the head commit, since a lens reading that checkout would review other code, and a pull request that is no longer open. Replace each `<What it changes.>` with the files and sections the pull request touches.
+It prints each pull request's head commit and the merge base its diff starts from, which it reads from GitHub's compare API rather than the base branch's tip. It flags a checkout whose `HEAD` is not the head commit, since a lens reading that checkout would review other code, and a pull request that is no longer open. Replace each `<What it changes.>` with the files and sections the pull request touches, and keep each item's first line as printed, because the next round's brief is written from it.
 
 The template's sections say what else the brief holds: the facts every lens would otherwise spend turns finding, how to check a source, the limits every agent in the round works under, and what is out of scope. A source helper, such as one that prints the passage around a phrase at a location, comes with the source rather than with this skill.
 
 A later round's brief anchors at the fixing commit and lists the owner's rulings since the last round as facts. It names what the round reads: the diff from the last round's anchor to the fixing commit, leaving out what a merge of the base brought, and any passage or function that diff touches or that states the same fact. The brief says whether the subject has a path to an irreversible action, naming its files with their tests and helpers and the calls that perform the action, or saying none, and the risk engineer confirms that line in round 1. Where the line names a path, the risk engineer reads it from its entry to the action in every round. Where a fix rewrites the subject rather than patching it, the round reads the whole change again. The price is that a lens can miss a fault in text no fix touched, which round 1 has already read. The reason is cost: on [l3a0/ithildin-runtime PR #51](https://github.com/l3a0/ithildin-runtime/pull/51) every round re-read the whole change at about 15 US dollars. On [PR #83](https://github.com/l3a0/claude-plugins/pull/83) the rounds told to read only the fix cost 1.70 to 5.14 US dollars against 8.42 to 11.38 before, though those rounds also seated fewer lenses, and cost per lens fell from 1.75 to 1.13 US dollars. The brief does not list the earlier rounds' findings, so each lens reads the change rather than a list of past answers. It does carry forward `## Out of scope`'s list of owning work and the questions still waiting, after re-reading each one and re-running the template's searches, because a stale line there tells a lens to leave a settled question alone. A question the owner has settled moves to the facts, and where a pointer's owning work closed without stating the guarantee, the guarantee goes back into the rule, and any other gap into an issue. A list that stops being none takes the template's paragraphs back.
+
+From round 2 on, write the brief from the last round's brief rather than from the template, with the same script. Name each pull request's fixing commit, or its anchor where the round changed nothing on it.
+
+```bash
+python3 <this skill>/scripts/brief_anchors.py --next <scratchpad>/review-r<N>/brief.md --out <scratchpad>/review-r<N+1>/brief.md \
+  l3a0/ithildin-runtime#27=<fixing commit> l3a0/claude-plugins#48=<fixing commit>
+```
+
+The script makes four changes and keeps every other line.
+
+1. It raises the round number at the end of the title by one.
+2. It prints each item's first line again from GitHub, as round 1's run does, so a merge of the base moves the merge base too. It adds the round just finished and its head to that line's list of earlier rounds' anchors. It writes nothing when GitHub's head is not the commit named, because the brief would anchor at a commit no one pushed.
+3. It moves every `git archive` line from the last round's head to the new one. It stops on an archive line that names any other commit, such as a merge base, so the session decides what that line should read.
+4. It replaces the paragraph that starts `This round reads`, with any list right under it and the indented lines inside that list, by a blank in angle brackets that names the diff from the last anchor to the new head. It reads the brief's Markdown by pattern rather than with a parser, so it names on standard error each line it replaced from the first one that starts like a list item on, and the session can put back one that belonged elsewhere. It never replaces an item line.
+
+The session then fills the blank, keeping its first words `This round reads` so the next round's run finds it. It also adds the owner's rulings since the last round to the facts, and re-reads `## Out of scope` as the paragraph above says. The script names on standard error each other line that still holds an old head, such as a sentence saying where the risk engineer reads the path, so the session reads those lines. It refuses to overwrite a brief that already exists, so a rerun cannot erase one already filled, and it stops on a brief whose items it did not print, whose list of earlier anchors is not every round before its own, in order, or whose item's first line holds text the script did not print, such as a description written there by an older version. That last stop keeps a reprint from dropping the text, and the session moves it to an indented paragraph under the item. On [l3a0/ithildin-runtime PR #214](https://github.com/l3a0/ithildin-runtime/pull/214), each of nine rounds rewrote the last brief by hand in the same places.
 
 ## 2. Choose the lenses
 
@@ -93,13 +109,19 @@ Before writing a fix, name the cause, and fix that rather than the form the lens
 2. Where the change cites a source, recheck every citation against it with the brief's helper, whether or not a lens flagged it, and list each miss.
 3. Where the fixes change code, show the test catches what it claims by breaking the code, with the `fast-mutation` skill or a fixture the code fails on before the fix.
 4. Run every check the repository's CI workflow runs, such as this repository's `.github/workflows/board-guard-test.yml`, and note what each printed.
-5. Commit, naming in each message the round it answers. Before pushing, run the script below over every pull request, from the round's anchor to the new commit. It prints each run of words the fix removed and each file, in any checkout, that still holds five of them in a row. Check the cuts and moves kept for the comment against the runs, and read each `still in` line. A line on a companion that carries the rule is a cut not yet made there, unless the fix moved the words or the companion keeps them on purpose. Then push.
+5. Commit, naming in each message the round it answers. Before pushing, run the script below over every pull request, from the round's anchor to the new commit. It prints each run of words the fix removed and each file, in any checkout, that still holds five of them in a row. Check the cuts and moves kept for the comment against the runs, and read each `still in` line. A line on a companion that carries the rule is a cut not yet made there, unless the fix moved the words or the companion keeps them on purpose.
 
    ```bash
    python3 <this skill>/scripts/removed_text.py <checkout>=<anchor>..<new commit> <companion checkout>=<anchor>..<new commit>
    ```
 
    Run over the fixes of l3a0/ithildin-runtime PR #51's round 10, it shows a sentence cut from the design and still in the plugin's risk engineer, which round 11 raised as a must-fix. Run over round 13's, it prints the words on working orders that the comment left out, which round 14 raised.
+
+   Before each push, also run the second script below over the same ranges. A fix that deletes a test deletes the check it made, and a long diff hides that. The script prints each test function name the round's anchor defines more often than the new commit, with the files that held it at each. A rename or a merge into another test keeps its check, and a name a merge of the base removed is not the fix's. Any other name is a check the fix removed, and the round's comment says why it went. `--path` reads a folder other than `tests`. The script sees only test functions, so in a repository whose tests are plain scripts of `check(...)` calls, such as l3a0/claude-plugins, read the removed `check(` lines in the diff instead. Then push.
+
+   ```bash
+   python3 <this skill>/scripts/removed_tests.py <checkout>=<anchor>..<new commit> <companion checkout>=<anchor>..<new commit>
+   ```
 6. Watch the pull request's checks until they settle, with `gh pr checks <n> --watch`, and fix any red one before posting.
 
 Read each pull request's state with `gh pr view <n> --json state` before pushing, because the owner can merge at any round. A commit pushed to a merged pull request's branch reaches nothing, and on [PR #80](https://github.com/l3a0/claude-plugins/pull/80) a round's fixes sat there until [PR #83](https://github.com/l3a0/claude-plugins/pull/83) carried them. Once one has merged, the fixes go on a new pull request from `main`, and the round's comment goes there.

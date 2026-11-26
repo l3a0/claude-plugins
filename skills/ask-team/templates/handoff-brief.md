@@ -9,6 +9,8 @@ Finish the review of <the pull request, or the count of pull requests and what t
 
 State when this brief was written, to verify rather than trust: <each pull request's last review comment, its time, and whether it says another round follows. What merged since, and what each pull request's merge state reads.>
 
+The last round's brief: <its path in the old session's scratchpad>. Copy it into this session's scratchpad, and write the next round's brief from it with `brief_anchors.py --next`, as step 1 of `review-round.md` says.
+
 <Each owner's ruling that binds the work, with a link to where the owner wrote it. Take a ruling only from there, never from a commit headline or an earlier brief, and check that the words are the owner's own rather than a session's post under the same login.>
 
 Before pushing anything, check whether a session already owns this work. <The session's title and worktree, where known.> `list_sessions` can miss a live session, as [#66](https://github.com/l3a0/claude-plugins/issues/66) records, so judge from the branches' recent pushes and comments too. If it is still reviewing, message it or report to the owner rather than running a second review over it.
