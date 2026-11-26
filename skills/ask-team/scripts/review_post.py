@@ -13,7 +13,10 @@ only when every changed line sits inside the section and a second run would
 change nothing, and it reads the body back. A line already in the section is
 not added twice, so a retry changes nothing. It sends nothing on a body with
 two Revision headings, a heading written any other way, or two items with one
-number, and says to edit by hand.
+number, and says to edit by hand. It refuses a line that starts with a list
+number or bullet of its own, such as `1. `, because the script numbers the
+item itself and would write `2. 1. `. It refuses rather than strips the mark,
+so the line in PATH is the line the section holds, and a retry finds it.
 
 `comment` takes each comment's heading from its file's first line. It refuses a
 file that does not start with a heading and name the round, its anchor and the
@@ -46,6 +49,7 @@ HEADING = re.compile(r"^ {0,3}#{1,6}(\s|$)")
 REVISION = re.compile(r"^ {0,3}#{1,6}\s+Revision\s*$")
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 ITEM = re.compile(r"^(\d+)\. (.*)$")
+LIST_MARK = re.compile(r"^\s*(\d+[.)]|[-*+])(\s|$)")
 CLOSING = re.compile(r"^(close[sd]?|fix(es|ed)?|resolve[sd]?|part of)\s+(no issue|([\w.-]+/[\w.-]+)?#\d+)", re.IGNORECASE)
 SECTION = "## Revision"
 
@@ -200,6 +204,10 @@ def revision(args):
         text = f.read().strip()
     if not text or "\n" in text or "\r" in text:
         sys.exit("a revision entry is one non-empty line")
+    mark = LIST_MARK.match(text)
+    if mark:
+        sys.exit(f"the line starts with its own list marker {mark[1]!r}, and the script numbers the item itself, "
+                 f"and the item would start '<n>. {mark[1]}'. Remove the marker from {args.file} and rerun")
     body = view(repo, num, "body")
     os.makedirs(args.scratch, exist_ok=True)
     name = f"body-{repo.replace('/', '-')}-{num}-"
