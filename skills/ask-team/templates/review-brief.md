@@ -4,11 +4,11 @@
 
 <One sentence on what the pull requests share, such as "Three pull requests adopt rules from <source>, cited as <citation form>." Drop it for a single pull request.>
 
-<Paste the output of `scripts/brief_anchors.py`, then replace each `<What it changes.>` with one or two sentences naming the files and sections the pull request touches.>
+<Paste the output of `scripts/brief_anchors.py`, then replace each `<What it changes.>` with one or two sentences naming the files and sections the pull request touches. Keep each item's first line as the script printed it, because `brief_anchors.py --next` writes the next round's brief from it.>
+
+<From round 2 on, `brief_anchors.py --next` writes this paragraph as a blank. Fill it with what this round reads: `git diff <last round's anchor> <fixing commit>` without what a merge of the base brought, and any passage or function that diff touches or that states the same fact. Where the line below names a path, the risk engineer also reads it from its entry to the action. Where a fix rewrites the subject, the round reads the whole change. Keep the paragraph's first words, `This round reads`, so the next round's run finds it. Delete this line in round 1.>
 
 Review the head commit named here, not the branch tip, which may move while the round runs.
-
-<From round 2 on, what this round reads: `git diff <last round's anchor> <fixing commit>` without what a merge of the base brought, and any passage or function that diff touches or that states the same fact. Where the line below names a path, the risk engineer also reads it from its entry to the action. Where a fix rewrites the subject, the round reads the whole change. Delete this line in round 1.>
 
 <The files that hold the path to an irreversible action, with their tests and helpers, and the calls that perform the action, or "none in this subject".>
 
