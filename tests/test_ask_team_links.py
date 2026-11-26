@@ -65,7 +65,7 @@ check("the review ends only when a round leaves nothing to push", "leaves nothin
 check("the missing-test exception is gone", "starts no successor" not in step6 and "That exception is gone" in step6)
 README = (ROOT / "README.md").read_text()
 check("the README no longer states the exception", "a missing test or a corrected statement to answer" not in README and "until a round reads the head and leaves nothing to push" in README)
-check("a closing comment says which fixes no lens read when the owner ends the review", "lists those fixes as read by no lens" in ROUND)
+check("a closing comment says which fixes no lens read when the owner ends the review", "names both heads and lists those fixes as read by no lens" in ROUND)
 check("the risk engineer confirms the brief's line", "the risk engineer confirms that line in round 1" in step1)
 check("the risk engineer sits unless the line says none", "in every later round unless that line says none" in step2)
 check("the risk engineer sits in round 1", "sits in round 1 to confirm the brief's line" in step2)
