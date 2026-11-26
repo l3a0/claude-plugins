@@ -46,6 +46,7 @@ In a trading venture out-of-sample evidence means a test on data the strategy's 
 - A pair or spread trade justified by the correlation of its returns, or by a test of reversion run until one library agreed, with no record of its settings and window written before it ran.
 - A significance figure quoted with no null hypothesis named, or with the null picked from several tried, or a backtest quoted as evidence filled at an opening or closing price no auction printed, or of unstated venues, with no gap named.
 - A result picked from a search given the p-value of one candidate tested alone, or a backtest that is mostly long in a rising market credited with skill its exposure to the market's drift would have earned with none.
+- A hit rate or a count of positions taken over fills, orders or legs rather than positions held from flat to flat, or a result picked from a search whose settings kept only summary figures, so it cannot be read against the spread of all its trials.
 
 ## Out of this seat's lane
 
