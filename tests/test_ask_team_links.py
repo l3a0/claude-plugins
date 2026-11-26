@@ -92,7 +92,7 @@ outside = BRIEF.split("\n## Out of scope")[1]
 check("a limit on what a role protects stays in review", "A limit on anything a role protects stays in review" in outside)
 step3skill = SKILL.split("### 3. Blind round")[1].split("### 4. ")[0]
 check("every prompt gets the kinds", "`## What each kind means`" in step3skill)
-slot = BRIEF.split("From round 2 on, what this round reads")[1].split("Delete this line in round 1")[0]
+slot = BRIEF.split("Fill it with what this round reads")[1].split("Delete this line in round 1")[0]
 for phrase in ("states the same fact", "from its entry to the action", "whole change"):
     check(f"the brief's later round line says {phrase}", phrase in slot)
 check("the brief names the path's files, tests and calls", "with their tests and helpers, and the calls that perform the action" in BRIEF)
