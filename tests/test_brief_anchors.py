@@ -270,6 +270,28 @@ with tempfile.TemporaryDirectory() as BIN:
           and 'round 1\'s fixes.\n' not in to and 'Detail' not in to and 'Review the head commit' in to)
     check('--next names a list written with no blank line above it', 'round 1\'s fixes.' in out and 'Detail of the fix' in out)
 
+    one = R2.replace("This round reads round 1's fixes, `git diff aaaaaaa eeeeeee`,\nand the passage `archive aaaaaaa` named, over two lines.",
+                     "This round reads the fixes:\n1. `eeeeeee`, round 1's fixes.\n\n   Detail of the fix.")
+    code, out = nxt(brief('one.md', one), 'one-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    oo = read(os.path.join(SCRATCH, 'one-out.md')) if code == 0 else ''
+    check('--next replaces and names a list right under a one-line paragraph', code == 0 and 'Detail' not in oo
+          and "round 1's fixes." in out and 'Detail of the fix' in out)
+
+    bullet = one.replace("1. `eeeeeee`, round 1's fixes.", "- `eeeeeee`, round 1's fixes.")
+    code, out = nxt(brief('bullet.md', bullet), 'bullet-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    check('--next replaces and names a bulleted list right under the paragraph', code == 0
+          and 'Detail' not in read(os.path.join(SCRATCH, 'bullet-out.md')) and "round 1's fixes." in out)
+
+    year = R2.replace('over two lines.', 'over\n2026. It also reads more.\n\n   Kept command.')
+    code, out = nxt(brief('year.md', year), 'year-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    check('--next reads a wrapped line that starts with a year as prose', code == 0
+          and 'Kept command.' in read(os.path.join(SCRATCH, 'year-out.md')) and 'replaced with' not in out)
+
+    moved = R2[:R2.index('\n\nThis round reads round 1')] + R2[R2.index('\n\nReview the head'):]
+    moved = moved.replace('## Subject and anchors\n\n', '## Subject and anchors\n\nThis round reads the fixes,\nover two lines.\n\n')
+    code, out = nxt(brief('moved.md', moved), 'moved-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    check('--next warns on no item line when the paragraph sits above the items', code == 0 and '**o/r PR #5**' not in out)
+
     note = R2.replace('over two lines.', 'over two lines.\n\n   Kept note.')
     code, out = nxt(brief('note.md', note), 'note-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
     check('--next keeps an indented line under the paragraph when no list comes first', code == 0

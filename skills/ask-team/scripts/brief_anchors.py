@@ -30,8 +30,9 @@ changes four things and keeps every other line.
    one. One that names another commit stops the run.
 4. The paragraph that starts `This round reads`, with any list right under
    it and the indented lines inside that list, is replaced by a blank, in
-   angle brackets, for the session to fill. Each of those list lines is named
-   on standard error. A
+   angle brackets, for the session to fill. It reads the Markdown by pattern
+   rather than with a parser, so each line it replaces from the list's first
+   line on is named on standard error, where a misread shows. A
    brief with no such paragraph gets the blank after its items, which ends at
    the first line that is neither blank nor indented.
 
@@ -60,6 +61,9 @@ EARLIER_ITEM = re.compile(r"round (\d+) `([0-9a-f]{7,40})`")
 ARCHIVE = re.compile(r"\barchive\s+([0-9a-f]{7,40})\b")
 READS = ("This round reads", "<This round reads", "<From round 2 on,")
 LIST_LINE = re.compile(r"^\s*(\d+[.)]|[-*+])\s")
+# Inside a paragraph only a list that starts at 1, or a bullet, begins a list, as in Markdown, so a wrapped line
+# such as "2026. It also reads" stays prose.
+LIST_IN_PARAGRAPH = re.compile(r"^\s*(1[.)]|[-*+])\s")
 REF_FORM = r"(?:`[\w./-]+`|\*\*unusual branch name .+?\*\*)"
 # The whole first line as anchor() prints it, with the list --next adds. Anything else on it is the session's text,
 # which a reprint would drop.
@@ -211,7 +215,7 @@ def next_brief(previous, out, specs):
         # A list right under the paragraph, such as the commits it read, belongs to it, with or without a blank
         # line above it, and so do the indented lines inside that list. Each list line is named on standard error,
         # since it may have been meant to stay.
-        first = next((k for k in range(start + 1, end) if LIST_LINE.match(lines[k])), end)
+        first = next((k for k in range(start + 1, end) if LIST_IN_PARAGRAPH.match(lines[k])), end)
         listed = first < end
         while True:
             after = end
@@ -246,7 +250,8 @@ def next_brief(previous, out, specs):
 
     lines = [ARCHIVE.sub(archived, line) for line in lines]
 
-    skip = {i for i, _ in items} | {reads}
+    # Read after the replacement, because a paragraph above the items moves their line numbers.
+    skip = {i for i, line in enumerate(lines) if ITEM.match(line)} | {reads}
     for n, line in enumerate(lines, 1):
         if n - 1 in skip:
             continue
