@@ -31,8 +31,9 @@ changes four things and keeps every other line.
 4. The paragraph that starts `This round reads`, with any list right under
    it and the indented lines inside that list, is replaced by a blank, in
    angle brackets, for the session to fill. It reads the Markdown by pattern
-   rather than with a parser, so each line it replaces from the list's first
-   line on is named on standard error, where a misread shows. A
+   rather than with a parser, so each line it replaces that is a list line, or
+   comes after the list's first line, is named on standard error, where a
+   misread shows. It never replaces an item line. A
    brief with no such paragraph gets the blank after its items, which ends at
    the first line that is neither blank nor indented.
 
@@ -137,6 +138,14 @@ def paragraph_end(lines, i):
     return i
 
 
+def block_end(lines, i):
+    """The end of the block that starts at i, which also ends at an item line, since an item never belongs to it."""
+    i += 1
+    while i < len(lines) and lines[i].strip() and not ITEM.match(lines[i]):
+        i += 1
+    return i
+
+
 def next_brief(previous, out, specs):
     if os.path.exists(out):
         sys.exit(f"{out} already exists. Writing nothing, so a brief already filled is not overwritten")
@@ -211,10 +220,10 @@ def next_brief(previous, out, specs):
              "angle brackets.>")
     start = next((i for i, line in enumerate(lines) if line.startswith(READS)), None)
     if start is not None:
-        end = paragraph_end(lines, start)
+        end = block_end(lines, start)
         # A list right under the paragraph, such as the commits it read, belongs to it, with or without a blank
-        # line above it, and so do the indented lines inside that list. Each list line is named on standard error,
-        # since it may have been meant to stay.
+        # line above it, and so do the indented lines inside that list. Every line replaced that is a list line or
+        # follows one is named on standard error, since it may have been meant to stay.
         first = next((k for k in range(start + 1, end) if LIST_IN_PARAGRAPH.match(lines[k])), end)
         listed = first < end
         while True:
@@ -223,11 +232,12 @@ def next_brief(previous, out, specs):
                 after += 1
             if after < len(lines) and not ITEM.match(lines[after]) and (
                     LIST_LINE.match(lines[after]) or (listed and lines[after][0] in " \t")):
-                end, listed = paragraph_end(lines, after), True
+                end, listed = block_end(lines, after), True
             else:
                 break
-        for line in lines[first:end]:
-            if line.strip():
+        for k in range(start + 1, end):
+            line = lines[k]
+            if line.strip() and (k >= first or LIST_LINE.match(line)):
                 print(f"replaced with the paragraph on what round {finished} read: {line.strip()}", file=sys.stderr)
         lines[start:end] = [blank]
     else:

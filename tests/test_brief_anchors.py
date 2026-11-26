@@ -285,12 +285,40 @@ with tempfile.TemporaryDirectory() as BIN:
     year = R2.replace('over two lines.', 'over\n2026. It also reads more.\n\n   Kept command.')
     code, out = nxt(brief('year.md', year), 'year-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
     check('--next reads a wrapped line that starts with a year as prose', code == 0
-          and 'Kept command.' in read(os.path.join(SCRATCH, 'year-out.md')) and 'replaced with' not in out)
+          and 'Kept command.' in read(os.path.join(SCRATCH, 'year-out.md')))
+
+    digit = R2.replace('over two lines.', 'over\n2. It also reads more.\n\n   Kept command.')
+    code, out = nxt(brief('digit.md', digit), 'digit-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    check('--next keeps an indented line under a wrapped line that starts with 2.', code == 0
+          and 'Kept command.' in read(os.path.join(SCRATCH, 'digit-out.md')) and '2. It also reads more.' in out)
+
+    paren = one.replace("1. `eeeeeee`, round 1's fixes.", "1) `eeeeeee`, round 1's fixes.")
+    code, out = nxt(brief('paren.md', paren), 'paren-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    check('--next replaces and names a 1) list right under the paragraph', code == 0
+          and 'Detail' not in read(os.path.join(SCRATCH, 'paren-out.md')) and "round 1's fixes." in out and 'Detail of the fix' in out)
+
+    third = R2.replace('over two lines.', 'over two lines:\n3. `ccccccc`, the third fix.')
+    code, out = nxt(brief('third.md', third), 'third-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    check('--next names a numbered line other than 1. that it replaced with the paragraph', code == 0
+          and 'the third fix.' in out and 'the third fix' not in read(os.path.join(SCRATCH, 'third-out.md')))
+
 
     moved = R2[:R2.index('\n\nThis round reads round 1')] + R2[R2.index('\n\nReview the head'):]
     moved = moved.replace('## Subject and anchors\n\n', '## Subject and anchors\n\nThis round reads the fixes,\nover two lines.\n\n')
     code, out = nxt(brief('moved.md', moved), 'moved-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
     check('--next warns on no item line when the paragraph sits above the items', code == 0 and '**o/r PR #5**' not in out)
+
+    glued = moved.replace('over two lines.\n\n1. **o/r PR #5**', 'over two lines.\n1. **o/r PR #5**')
+    code, out = nxt(brief('glued.md', glued), 'glued-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    go = read(os.path.join(SCRATCH, 'glued-out.md')) if code == 0 else ''
+    check('--next never replaces an item line right under the paragraph', code == 0 and '1. **o/r PR #5**, head `fffffff`' in go
+          and 'Changes `order_path.py`' in go and '**o/r PR #5**' not in out)
+
+    glued_list = moved.replace('over two lines.\n\n1. **o/r PR #5**', 'over two lines.\n\n- `eeeeeee`, round 1\'s fixes.\n1. **o/r PR #5**')
+    code, out = nxt(brief('glued-list.md', glued_list), 'glued-list-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    gl = read(os.path.join(SCRATCH, 'glued-list-out.md')) if code == 0 else ''
+    check('--next stops a list under the paragraph at an item line right under it', code == 0
+          and '1. **o/r PR #5**, head `fffffff`' in gl and "round 1's fixes." not in gl)
 
     note = R2.replace('over two lines.', 'over two lines.\n\n   Kept note.')
     code, out = nxt(brief('note.md', note), 'note-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
