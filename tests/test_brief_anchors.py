@@ -246,6 +246,43 @@ with tempfile.TemporaryDirectory() as BIN:
     check('--next replaces the list under the paragraph on what the last round read', code == 0
           and 'merge of main' not in lo and 'Review the head commit' in lo and '1. **o/r PR #5**' in lo)
 
+    check('--next names each list line it replaced', out.count('replaced with the paragraph') == 2 and 'merge of main' in out)
+
+    for label, body in (('a loose list', '1. `eeeeeee`, round 1\'s fixes.\n\n2. `ccccccc`, the merge of main.'),
+                        ('a bulleted list', '- `eeeeeee`, round 1\'s fixes.\n- `ccccccc`, the merge of main.'),
+                        ('a list item with an indented paragraph',
+                         '1. `eeeeeee`, round 1\'s fixes.\n\n   Detail of the fix.\n\n2. `ccccccc`, the merge of main.')):
+        shaped = R2.replace('over two lines.', 'over two lines:\n\n' + body)
+        code, out = nxt(brief('shaped.md', shaped), 'shaped-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+        so = read(os.path.join(SCRATCH, 'shaped-out.md')) if code == 0 else ''
+        os.remove(os.path.join(SCRATCH, 'shaped-out.md')) if code == 0 else None
+        check(f'--next replaces {label} under the paragraph', code == 0 and 'merge of main' not in so
+              and 'Detail' not in so and 'Review the head commit' in so)
+
+    above = R2[:R2.index('\n\nThis round reads round 1')] + R2[R2.index('\n\nReview the head'):]
+    above = above.replace('## Subject and anchors\n\n', '## Subject and anchors\n\nThis round reads the fixes.\n\n')
+    code, out = nxt(brief('above.md', above), 'above-out.md', 'fffffff6666', STUB_SHA='fffffff6666', STUB_LOCAL='fffffff6666')
+    ab = read(os.path.join(SCRATCH, 'above-out.md')) if code == 0 else ''
+    check('--next keeps an item right under the paragraph', code == 0 and '1. **o/r PR #5**, head `fffffff`' in ab
+          and 'Changes `order_path.py`' in ab)
+
+    inline_after = R1.replace(first, first + ' Changes `stress.py`.')
+    code, out = nxt(brief('after.md', inline_after), 'after-out.md', 'eeeeeee5555', STUB_SHA='eeeeeee5555', STUB_LOCAL='eeeeeee5555')
+    check('--next stops on text after the diff on an item\'s first line', code != 0 and 'did not print' in out)
+    code, out = nxt(brief('spaces.md', R1.replace(first, first + '   ')), 'spaces-out.md', 'eeeeeee5555',
+                    STUB_SHA='eeeeeee5555', STUB_LOCAL='eeeeeee5555')
+    check('--next accepts trailing spaces on an item\'s first line', code == 0)
+
+    for label, env in (('the checkout flag', {'STUB_LOCAL': 'ccccccc4444'}), ('a state that is not open', {'STUB_STATE': 'MERGED'}),
+                       ('an unusual branch name', {'STUB_HEAD_REF': 'x`<!--hidden-->'})):
+        code, flagged = run('o/r#5=/co', **env)
+        flagged = flagged.strip()
+        body = f'# Review brief: flagged, round 1\n\n{flagged}\n'
+        code, out = nxt(brief('flagged.md', body), 'flagged-out.md', 'eeeeeee5555', STUB_SHA='eeeeeee5555', **env)
+        check(f'--next accepts a first line it printed with {label}', code == 0)
+        if code == 0:
+            os.remove(os.path.join(SCRATCH, 'flagged-out.md'))
+
     code, out = nxt(brief('dup.md', R1.replace(items, items + '\n\n' + items)), 'dup-out.md', 'eeeeeee5555')
     check('--next stops on a brief that lists one pull request twice', code != 0 and 'listed twice' in out)
 
