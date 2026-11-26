@@ -60,7 +60,7 @@ step6 = ROUND.split("## 6. Price the round")[1].split("## 7. ")[0]
 check("a later round reads the fix", "the diff from the last round's anchor to the fixing commit" in step1)
 check("a later round seats by the fix", "as applied to the fix rather than to the change" in step2)
 check("every commit after a round gets a round of its own", "Every commit pushed after a round's lenses read the change gets a round of its own" in step6)
-check("no fix is left unread", "no fix is left for no lens to read" in step6)
+check("every fix is read by a lens", "every fix is read by at least one lens" in step6)
 check("the review ends only when a round leaves nothing to push", "leaves nothing to push" in step6)
 check("the missing-test exception is gone", "starts no successor" not in step6 and "That exception is gone" in step6)
 README = (ROOT / "README.md").read_text()
