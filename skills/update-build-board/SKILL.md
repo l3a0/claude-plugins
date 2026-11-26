@@ -104,7 +104,7 @@ From `14656aa` on, every input the workflow declares carries a type. `bde82a9` c
 | Repository | Pinned at | Formats that pin reads | Caller read at |
 | --- | --- | --- | --- |
 | l3a0/repo-template | `main` | everything this skill states, at `9e3c160` when this was checked, whose generator, workflows and page are `fd8317e`'s | `9e3c160` |
-| l3a0/ithildin-runtime | `fd8317e537a3d85423757c56c034ace623878a81` | everything this skill states | the head of l3a0/ithildin-runtime PR #226, which a squash merge leaves off `main` |
+| l3a0/ithildin-runtime | `fd8317e537a3d85423757c56c034ace623878a81` | everything this skill states | `f2c0064`, the reviewed head of l3a0/ithildin-runtime PR #226, which a squash merge leaves off `main` and `refs/pull/226/head` keeps |
 | l3a0/quantitative-trading | `cf2959a3e48aeec3d71a6ade5fc9641fc9e82073` | the formats of `9c6d7e2` plus the `data-label` input, without the fixes listed below | `f1c4c0b` |
 | l3a0/marketlake | `fd8317e537a3d85423757c56c034ace623878a81` | everything this skill states | `b53be9d` |
 
