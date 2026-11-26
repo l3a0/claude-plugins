@@ -337,6 +337,15 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('refuses an entry of two lines', code != 0 and 'one non-empty line' in out)
     code, out = revise('--line', 'two\rlines')
     check('refuses an entry with a carriage return', code != 0 and 'one non-empty line' in out)
+    seed(5)
+    for marked in ('1. `ccccccc` answers round 3.', '12. x', '1) x', '- x', '* x', '+ x', '3.'):
+        code, out = revise('--line', marked)
+        check(f'refuses a line that starts with its own list marker: {marked!r}',
+              code != 0 and 'list marker' in out and 'Remove the marker' in out and state(5).get('edits') is None)
+    code, out = revise('--line', '2026-11-26 fixes `ccccccc`.', '--dry-run')
+    check('takes a line that starts with a number that is not a list marker', code == 0 and '+3. 2026-11-26' in out)
+    code, out = revise('--line', '**Round 3**, `ccccccc`.', '--dry-run')
+    check('takes a line that starts with bold text', code == 0 and '+3. **Round 3**' in out)
     code, out = revise('--line', '  ')
     check('refuses an empty entry', code != 0 and 'one non-empty line' in out and state(5).get('edits') is None)
     code, out = revise('--line', 'x', pull='not-a-spec')
