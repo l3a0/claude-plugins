@@ -26,7 +26,8 @@ docstring gives the spec format. For each mutant it does five things.
    restore byte for byte. `git checkout --` would also discard uncommitted work.
 5. It records CAUGHT, SURVIVED, TIMEOUT or NO-TESTS, with the first failing test.
 
-Before any mutant, it runs the baseline and stops if the baseline is not green. A baseline
+Before any mutant, it refuses a mutated file that resolves outside `root`, then runs the
+baseline and stops with exit code 2 if the baseline is not green. A baseline
 that already fails, for example a wall-clock test under load, makes every mutant read as
 caught.
 
@@ -44,15 +45,16 @@ selection, and `--workers N` to spread the wide runs over pytest-xdist workers.
 
 ## Plain test scripts
 
-A suite of plain scripts, each run as `python3 tests/<file>` and exiting non-zero on a failure, has no pytest to drive. l3a0/claude-plugins is one: each test file prints an `ok` or `FAIL` line per check. On l3a0/claude-plugins [PR #100](https://github.com/l3a0/claude-plugins/pull/100), the test engineer in each of seven review rounds wrote its own loop to apply a mutant, run the script and restore the file, because this runner only drove pytest.
+A suite of plain scripts, each run as `python3 tests/<file>` and exiting non-zero on a failure, has no pytest to drive. l3a0/claude-plugins is one: most of its test files print an `ok` or `FAIL` line per check, and two use `unittest`. On l3a0/claude-plugins [PR #100](https://github.com/l3a0/claude-plugins/pull/100), the test engineer in each of seven review rounds wrote its own loop to apply a mutant, run the script and restore the file, because this runner only drove pytest.
 
-Set `"runner": "script"` in the spec for such a suite. Each selection is then a command the spec's interpreter runs, such as `["tests/test_brief_anchors.py"]`, or a list of such commands that must all pass. A run is green when every command exits 0. Its failures are the output lines that match `fail_pattern`, which defaults to lines starting `FAIL` or `FAILED`. A command that fails without printing such a line is reported by its last output line.
+Set `"runner": "script"` in the spec for such a suite. Each selection is then a command the spec's interpreter runs, such as `["tests/test_brief_anchors.py"]`, or a list of such commands that must all pass. Each command reads an empty stdin, so a test that waits for input fails rather than hangs. A run is green when every command exits 0. Its failures are the output lines that match `fail_pattern`, which defaults to lines starting `FAIL`, `FAILED`, `ERROR` or `ERRORED`, the last two being what `unittest` prints for a test that raises. A command that fails without such a line is reported by its last output line.
 
-Three things change in this mode.
+The baseline and each mutant run the same way as with pytest, including the byte-copy restore and the cleared `__pycache__`. Four things differ in this mode.
 
-1. The baseline and each mutant run the same way as with pytest, including the byte-copy restore and the cleared `__pycache__`.
-2. A survivor escalates against the full `escalate` selection, and its line says `scope=full (script runner, no coverage map)`, because the coverage map is a pytest plugin.
+1. `timeout` is one budget for all the commands of a selection. A run that has already failed when the budget runs out reads red, so a mutant one command caught is not reported as a timeout.
+2. A survivor escalates against the full `escalate` selection, because the coverage map is a pytest plugin. Its line says `scope=full (script runner, no coverage map)`, unless `--escalate-full` was given. Escalation runs under `escalate_timeout`, which defaults to twice `timeout`, because the full list takes longer than one script. When `escalate` names the same command as `select`, a survivor learns nothing from it, so name the whole suite there or pass `--no-escalate`.
 3. Workers are not used, and asking for them prints a line that says so.
+4. Every command runs through the interpreter, so a shell test such as `tests/test_board_guard.sh` goes in as `["-c", "import subprocess, sys; sys.exit(subprocess.call(['sh', 'tests/test_board_guard.sh']))"]`.
 
 ```json
 {
@@ -189,7 +191,8 @@ and then with `"workers": 8` on a laptop other sessions kept loaded, so every ti
 1. **Commit first.** The runner restores from its own backup, but a mutation session that
    also edits tests needs a commit to return to.
 2. **Measure the selections before choosing them.** Time the baseline files, then a `-k` or
-   node-ID selection that reaches the mutated code. On [PR #713](https://github.com/l3a0/marketlake/pull/713) the two whole files took 7.79 s,
+   node-ID selection that reaches the mutated code, or in script mode the one script that
+   does. On [PR #713](https://github.com/l3a0/marketlake/pull/713) the two whole files took 7.79 s,
    and the 17 entitlement tests took 0.98 s. Use the narrow selection per mutant, and the whole
    files as the baseline and for escalation.
 3. **Write the mutants as guarantees.** Name each mutant after the guarantee it breaks, such as
@@ -204,7 +207,8 @@ and then with `"workers": 8` on a laptop other sessions kept loaded, so every ti
    - **Real gap:** name the input it gets wrong, add the assertion that closes it, and re-run
      that mutant with `--only` to show it is now caught.
 6. **Run the full suite once at the end**, unmutated, whatever happened above. When survivors
-   were escalated against the whole suite, the MAP line already records that run.
+   were escalated against the whole suite under pytest, the MAP line already records that run.
+   Script mode prints no MAP line, so run the suite by hand.
 
 ## Running it from a lens
 
@@ -222,6 +226,11 @@ reports. The global `CLAUDE.md` rule "Leave no background job waiting on itself"
 full reasoning.
 
 ## Safety
+
+The runner restores every file when it ends, including on SIGTERM or SIGHUP, which it turns into
+an ordinary exit. SIGKILL cannot be caught, so a run killed that way leaves the current mutant in
+place. Copy each file back from `backup/` in the `--out` folder, where the runner wrote a byte copy
+of every file before the first mutant.
 
 The runner executes code only through pytest, or through the commands a script spec names, in the given worktree. A repository whose
 default paths point at live configuration must redirect them in its test setup. Marketlake's

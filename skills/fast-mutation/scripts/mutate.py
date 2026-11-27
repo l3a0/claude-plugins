@@ -11,8 +11,8 @@ The spec is JSON:
       "python": ".venv/bin/python",           # relative to root, or absolute
       "baseline": ["tests/a.py", "tests/b.py"],     # pytest args run once, unmutated
       "select": ["tests/a.py", "-k", "entitlement"],  # default pytest args per mutant
-      "escalate": ["tests"],                  # pytest args a survivor is re-run against
-      "timeout": 300,                         # seconds per pytest run
+      "escalate": ["tests"],                  # optional: pytest args a survivor is re-run against
+      "timeout": 300,                         # seconds per test run, see below for scripts
       "workers": 8,                           # optional: pytest-xdist workers on wide runs
       "workers_min_secs": 10,                 # optional: see below
       "mutants": [
@@ -58,13 +58,22 @@ escalation pays the worker startup.
 
 ``"runner": "script"`` runs a suite of plain test scripts instead of pytest. Each selection is
 then one command, a list of arguments the target interpreter runs, such as
-``["tests/test_x.py"]``, or a list of such commands that must all pass. A run is green when
-every command exits 0. Its failures are the output lines that match ``fail_pattern``, by default
-``^FAIL(?:ED)?\b.*``. Escalation runs the full ``escalate`` selection, because the coverage map
-is a pytest plugin, and workers are not used.
+``["tests/test_x.py"]``, or a list of such commands that must all pass. Each command reads an
+empty stdin. A run is green when every command exits 0. Its failures are the output lines that
+match ``fail_pattern``, by default ``^(?:FAIL|ERROR)(?:ED)?\b.*``, and a command that exits
+non-zero with no such line is named by its last line of output. ``timeout`` is one budget for
+all the commands of a selection, and a run that has already failed when the budget runs out
+reads red, not timeout. Escalation runs the full ``escalate`` selection, because the coverage
+map is a pytest plugin, under ``escalate_timeout``, which defaults to twice ``timeout``.
+Workers are not used.
+
+Every mutated ``file`` must resolve inside ``root``, or the run stops before it writes anything.
+SIGTERM and SIGHUP restore every file before the runner exits. SIGKILL cannot be caught, so after
+one, copy each file back from ``backup/`` in --out.
 
 Output: one line per mutant on stdout, ``results.jsonl`` and ``results.txt`` in --out, and
-``cover_map.json`` when escalation was scoped.
+``cover_map.json`` when escalation was scoped. A red baseline stops the run with exit code 2 and
+writes only ``results.txt``. A red map run exits with code 3.
 """
 
 from __future__ import annotations
@@ -74,6 +83,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -149,17 +159,21 @@ def commands(selection: list) -> list[list[str]]:
 def scripts(spec: dict, root: Path, selection: list, env: dict | None = None,
             timeout: float | None = None) -> dict:
     """Run each command of a script selection, and read failures from its output."""
-    pattern = re.compile(spec.get("fail_pattern", r"^FAIL(?:ED)?\b.*"), re.M)
+    pattern = re.compile(spec.get("fail_pattern", r"^(?:FAIL|ERROR)(?:ED)?\b.*"), re.M)
     start, outs, failed, code = time.monotonic(), [], [], 0
     limit = timeout or spec.get("timeout", 300)
     for cmd in commands(selection):
         left = limit - (time.monotonic() - start)
         try:
+            if left <= 0:
+                raise subprocess.TimeoutExpired(cmd, limit)
             done = subprocess.run([interpreter(spec, root), *cmd], cwd=root, capture_output=True,
-                                  text=True, env=env, timeout=max(left, 1))
+                                  text=True, env=env, timeout=left, stdin=subprocess.DEVNULL)
         except subprocess.TimeoutExpired:
-            return {"status": "timeout", "secs": round(time.monotonic() - start, 2),
-                    "failed": failed, "_out": "".join(outs)}
+            # A command that already failed decided the run, whatever a later one would do.
+            return {"status": "red" if code else "timeout",
+                    "secs": round(time.monotonic() - start, 2), "failed": failed,
+                    "code": code, "workers": 0, "_out": "".join(outs)}
         out = done.stdout + done.stderr
         outs.append(out)
         found = [m.group(0).strip() for m in pattern.finditer(out)]
@@ -398,7 +412,9 @@ def escalate(spec: dict, root: Path, out: Path, survivors: list[dict], backups: 
                 env, args, workers = None, spec["escalate"], opts.workers_n
             apply(root, m)
             clear_pycache(root)
-            esc = run_tests(spec, root, args, env=env, workers=workers)
+            limit = (spec.get("escalate_timeout", 2 * spec.get("timeout", 300))
+                     if is_script(spec) else None)
+            esc = run_tests(spec, root, args, env=env, timeout=limit, workers=workers)
             restore()
             if kind == "coverage" and esc["status"] != "red":
                 seen = json.loads(report.read_text()) if report.exists() else None
@@ -451,6 +467,9 @@ def main() -> int:
     opts.workers_n = resolve_workers(spec, root, opts)
 
     files = sorted({m["file"] for m in mutants})
+    outside = [f for f in files if not (root / f).resolve().is_relative_to(root)]
+    if outside:
+        raise SystemExit(f"every mutated file must sit inside root {root}: {', '.join(outside)}")
     backups = {f: (root / f).read_bytes() for f in files}
     (out / "backup").mkdir(exist_ok=True)
     for f, data in backups.items():
@@ -461,6 +480,13 @@ def main() -> int:
             (root / f).write_bytes(data)
             assert (root / f).read_bytes() == data, f"restore of {f} did not stick"
         clear_pycache(root)
+
+    def stop(signum, frame):
+        # SystemExit unwinds through the finally below, which restores every file.
+        raise SystemExit(128 + signum)
+
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, stop)
 
     clear_pycache(root)
     base = run_tests(spec, root, spec["baseline"])
@@ -481,7 +507,7 @@ def main() -> int:
             else:
                 clear_pycache(root)
                 row = {"name": m["name"],
-                       **clean(run_tests(spec, root, m.get("select", spec["select"])))}
+                       **clean(run_tests(spec, root, m["select"] if "select" in m else spec["select"]))}
                 restore()
                 if row["status"] == "green":
                     survivors.append(m)
@@ -497,6 +523,9 @@ def main() -> int:
 
         if survivors and not opts.no_escalate and spec.get("escalate"):
             rows.extend(escalate(spec, root, out, survivors, backups, restore, opts))
+        elif survivors and not opts.no_escalate:
+            print("the spec has no escalate selection, so the survivors were not escalated.",
+                  flush=True)
     finally:
         restore()
 

@@ -5,7 +5,7 @@
 
 The pytest runner and its coverage map need pytest, which CI does not install, so only the script runner is tested.
 """
-import json, os, subprocess, sys, tempfile
+import json, os, signal, stat, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, '..', 'skills', 'fast-mutation', 'scripts', 'mutate.py')
@@ -23,6 +23,7 @@ MOD = 'def add(a, b):\n    return a + b\n\n\ndef sign(x):\n    return 1 if x > 0
 NEAR = '''import sys
 sys.path.insert(0, '.')
 from mod import add
+print('ok   setup')
 bad = 0
 for got, want in ((add(2, 3), 5),):
     print(('ok   ' if got == want else 'FAIL ') + 'add')
@@ -36,11 +37,18 @@ print('ok   sign' if sign(-2) == -1 else 'FAIL sign of a negative')
 sys.exit(0 if sign(-2) == -1 else 1)
 '''
 CRASH = 'import sys\nsys.exit(3)\n'
+LOUD = 'import sys\nprint("boom", file=sys.stderr)\nsys.exit(3)\n'
+FAILED = 'import sys\nprint("ok   first")\nprint("FAILED the second check")\nsys.exit(1)\n'
+ERRORS = 'import sys\nprint("ERROR: test_lookup (t.T)")\nsys.exit(1)\n'
+SLOW = 'import sys, time\ntime.sleep(float(sys.argv[1]) if len(sys.argv) > 1 else 3)\n'
+READS = 'import sys\nsys.stdin.read()\n'
 
 with tempfile.TemporaryDirectory() as root:
     repo = os.path.join(root, 'repo')
     os.makedirs(os.path.join(repo, 'tests'))
-    for path, text in (('mod.py', MOD), ('tests/near.py', NEAR), ('tests/far.py', FAR), ('tests/crash.py', CRASH)):
+    for path, text in (('mod.py', MOD), ('tests/near.py', NEAR), ('tests/far.py', FAR), ('tests/crash.py', CRASH),
+                       ('tests/loud.py', LOUD), ('tests/failed.py', FAILED), ('tests/errors.py', ERRORS),
+                       ('tests/slow.py', SLOW), ('tests/reads.py', READS)):
         with open(os.path.join(repo, path), 'w') as f:
             f.write(text)
     subprocess.run(['git', '-C', repo, 'init', '-q'], check=True)
@@ -50,7 +58,13 @@ with tempfile.TemporaryDirectory() as root:
         with open(path, 'w') as f:
             json.dump(spec, f)
         out = os.path.join(root, 'out')
-        done = subprocess.run([sys.executable, SCRIPT, path, '--out', out, *args], capture_output=True, text=True)
+        # A pipe nobody writes to, so a child that read the runner's stdin would wait on it.
+        quiet, held = os.pipe()
+        try:
+            done = subprocess.run([sys.executable, SCRIPT, path, '--out', out, *args], capture_output=True, text=True,
+                                  stdin=quiet, timeout=120)
+        finally:
+            os.close(quiet), os.close(held)
         rows = []
         if os.path.exists(os.path.join(out, 'results.jsonl')):
             with open(os.path.join(out, 'results.jsonl')) as f:
@@ -69,7 +83,8 @@ with tempfile.TemporaryDirectory() as root:
     by = {r['name']: r for r in rows if not r.get('escalated')}
     wide = {r['name']: r for r in rows if r.get('escalated')}
     check('exits 0 on a green baseline', code == 0)
-    check('reads a green baseline of two commands', 'BASE green' in out and by['BASE']['status'] == 'green')
+    check('reads a green baseline of two commands', 'BASE green' in out and by['BASE']['status'] == 'green'
+          and by['BASE']['summary'] == '2 command(s), 0 failure(s)')
     check('catches a mutant the selection notices', by['add subtracts']['status'] == 'red' and 'CAUGHT' in out)
     check('names the failing line', by['add subtracts']['failed'] == ['FAIL add'])
     check('a survivor of the selection is caught by the full escalate run',
@@ -90,6 +105,76 @@ with tempfile.TemporaryDirectory() as root:
     code, out, rows = run(dict(spec, mutants=[crashing]), '--no-escalate')
     check('names a command that failed without a FAIL line', rows[1]['status'] == 'red'
           and rows[1]['failed'] == ['tests/crash.py: exit 3'])
+    code, out, rows = run(dict(spec, mutants=[dict(crashing, select=['tests/loud.py'])]), '--no-escalate')
+    check('names a command that failed without a FAIL line by its last output line',
+          rows[1]['failed'] == ['tests/loud.py: boom'])
+    code, out, rows = run(dict(spec, mutants=[dict(crashing, select=[['tests/failed.py'], ['tests/errors.py']])]),
+                          '--no-escalate')
+    check('the default pattern reads FAILED and ERROR lines after an ok line',
+          rows[1]['failed'] == ['FAILED the second check', 'ERROR: test_lookup (t.T)'])
+
+    both = {'name': 'both broken', 'file': 'mod.py', 'edits': [['return a + b', 'return a - b'], ['else -1', 'else 1']]}
+    code, out, rows = run(dict(spec, mutants=[both], select=[['tests/near.py'], ['tests/far.py']]), '--no-escalate')
+    check('keeps the failures of every command that failed', rows[1]['failed'] == ['FAIL add', 'FAIL sign of a negative'])
+
+    code, out, rows = run(dict(spec, mutants=[dict(both, select=['tests/slow.py'])], timeout=1), '--no-escalate')
+    check('a script past its time limit reads TIMEOUT', rows[1]['status'] == 'timeout' and 'TIMEOUT' in out)
+    code, out, rows = run(dict(spec, mutants=[dict(both, select=[['tests/slow.py', '0.7'], ['tests/slow.py', '0.7']])],
+                               timeout=1), '--no-escalate')
+    check('the time limit is shared by the commands of a selection', rows[1]['status'] == 'timeout')
+    code, out, rows = run(dict(spec, mutants=[dict(both, select=[['tests/near.py'], ['tests/slow.py']])], timeout=1),
+                          '--no-escalate')
+    check('a run that failed before its time ran out reads red', rows[1]['status'] == 'red'
+          and rows[1]['failed'] == ['FAIL add'])
+
+    survivor = {'name': 'comment only', 'file': 'mod.py', 'edits': [['def add(a, b):', 'def add(a, b):  # x']]}
+    code, out, rows = run(dict(spec, mutants=[survivor], timeout=1, escalate=[['tests/slow.py', '1.5']]))
+    check('escalation gets twice the time limit by default', 'SURVIVED-ALL' in out and 'TIMEOUT-WIDE' not in out)
+    code, out, rows = run(dict(spec, mutants=[survivor], timeout=1, escalate_timeout=1, escalate=[['tests/slow.py', '1.5']]))
+    check('escalate_timeout limits escalation', 'TIMEOUT-WIDE' in out)
+    code, out, rows = run({k: v for k, v in dict(spec, mutants=[survivor]).items() if k != 'escalate'})
+    check('says when survivors were not escalated because escalate is missing', code == 0
+          and 'no escalate selection' in out)
+    code, out, rows = run({k: v for k, v in dict(spec, mutants=[dict(survivor, select=['tests/near.py'])]).items()
+                           if k != 'select'}, '--no-escalate')
+    check('needs no default select when every mutant has its own', code == 0 and 'SURVIVED' in out)
+
+    code, out, rows = run(dict(spec, baseline=['tests/reads.py'], mutants=[], timeout=20))
+    check('a test that reads stdin gets an empty stdin and does not hang', code == 0 and 'BASE green' in out
+          and rows[0]['secs'] < 10)
+
+    with open(os.path.join(root, 'outside.py'), 'w') as f:
+        f.write('X = 1\n')
+    for label, name in (('a path that climbs out of root', '../outside.py'),
+                        ('an absolute path outside root', os.path.join(root, 'outside.py'))):
+        code, out, rows = run(dict(spec, mutants=[{'name': 'escape', 'file': name, 'edits': [['X = 1', 'X = 2']]}]))
+        with open(os.path.join(root, 'outside.py')) as f:
+            check(f'refuses {label}, and writes nothing', code != 0 and 'must sit inside root' in out and f.read() == 'X = 1\n')
+
+    stub = os.path.join(root, 'stub-python')
+    with open(stub, 'w') as f:
+        f.write('#!/bin/sh\necho "$@" >> "$(dirname "$0")/stub-args"\nexit 0\n')
+    os.chmod(stub, os.stat(stub).st_mode | stat.S_IEXEC)
+    code, out, rows = run({'root': repo, 'python': stub, 'baseline': ['tests'], 'select': ['tests'], 'mutants': []})
+    with open(os.path.join(root, 'stub-args')) as f:
+        check('a spec with no runner key still runs pytest', code == 0 and f.read().startswith('-m pytest'))
+
+    slow_mutant = {'name': 'slow', 'file': 'mod.py', 'edits': [['return a + b', 'return a - b']], 'select': ['tests/slow.py', '30']}
+    path = os.path.join(root, 'spec-term.json')
+    with open(path, 'w') as f:
+        json.dump(dict(spec, mutants=[slow_mutant], timeout=60), f)
+    proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', os.path.join(root, 'out-term'), '--no-escalate'],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        with open(os.path.join(repo, 'mod.py')) as f:
+            if 'a - b' in f.read():
+                break
+        time.sleep(0.05)
+    proc.send_signal(signal.SIGTERM)
+    proc.wait(timeout=60)
+    with open(os.path.join(repo, 'mod.py')) as f:
+        check('SIGTERM during a mutant restores the file', f.read() == MOD and proc.returncode == 128 + signal.SIGTERM)
 
     code, out, rows = run(dict(spec, fail_pattern=r'add$'), '--only', 'add subtracts', '--no-escalate')
     check('reads failures with the spec\'s fail_pattern', rows[1]['status'] == 'red' and rows[1]['failed'] == ['add'])
