@@ -22,22 +22,29 @@ so the line in PATH is the line the section holds, and a retry finds it.
 `comment` takes each comment's heading from its file's first line. It refuses a
 file that does not start with a heading and name the round, its anchor and the
 head, because a retry could not recognise that post, and a pull request named
-twice. It then checks every pull request's head, and every earlier comment by
-the same login, since anyone can comment on a public pull request, and posts on
-none of them if a head differs or an earlier comment has the same key with other
-text. It skips a pull request that already carries this comment, so a retry
-posts only what is missing. GitHub takes no key on a comment, so this narrows
-the window for a double post rather than closing it. So it counts the copies
-after posting, and exits non-zero naming any pull request that does not hold
-exactly one. A closing comment posts the same way, with R the round it closes
-and ANCHOR the commit that round read. It refuses a first line that reads
-`Review complete` and is not exactly `## Review complete`, such as one with a
-space before or after it or another heading level, because a build board
-counts only that whole line. Where a comment that opens with `## Review complete`
-already names the same round, anchor and head, that comment closes the review,
-so it posts nothing and says so. One naming an older head does not count,
-because a build board counts it only when posted after the head commit, so a closing comment
-at the new head posts.
+twice. It then checks every pull request's head, that each anchor is the head
+or an ancestor of it on GitHub, and every earlier comment by the same login,
+since anyone can comment on a public pull request. It posts on none of them if
+a head differs, an anchor is not shown to be the head or an ancestor of it, or
+an earlier comment has the same key with other text. The anchor check catches
+an anchor copied from another branch or another pull request, and one a force
+push dropped, and it cannot tell the two apart, so nothing should post around
+it by hand. l3a0/claude-plugins#108 decides what a review does after a force
+push drops an anchor. The anchor check does not catch an earlier round's
+anchor, which is still an ancestor. It skips a pull request that already
+carries this comment, so a retry posts only what is missing. GitHub takes no
+key on a comment, so this narrows the window for a double post rather than
+closing it. So it counts the copies after posting, and exits non-zero naming
+any pull request that does not hold exactly one. A closing comment posts the
+same way, with R the round it closes and ANCHOR the commit that round read. It
+refuses a first line that reads `Review complete` and is not exactly
+`## Review complete`, such as one with a space before or after it or another
+heading level, because a build board counts only that whole line. Where a
+comment that opens with `## Review complete` already names the same round,
+anchor and head, that comment closes the review, so it posts nothing and says
+so. One naming an older head does not count, because a build board counts it
+only when posted after the head commit, so a closing comment at the new head
+posts.
 
 `cost` posts a round's `## Cost` comment on the issue the main pull request
 tracks. It refuses a file whose first line is not exactly `## Cost`, which is
@@ -289,6 +296,29 @@ def copies(m, heading, round_no, login):
             and (heading != FINAL or m["head"][:7] in c["body"])]
 
 
+def outside_history(repo, anchor, head):
+    """Return why the anchor is not the head or an ancestor of it, or None when it is."""
+    if head.startswith(anchor):
+        return None
+    # GitHub's compare API says "ahead" when the second commit descends from the first, and answers 404 for a
+    # commit the repository does not hold.
+    done = subprocess.run(("gh", "api", f"repos/{repo}/compare/{anchor}...{head}", "--jq", ".status"),
+                          capture_output=True, text=True)
+    if done.returncode:
+        return f"GitHub could not compare {anchor[:7]} with the head {head[:7]}: {done.stderr.strip()}"
+    status = done.stdout.strip()
+    # Two commits that differ never compare "identical", so only "ahead" passes.
+    if status == "ahead":
+        return None
+    if status == "identical":
+        return (f"GitHub answered identical for the anchor {anchor[:7]} and the head {head[:7]}, which it gives only for "
+                f"one commit, though the head does not start with the anchor")
+    if status not in ("behind", "diverged"):
+        return (f"GitHub compared {anchor[:7]} with the head {head[:7]} and answered {status!r}, which is none of "
+                f"ahead, behind, diverged, identical")
+    return f"the head {head[:7]} is {status} against the anchor {anchor[:7]}, so the anchor is not in its history"
+
+
 def comment(args):
     targets, seen = [], set()
     for spec in args.targets:
@@ -313,13 +343,21 @@ def comment(args):
             sys.exit(f"posting nothing, because {m['repo']}#{m['num']} is named twice")
         seen.add(pull)
         targets.append((m, text, heading))
-    wrong = []
+    wrong, heads = [], []
     for m, _, _ in targets:
         head = view(m["repo"], m["num"], "headRefOid")
+        heads.append(head)
         if not head.startswith(m["head"]):
-            wrong.append(f"{m['repo']}#{m['num']} is at {head[:7]}, not {m['head'][:7]}")
+            # Two heads that share their first seven characters are named in full, so the message tells them apart.
+            width = 7 if head[:7] != m["head"][:7] else len(head)
+            wrong.append(f"{m['repo']}#{m['num']} is at {head[:width]}, not {m['head'][:width]}")
     if wrong:
         sys.exit("posting nothing, because a head does not match: " + "; ".join(wrong))
+    outside = [f"{m['repo']}#{m['num']}: {why}" for (m, _, _), head in zip(targets, heads)
+               if (why := outside_history(m["repo"], m["anchor"], head))]
+    if outside:
+        sys.exit("posting nothing, because an anchor was not shown to be the head or an ancestor of it: " + "; ".join(outside)
+                 + ". Check that each anchor is the commit this round's brief anchors at, and post nothing by hand")
     login = run("gh", "api", "user", "--jq", ".login").strip()
     pending, doubled = [], []
     for m, text, heading in targets:
@@ -332,7 +370,8 @@ def comment(args):
                      "Report it, and post no second one")
         if any(not same_text(body, text) for body in mine):
             sys.exit(f"posting nothing, because {name} already carries this heading, round and anchor with "
-                     "different text. Report it, and post by hand once it is settled")
+                     "different text. Report it, and once it is settled post by hand after the checks review-round.md's step 7 "
+                     "gives for a hand post")
         if len(mine) > 1:
             doubled.append(name)
         elif mine:

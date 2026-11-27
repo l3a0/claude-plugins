@@ -37,7 +37,7 @@ Round <N>, of `<anchor sha>`<, run together with the review of <companion links>
 
 ### Checks
 
-<The repository's checks run at `<fix sha>` and what each printed, such as "`gen_team.py --check` passes, and `tests/test_board_guard.sh` passes 106 of 106".>
+<The repository's checks run at the head the comment names, `<head sha>`, which is the fix commit unless a merge of the base sits on top of it, and what each printed, such as "`gen_team.py --check` passes, and `tests/test_board_guard.sh` passes 106 of 106".>
 
 ### Yield per lens
 
