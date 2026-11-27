@@ -20,10 +20,11 @@ next round's brief to NEW_BRIEF. HEAD is the commit the next round anchors at,
 named for every pull request the brief lists, or bare when it lists one. FIX is
 the commit that holds the last round's fixes, where a later commit, such as a
 merge of the base, sits on top of it. It defaults to HEAD, and the run stops on
-a FIX that GitHub does not show as HEAD or an ancestor of it, and on a last
-round's head that is not FIX or an ancestor of it, as after a force push, since
-a diff from that head would not show the round's fixes. The run changes four
-things and keeps every other line.
+a FIX that GitHub does not show as HEAD or an ancestor of it. Where the last
+round's head is not FIX or an ancestor of it, as after a force push such as a
+rebase, or GitHub cannot compare the two, it says so on standard error,
+because the diff from that head to FIX then also holds what the push brought.
+The run changes four things and keeps every other line.
 
 1. The round number at the end of the title goes up by one.
 2. Each item's first line is printed again from GitHub, as the first form
@@ -171,7 +172,7 @@ def resolve(specs, names, what):
                 sys.exit(f"a bare {what} works only for a brief that lists one pull request")
             key = names[0].lower()
         else:
-            key = f"{s['repo']}#{s['num']}".lower()
+            key = f"{s['repo']}#{int(s['num'])}".lower()
         if key not in (n.lower() for n in names):
             sys.exit(f"{spec}: the brief lists no such pull request")
         if key in found:
@@ -196,7 +197,7 @@ def next_brief(previous, out, specs, fix_specs=()):
     items = [(i, ITEM.match(line)) for i, line in enumerate(lines) if ITEM.match(line)]
     if not items:
         sys.exit(f"{previous}: no item in the form brief_anchors.py prints, so no head is known")
-    names = [f"{it['repo']}#{it['num']}" for _, it in items]
+    names = [f"{it['repo']}#{int(it['num'])}" for _, it in items]
     if len(set(n.lower() for n in names)) != len(names):
         sys.exit(f"{previous}: a pull request is listed twice")
 
@@ -225,11 +226,11 @@ def next_brief(previous, out, specs, fix_specs=()):
                      f"list by hand first")
         checkout = CHECKOUT.search(lines[i])
         line, head = anchor(it["repo"], it["num"], checkout["checkout"] if checkout else None)
-        want = heads[f"{it['repo']}#{it['num']}".lower()]
+        want = heads[f"{it['repo']}#{int(it['num'])}".lower()]
         if not same(head, want):
             sys.exit(f"{it['repo']} PR #{it['num']} is at {head[:7]} on GitHub, not {want[:7]}. Push the fix "
                      f"first, or name the head GitHub shows. Writing nothing")
-        fix = fixes.get(f"{it['repo']}#{it['num']}".lower(), head)
+        fix = fixes.get(f"{it['repo']}#{int(it['num'])}".lower(), head)
         # "ahead" means the second commit descends from the first, as for the merge base above. Two commits that
         # differ never compare "identical", so each check accepts only "ahead".
         if same(head, fix):
@@ -240,12 +241,17 @@ def next_brief(previous, out, specs, fix_specs=()):
                 sys.exit(f"{it['repo']} PR #{it['num']}'s head {head[:7]} is {status} against the fix {fix[:7]}, so "
                          f"the fix is not in the head's history. Name a fixing commit the head holds. Writing nothing")
         if not same(old, fix):
-            status = run("gh", "api", f"repos/{it['repo']}/compare/{old}...{fix}", "--jq", ".status")
-            if status != "ahead":
-                sys.exit(f"{it['repo']} PR #{it['num']}'s fix {fix[:7]} is {status} against round {finished}'s head "
-                         f"{old}, so that head is not in the fix's history, as after a force push, and a diff from it "
-                         f"would not show the round's fixes. The round reads the whole change, so write its brief by "
-                         f"hand. Writing nothing")
+            done = subprocess.run(("gh", "api", f"repos/{it['repo']}/compare/{old}...{fix}", "--jq", ".status"),
+                                  capture_output=True, text=True)
+            status = done.stdout.strip()
+            if done.returncode or status != "ahead":
+                found = (f"GitHub could not compare round {finished}'s head {old} with the fix {fix[:7]}: "
+                         f"{done.stderr.strip()}" if done.returncode else
+                         f"round {finished}'s head {old} is not in the history of the fix {fix[:7]} on GitHub, which "
+                         f"answers {status}")
+                print(f"{it['repo']} PR #{it['num']}: {found}, as after a force push such as a rebase. "
+                      f"`git diff {old} {fix[:7]}` then also holds what the push brought, so leave that out of the "
+                      f"blank as for a merge of the base", file=sys.stderr)
         rounds.append((finished, old))
         listed = ", ".join(f"round {r} `{h}`" for r, h in rounds)
         lines[i] = f"{it['n']}. {line} Earlier rounds read {listed}."

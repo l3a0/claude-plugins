@@ -603,6 +603,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     code, out = post(COMP, f'o/r#5={head5}={F}={unrelated}')
     check('refuses an anchor on another branch, and posts on no companion', code != 0
           and 'neither the head nor an ancestor' in out and 'diverged' in out and f'o/r#5' in out
+          and 'post nothing by hand' in out
           and state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
 
     seed(5, head=head5, later=('f' * 40,))
