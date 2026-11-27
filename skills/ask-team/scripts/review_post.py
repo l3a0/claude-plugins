@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Post a review round's comments and edit a pull request's Revision section.
+"""Post a review round's comments and its cost on the issue, and edit a pull request's Revision section.
 
 Usage:
     review_post.py revision OWNER/REPO#N --scratch DIR --file PATH [--replace ITEM] [--dry-run]
     review_post.py comment --round R OWNER/REPO#N=HEAD=ANCHOR=FILE [...] [--dry-run]
+    review_post.py cost --round R OWNER/REPO#ISSUE --pull OWNER/REPO#N --anchor ANCHOR --file PATH [--dry-run]
 
 `revision` adds the one line in PATH to the body's `## Revision` section as a
 numbered item, or replaces item ITEM, and adds the section before the closing lines and footer
@@ -18,15 +19,15 @@ number or bullet of its own, such as `1. `, because the script numbers the
 item itself and would write `2. 1. `. It refuses rather than strips the mark,
 so the line in PATH is the line the section holds, and a retry finds it.
 
-`comment` takes each comment's heading from its file's first line. It refuses
-a file that does not start with a heading and name the round, its anchor and
-the head, because a retry could not recognise that post, and a pull request
-named twice. It then checks every pull request's head, that each anchor is the
-head or an ancestor of it on GitHub, and every earlier comment by the same
-login, since anyone can comment on a public pull request. It posts on none of
-them if a head differs, an anchor is not shown to be the head or an ancestor of it, or an
-earlier comment has the same key with other text. The anchor check catches an
-anchor copied from another branch or another pull request, and one a force
+`comment` takes each comment's heading from its file's first line. It refuses a
+file that does not start with a heading and name the round, its anchor and the
+head, because a retry could not recognise that post, and a pull request named
+twice. It then checks every pull request's head, that each anchor is the head
+or an ancestor of it on GitHub, and every earlier comment by the same login,
+since anyone can comment on a public pull request. It posts on none of them if
+a head differs, an anchor is not shown to be the head or an ancestor of it, or
+an earlier comment has the same key with other text. The anchor check catches
+an anchor copied from another branch or another pull request, and one a force
 push dropped, and it cannot tell the two apart, so nothing should post around
 it by hand. l3a0/claude-plugins#108 decides what a review does after a force
 push drops an anchor. The anchor check does not catch an earlier round's
@@ -34,7 +35,27 @@ anchor, which is still an ancestor. It skips a pull request that already
 carries this comment, so a retry posts only what is missing. GitHub takes no
 key on a comment, so this narrows the window for a double post rather than
 closing it. So it counts the copies after posting, and exits non-zero naming
-any pull request that does not hold exactly one.
+any pull request that does not hold exactly one. A closing comment posts the
+same way, with R the round it closes and ANCHOR the commit that round read. It
+refuses a first line that reads `Review complete` and is not exactly
+`## Review complete`, such as one with a space before or after it or another
+heading level, because a build board counts only that whole line. Where a
+comment that opens with `## Review complete` already names the same round,
+anchor and head, that comment closes the review, so it posts nothing and says
+so. One naming an older head does not count, because a build board counts it
+only when posted after the head commit, so a closing comment at the new head
+posts.
+
+`cost` posts a round's `## Cost` comment on the issue the main pull request
+tracks. It refuses a file whose first line is not exactly `## Cost`, which is
+the only form the `## Cost total` sweep reads, or whose next non-blank line is
+not `Review round R, of ANCHOR, on <the pull request's URL>`, because that line
+is how a retry recognises the post. It takes the issue on trust, since a pull
+request that is only part of an issue names it only in its body's text, which
+the script does not parse. It skips the
+post when the issue already carries a comment by the same login with that
+heading and line, stops when one carries them with other text, and counts the
+copies after posting, as `comment` does.
 
 A write that fails says the outcome is unknown, since the request may have
 landed. Rerun the same command, which looks before it writes. The tests run
@@ -56,6 +77,11 @@ REVISION = re.compile(r"^ {0,3}#{1,6}\s+Revision\s*$")
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 ITEM = re.compile(r"^(\d+)\. (.*)$")
 LIST_MARK = re.compile(r"^\s*(\d+[.)]|[-*+])(\s|$)")
+FINAL = "## Review complete"
+NEAR_FINAL = re.compile(r"^#{1,6}\s*Review[\W_]*complete\b", re.IGNORECASE)
+COST_HEADING = "## Cost"
+COST_LINE = re.compile(r"^Review round (?P<round>\d+), of `?(?P<anchor>[0-9a-f]{7,40})`?, on (?P<link>.+?)\s*$")
+PULL_LINK = re.compile(r"^(?:\[[^\]\n]*\]\()?https://github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/(?P<num>\d+)(?!\d)", re.IGNORECASE)
 CLOSING = re.compile(r"^(close[sd]?|fix(es|ed)?|resolve[sd]?|part of)\s+(no issue|([\w.-]+/[\w.-]+)?#\d+)", re.IGNORECASE)
 SECTION = "## Revision"
 
@@ -75,9 +101,9 @@ def write(*args, where=""):
     return done.stdout.strip()
 
 
-def view(repo, num, field):
+def view(repo, num, field, kind="pr"):
     # --jq would print one newline more than the string holds, so parse the JSON.
-    return json.loads(run("gh", "pr", "view", num, "-R", repo, "--json", field))[field]
+    return json.loads(run("gh", kind, "view", num, "-R", repo, "--json", field))[field]
 
 
 def outside_fences(lines):
@@ -248,14 +274,26 @@ def first_line(text):
     return text.split("\n", 1)[0].strip()
 
 
+def raw_first_line(text):
+    # The file is read in text mode, so no carriage return reaches here.
+    return text.split("\n", 1)[0]
+
+
+def same_text(a, b):
+    return a.replace("\r\n", "\n").strip() == b.replace("\r\n", "\n").strip()
+
+
 def carries(comment, heading, round_no, anchor):
     return first_line(comment) == heading and anchor[:7] in comment \
         and re.search(rf"\bround {round_no}\b", comment, re.IGNORECASE) is not None
 
 
 def copies(m, heading, round_no, login):
+    # A closing comment counts only after the head it names, so one naming an older head is
+    # not this post, and a later closing comment names the head it is posted at.
     return [c["body"] for c in view(m["repo"], m["num"], "comments")
-            if (c.get("author") or {}).get("login") == login and carries(c["body"], heading, round_no, m["anchor"])]
+            if (c.get("author") or {}).get("login") == login and carries(c["body"], heading, round_no, m["anchor"])
+            and (heading != FINAL or m["head"][:7] in c["body"])]
 
 
 def outside_history(repo, anchor, head):
@@ -292,6 +330,9 @@ def comment(args):
         with open(m["file"], encoding="utf-8") as f:
             text = f.read()
         heading = first_line(text)
+        if NEAR_FINAL.match(heading) and raw_first_line(text) != FINAL:
+            sys.exit(f"posting nothing, because {m['file']} starts {raw_first_line(text)!r}, and a build board counts a "
+                     f"closing comment only when its whole first line is {FINAL!r}")
         if not HEADING.match(heading) or not carries(text, heading, args.round, m["anchor"]):
             sys.exit(f"posting nothing, because {m['file']} does not start with a heading and name "
                      f"round {args.round} and {m['anchor'][:7]}, so a retry could not recognise it")
@@ -322,7 +363,12 @@ def comment(args):
     for m, text, heading in targets:
         name = f"{m['repo']}#{m['num']}"
         mine = copies(m, heading, args.round, login)
-        if any(body.strip() != text.strip() for body in mine):
+        if heading == FINAL and any(not same_text(body, text) for body in mine):
+            sys.exit(f"posting nothing, because {name} already carries a {FINAL!r} comment on round "
+                     f"{args.round} and {m['anchor'][:7]} at the head {m['head'][:7]}, which closes the "
+                     "review, whether it is that round's own comment or an earlier closing comment. "
+                     "Report it, and post no second one")
+        if any(not same_text(body, text) for body in mine):
             sys.exit(f"posting nothing, because {name} already carries this heading, round and anchor with "
                      "different text. Report it, and once it is settled post by hand after the checks review-round.md's step 7 "
                      "gives for a hand post")
@@ -343,6 +389,68 @@ def comment(args):
         sys.exit(f"{', '.join(doubled)} should hold this comment once and does not. Delete any extra copy, and report it")
 
 
+def cost_key(text):
+    """Return (round, anchor's first seven, repo, number) from a ## Cost comment, or None."""
+    lines = text.replace("\r\n", "\n").split("\n")
+    if lines[0] != COST_HEADING:
+        return None
+    rest = [line for line in lines[1:] if line.strip()]
+    m = COST_LINE.match(rest[0]) if rest else None
+    link = PULL_LINK.match(m["link"]) if m else None
+    if not link:
+        return None
+    return int(m["round"]), m["anchor"][:7], link["repo"].lower(), int(link["num"])
+
+
+def cost_copies(repo, num, key, login):
+    return [c["body"] for c in view(repo, num, "comments", kind="issue")
+            if (c.get("author") or {}).get("login") == login and cost_key(c["body"]) == key]
+
+
+def cost(args):
+    issue, pull = SPEC.match(args.issue), SPEC.match(args.pull)
+    if not issue:
+        sys.exit(f"not OWNER/REPO#N: {args.issue}")
+    if not pull:
+        sys.exit(f"not OWNER/REPO#N: {args.pull}")
+    if not re.fullmatch(r"[0-9a-f]{7,40}", args.anchor):
+        sys.exit(f"not a commit of 7 to 40 hex characters: {args.anchor}")
+    if not os.path.isfile(args.file):
+        sys.exit(f"no comment file at {args.file}")
+    with open(args.file, encoding="utf-8") as f:
+        text = f.read()
+    key = (args.round, args.anchor[:7], pull["repo"].lower(), int(pull["num"]))
+    if cost_key(text) != key:
+        sys.exit(f"posting nothing, because {args.file} does not start with the line {COST_HEADING!r} and then "
+                 f"'Review round {args.round}, of `{args.anchor[:7]}`, on <the URL of {args.pull}>', "
+                 "so a retry could not recognise it")
+    repo, num, name = issue["repo"], issue["num"], args.issue
+    login = run("gh", "api", "user", "--jq", ".login").strip()
+    mine = cost_copies(repo, num, key, login)
+    if any(not same_text(body, text) for body in mine):
+        sys.exit(f"posting nothing, because {name} already carries this round's {COST_HEADING} comment with "
+                 "different text. Edit that comment by hand, and report it")
+    if len(mine) > 1:
+        sys.exit(f"{name} should hold this comment once and does not. Delete any extra copy, and report it")
+    if mine:
+        print(f"{name}: already carries this comment, so skipped")
+        return
+    if args.dry_run:
+        print(f"{name}: would post {args.file}")
+        return
+    print(f"{name}: posted {write('gh', 'issue', 'comment', num, '-R', repo, '--body-file', args.file)}")
+    if len(cost_copies(repo, num, key, login)) != 1:
+        sys.exit(f"{name} should hold this comment once and does not. Delete any extra copy, and report it")
+
+
+def round_number(value):
+    if not re.fullmatch(r"[0-9]+", value):
+        raise argparse.ArgumentTypeError(
+            f"{value!r} is not a round's number. Give the number of the round the comment reports, "
+            "and for a closing comment the round it closes, as in --round 12")
+    return int(value)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -357,9 +465,18 @@ def main():
 
     post = commands.add_parser("comment")
     post.add_argument("targets", nargs="+")
-    post.add_argument("--round", type=int, required=True)
+    post.add_argument("--round", type=round_number, required=True)
     post.add_argument("--dry-run", action="store_true")
     post.set_defaults(handler=comment)
+
+    price = commands.add_parser("cost")
+    price.add_argument("issue")
+    price.add_argument("--round", type=round_number, required=True)
+    price.add_argument("--pull", required=True)
+    price.add_argument("--anchor", required=True)
+    price.add_argument("--file", required=True)
+    price.add_argument("--dry-run", action="store_true")
+    price.set_defaults(handler=cost)
 
     args = parser.parse_args()
     args.handler(args)

@@ -57,10 +57,13 @@ exact access). Reports of particular interest:
   role agent that ignores its instruction under the session's own
   permissions is out of scope, since the session's permission mode is the
   boundary there.
-- `review_post.py`, in `ask-team`, posts review comments and edits pull
-  request bodies as the user's `gh` login, sending back a body it read from
-  GitHub. In scope is any path where text in a pull request steers what it
-  posts, or where it writes outside the body's `## Revision` section.
+- `review_post.py`, in `ask-team`, posts review comments on pull requests,
+  posts a round's cost comment on an issue, and edits pull request bodies as
+  the user's `gh` login, sending back a body it read from GitHub. It reads
+  every comment on those pull requests and issues, which anyone can write on
+  a public repository. In scope is any path where text in a pull request or an
+  issue steers what it posts, or where it writes outside the body's
+  `## Revision` section.
 - `diagram_words.py`, in `ask-team`, writes a local page that draws a
   repository's diagrams, whoever wrote them, with Mermaid loaded from
   `cdn.jsdelivr.net`. A content security policy on the page confines it. In

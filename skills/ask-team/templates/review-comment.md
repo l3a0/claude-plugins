@@ -62,6 +62,6 @@ The figures cover <every companion pull request, linked>. <What dominated, if on
 
 <Where the `l3a0:loop-cost` skill's `## Name what a skill could save` places its outcome here.>
 
-<Where the pull requests track issues, the `## Cost` comment on the main pull request's issue repeats these lines under the line `Review round <N>, of <anchor sha>, on <pull request link>`.>
+<Where the pull requests track issues, the `## Cost` comment on the main pull request's issue repeats these lines under the line `Review round <N>, of <anchor sha>, on <the pull request's URL>`, with the full `https://github.com/...` address.>
 
 <On a companion pull request, the whole section is one line: "Posted once, on <link to the main pull request>: at least <dollars> US dollars for <what it covers> across all <count> pull requests.">
