@@ -637,10 +637,6 @@ with tempfile.TemporaryDirectory() as ROOT:
     link = state(5)['comments'][0]['url']
     check('a post the read after posting does not show says to rerun nothing', code != 0 and 'Rerun nothing' in out
           and f'the read after posting {link} shows none' in out and len(state(5)['comments']) == 1)
-    seed(5, head=head5), seed(6, head=head6, repo='o-s')
-    code, out = post(MAIN, COMP, STUB_HIDE='5', STUB_COMMENT_FAIL='6')
-    check('a failed post after one the read does not show keeps the rerun-nothing advice and names only the rest', code != 0
-          and 'Rerun nothing' in out and 'naming only o/s#6, since o/r#5 posted above' in out and len(state(5)['comments']) == 1)
     seed(5, head=head5)
     code, out = post(MAIN, STUB_RACE='5')
     check('a post that lands beside a copy with other text deletes nothing', code != 0 and 'Delete and edit nothing' in out
@@ -883,7 +879,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed_issue(40)
     code, out = price(STUB_HIDE='40')
     check('a cost post the read after posting does not show says to rerun nothing', code != 0 and 'Rerun nothing' in out
-          and issue(40)[0]['url'] in out and len(issue(40)) == 1)
+          and f"the read after posting {issue(40)[0]['url']} shows none" in out and len(issue(40)) == 1)
     seed_issue(40)
     code, out = price(STUB_LOST='comment')
     check('a lost reply on a cost post says the outcome is unknown', code != 0 and 'outcome is unknown' in out)

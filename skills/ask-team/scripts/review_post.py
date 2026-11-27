@@ -89,7 +89,15 @@ its figures post and which `## Cost` comment carries them waits on
 l3a0/claude-plugins#108.
 
 A write that fails says the outcome is unknown, since the request may have
-landed. Rerun the same command, which looks before it writes. The tests run
+landed. Rerun the same command, which looks before it writes. A read can lag
+behind a write. While it lags, a rerun posts a second copy wherever the read
+still hides the first, and the count after posting counts one, so nothing
+reports it. A rerun can follow a write that failed or had an unknown outcome,
+or a read that failed after a post landed, whose message gives no advice. In a
+run over several pull requests, a failed write ends the run with only that
+write's message, and drops what the run found on the pull requests before it,
+such as one whose read after posting showed none. l3a0/claude-plugins#117
+owns reruns that a lagging read cannot double. The tests run
 against a stand-in `gh`, so no test covers what the real one prints.
 """
 
@@ -439,19 +447,11 @@ def comment(args):
             print(f"{name}: already carries this comment, so skipped")
         else:
             pending.append((name, m, text, heading))
-    posted = []
-    for at, (name, m, text, heading) in enumerate(pending):
+    for name, m, text, heading in pending:
         if args.dry_run:
             print(f"{name}: would post {m['file']}")
             continue
-        try:
-            link = write("gh", "pr", "comment", m["num"], "-R", m["repo"], "--body-file", m["file"])
-        except SystemExit as failed:
-            # A rerun of every target would post again on one whose read lags, so name only those not posted.
-            rest = ", ".join(n for n, *_ in pending[at:])
-            sys.exit("; ".join(doubled + [f"{failed}" + (f" Rerun it naming only {rest}, since {', '.join(posted)} "
-                                                         "posted above" if posted else "")]))
-        posted.append(name)
+        link = write("gh", "pr", "comment", m["num"], "-R", m["repo"], "--body-file", m["file"])
         print(f"{name}: posted {link}")
         found = copies(m, heading, args.round, login)
         if len(found) != 1:
@@ -566,7 +566,7 @@ def cost(args):
         links = ", ".join(c.get("url") or "(no link)" for c in mine)
         sys.exit(f"posting nothing, because {name} already carries this round's {COST_HEADING} comment with "
                  f"different text at {links}. Where that comment is this file's text plus the build's line this session added at "
-                 "the closing comment or the handover, as review-round.md's step 7 asks, that is expected, so post nothing "
+                 "the closing comment or the handover, as review-round.md's steps 6 and 7 ask, that is expected, so post nothing "
                  "more. Otherwise edit nothing, since it may hold another session's spend, and report it")
     if len(mine) > 1:
         sys.exit(settle(name, mine, text))
