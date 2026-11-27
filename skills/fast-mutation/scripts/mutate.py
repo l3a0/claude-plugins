@@ -144,6 +144,7 @@ def pytest(spec: dict, root: Path, args: list[str], env: dict | None = None,
 
 STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 _stopped = False
+_restored = False
 
 
 def quiet_signals() -> None:
@@ -171,6 +172,7 @@ def finish(restore) -> None:
     writing its results can still be stopped. After a stop signal they stay ignored until the
     process exits.
     """
+    global _restored
     saved = {}
     try:
         for sig in STOP_SIGNALS:
@@ -179,6 +181,7 @@ def finish(restore) -> None:
     finally:
         try:
             restore()
+            _restored = True
         finally:
             if not _stopped:
                 for sig, handler in saved.items():
@@ -186,17 +189,20 @@ def finish(restore) -> None:
 
 
 def last_restore(restore) -> None:
-    """``finish``, run again when a stop signal lands before ``finish`` has switched the handlers.
+    """``finish``, run again when a stop signal lands before its restore has finished.
 
     By then ``exit_on_signal`` has set every stop signal to ignore, so the second run cannot be
     interrupted. Python runs a signal handler only between bytecodes, so this narrows the window
     in which a signal can skip the restore to the call itself, and ``backup/`` in --out stays the
     copy to trust after any exit other than 0, 2 or 3.
     """
+    global _restored
+    _restored = False
     try:
         finish(restore)
     except SystemExit:
-        finish(restore)
+        if not _restored:
+            finish(restore)
         raise
 
 
@@ -537,6 +543,19 @@ def main() -> int:
     if linked:
         raise SystemExit(f"a mutated file has another hard link, which may sit outside root: {', '.join(linked)}")
     backups = {f: (root / f).read_bytes() for f in files}
+    names = {}
+    for f in files:
+        names.setdefault(f.replace("/", "__"), []).append(f)
+    clash = [" and ".join(group) for group in names.values() if len(group) > 1]
+    if clash:
+        raise SystemExit(f"two mutated files would share one backup name in backup/: {'; '.join(clash)}")
+    # A rerun after a kill -9 must not overwrite the only copy of a file's original bytes.
+    stale = [f for f, data in backups.items()
+             if (out / "backup" / f.replace("/", "__")).exists()
+             and (out / "backup" / f.replace("/", "__")).read_bytes() != data]
+    if stale:
+        raise SystemExit(f"backup/ in {out} holds other bytes for {', '.join(stale)}, so a run may have"
+                         f" left them mutated. Copy them back from backup/, or use a new --out")
     (out / "backup").mkdir(exist_ok=True)
     for f, data in backups.items():
         (out / "backup" / f.replace("/", "__")).write_bytes(data)

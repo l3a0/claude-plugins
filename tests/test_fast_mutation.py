@@ -170,6 +170,31 @@ with tempfile.TemporaryDirectory() as root:
               and f.read() == 'X = 1\n')
     os.remove(os.path.join(repo, 'linked.py'))
 
+    with open(os.path.join(repo, 'a__b.py'), 'w') as f:
+        f.write('A = 1\n')
+    os.makedirs(os.path.join(repo, 'a'), exist_ok=True)
+    with open(os.path.join(repo, 'a', 'b.py'), 'w') as f:
+        f.write('B = 1\n')
+    code, out, rows = run(dict(spec, mutants=[{'name': 'flat', 'file': 'a__b.py', 'edits': [['A = 1', 'A = 2']]},
+                                              {'name': 'nested', 'file': 'a/b.py', 'edits': [['B = 1', 'B = 2']]}]))
+    check('refuses two files that would share one backup name', code != 0 and 'share one backup name' in out)
+
+    killed = os.path.join(root, 'out-killed')
+    os.makedirs(os.path.join(killed, 'backup'))
+    with open(os.path.join(killed, 'backup', 'mod.py'), 'w') as f:
+        f.write('the original\n')
+    path = os.path.join(root, 'spec-killed.json')
+    with open(path, 'w') as f:
+        json.dump(dict(spec, mutants=spec['mutants'][:1]), f)
+    done = subprocess.run([sys.executable, SCRIPT, path, '--out', killed], capture_output=True, text=True,
+                          stdin=subprocess.DEVNULL)
+    with open(os.path.join(killed, 'backup', 'mod.py')) as f:
+        check('refuses to overwrite a backup that holds other bytes', done.returncode != 0
+              and 'holds other bytes' in done.stdout + done.stderr and f.read() == 'the original\n')
+    code, out, rows = run(dict(spec, mutants=spec['mutants'][:1]))
+    code, out, rows = run(dict(spec, mutants=spec['mutants'][:1]))
+    check('reuses an --out whose backup matches the worktree', code == 0 and 'CAUGHT' in out)
+
     stub = os.path.join(root, 'stub-python')
     with open(stub, 'w') as f:
         f.write('#!/bin/sh\necho "$@" >> "$(dirname "$0")/stub-args"\nexit 0\n')
@@ -280,12 +305,25 @@ try:
     mutate.last_restore(lambda: done.append(True))
 except SystemExit as stop:
     print('entry window', stop.code, done == [True], len(calls))
+mutate._stopped, done, calls = False, [], []
+def restored(restore):
+    calls.append(True)
+    real(restore)
+    raise SystemExit(143)
+mutate.finish = restored
+try:
+    mutate.last_restore(lambda: done.append(True))
+except SystemExit as stop:
+    print('done once', stop.code, done == [True], len(calls))
 mutate.finish, mutate._stopped = real, False
 defaults()
 try:
     mutate.exit_on_signal(signal.SIGTERM, None)
 except SystemExit:
     pass
+for s in names:
+    signal.signal(s, marker)
+mutate._stopped = True
 mutate.finish(lambda: None)
 print('stay ignored after a stop', all(signal.getsignal(s) == signal.SIG_IGN for s in names))
 mutate._stopped = False
@@ -317,8 +355,9 @@ check('a signal while the handlers are being saved still reaches the restore', '
 with open(SCRIPT) as f:
     source = f.read()
 check('a signal as the last restore is entered gets a second restore', 'entry window 143 True 2' in lines)
-check('after a stop signal the stop signals stay ignored', 'stay ignored after a stop True' in lines
-      and 'mid save 143 True' in lines)
+check('a restore that finished is not run a second time', 'done once 143 True 1' in lines)
+check('finish leaves the stop signals ignored once a stop signal has fired', 'stay ignored after a stop True' in lines)
+check('a stop signal halfway through the save leaves every stop signal ignored', 'mid save 143 True' in lines)
 check("main's last restore runs through last_restore", 'finally:\n        last_restore(restore)\n' in source)
 
 print('all passed' if not failures else f'{failures} failed')
