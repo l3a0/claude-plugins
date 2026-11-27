@@ -459,7 +459,14 @@ with tempfile.TemporaryDirectory() as ROOT:
         f.write(f'## Review, round 3\n\nRound 3, of `{B}`, fixed in `{"e" * 7}`.\n')
     code, out = post(MAIN, f'o/s#6={"e" * 40}={B}={moved}')
     check('posts on no companion when one head differs', code != 0 and state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
-    check('names the head that differs', f'o/s#6 is at {head6[:7]}' in out)
+    check('names the head that differs in seven characters', f'o/s#6 is at {head6[:7]}, not {"e" * 7}' in out)
+    six = os.path.join(ROOT, 'six.md')
+    with open(six, 'w') as f:
+        f.write(f'## Review, round 3\n\nRound 3, of `{B}`, fixed in `{"d" * 6}e`.\n')
+    code, out = post(MAIN, f'o/s#6={"d" * 6 + "e" * 34}={B}={six}')
+    check('names heads that share six characters in seven characters each', code != 0
+          and 'o/s#6 is at ddddddd, not dddddde' in out
+          and state(6, 'o-s')['comments'] == [])
     near = os.path.join(ROOT, 'near.md')
     with open(near, 'w') as f:
         f.write(f'## Review, round 3\n\nRound 3, of `{B}`, fixed in `{"d" * 7}`.\n')
@@ -614,7 +621,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5, elsewhere=('f' * 40,)), seed(6, head=head6, repo='o-s')
     code, out = post(COMP, f'o/r#5={head5}={F}={unrelated}')
     check('refuses an anchor on another branch, and posts on no companion', code != 0
-          and 'no anchor was shown to be the head or an ancestor' in out and 'is diverged against the anchor' in out
+          and 'an anchor was not shown to be the head or an ancestor' in out and 'is diverged against the anchor' in out
           and 'none of ahead' not in out and f'o/r#5' in out
           and 'post nothing by hand' in out
           and state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
@@ -628,7 +635,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5, twins=('f' * 40,))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
     check('refuses an anchor GitHub compares as identical to another head', code != 0
-          and 'is identical against the anchor' in out and state(5)['comments'] == [])
+          and 'GitHub answered identical' in out and 'not in its history' not in out and state(5)['comments'] == [])
 
     seed(5, head=head5, later=('f' * 40,))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
@@ -646,7 +653,7 @@ with tempfile.TemporaryDirectory() as ROOT:
           and 'Not Found' in out and state(5)['comments'] == [])
 
     code, out = post(f'o/r#5={head5}={F}={unrelated}', '--dry-run')
-    check('a dry run checks the anchor too', code != 0 and 'no anchor was shown to be the head or an ancestor' in out)
+    check('a dry run checks the anchor too', code != 0 and 'an anchor was not shown to be the head or an ancestor' in out)
 
     code, out = post('not-a-target')
     check('refuses a malformed target', code != 0 and 'OWNER/REPO#N=HEAD=ANCHOR=FILE' in out)

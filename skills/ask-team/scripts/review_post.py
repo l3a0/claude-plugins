@@ -24,7 +24,7 @@ the head, because a retry could not recognise that post, and a pull request
 named twice. It then checks every pull request's head, that each anchor is the
 head or an ancestor of it on GitHub, and every earlier comment by the same
 login, since anyone can comment on a public pull request. It posts on none of
-them if a head differs, an anchor lies outside the head's history, or an
+them if a head differs, an anchor is not shown to be the head or an ancestor of it, or an
 earlier comment has the same key with other text. The anchor check catches an
 anchor copied from another branch or another pull request, and one a force
 push dropped, and it cannot tell the two apart, so nothing should post around
@@ -272,7 +272,10 @@ def outside_history(repo, anchor, head):
     # Two commits that differ never compare "identical", so only "ahead" passes.
     if status == "ahead":
         return None
-    if status not in ("behind", "diverged", "identical"):
+    if status == "identical":
+        return (f"GitHub answered identical for the anchor {anchor[:7]} and the head {head[:7]}, which it gives only for "
+                f"one commit, though the head does not start with the anchor")
+    if status not in ("behind", "diverged"):
         return (f"GitHub compared {anchor[:7]} with the head {head[:7]} and answered {status!r}, which is none of "
                 f"ahead, behind, diverged, identical")
     return f"the head {head[:7]} is {status} against the anchor {anchor[:7]}, so the anchor is not in its history"
@@ -312,7 +315,7 @@ def comment(args):
     outside = [f"{m['repo']}#{m['num']}: {why}" for (m, _, _), head in zip(targets, heads)
                if (why := outside_history(m["repo"], m["anchor"], head))]
     if outside:
-        sys.exit("posting nothing, because no anchor was shown to be the head or an ancestor of it: " + "; ".join(outside)
+        sys.exit("posting nothing, because an anchor was not shown to be the head or an ancestor of it: " + "; ".join(outside)
                  + ". Check that each anchor is the commit this round's brief anchors at, and post nothing by hand")
     login = run("gh", "api", "user", "--jq", ".login").strip()
     pending, doubled = [], []
