@@ -27,8 +27,22 @@ case "$*" in
       "$sha" "${STUB_HEAD_REF:-feat}" "${STUB_BASE:-main}" "${STUB_STATE:-OPEN}";;
   "api repos/$(cat "$d/last_repo")/compare/${STUB_BASE:-main}...$(cat "$d/last_sha") "*)
     case "$*" in *merge_base_commit*) echo "${STUB_MB:-bbbbbbb2222}";; *) echo "ddddddd3333";; esac;;
-  "api repos/$(cat "$d/last_repo")/compare/${STUB_FIX:-none}...$(cat "$d/last_sha") --jq .status")
-    echo "${STUB_FIX_STATUS:-ahead}";;
+  "api repos/$(cat "$d/last_repo")/compare/"*"...$(cat "$d/last_sha") --jq .status"|\
+  "api repos/$(cat "$d/last_repo")/compare/"*"...${STUB_FIX:-none} --jq .status")
+    # The fix against the head answers STUB_FIX_STATUS, and the last round's head against the fix STUB_OLD_STATUS.
+    # A status of 404 answers as GitHub does for a commit the repository lacks.
+    span="${2#repos/*/compare/}"
+    # Any other span is unexpected, so a script that compared the last head with the head rather than the fix fails.
+    fix="${STUB_FIX:-none}"; [ "$fix" = none ] && fix="$(cat "$d/last_sha")"
+    if [ "${span%%...*}" = "${STUB_FIX:-none}" ] && [ "${span#*...}" = "$(cat "$d/last_sha")" ]; then
+      st="${STUB_FIX_STATUS:-ahead}"
+    elif [ "${span#*...}" = "$fix" ]; then
+      st="${STUB_OLD_STATUS:-ahead}"
+    else
+      echo "stand-in gh: unexpected call: $*" >&2; exit 1
+    fi
+    [ "$st" = 404 ] && { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+    echo "$st";;
   *) echo "stand-in gh: unexpected call: $*" >&2; exit 1;;
 esac
 '''
@@ -400,20 +414,46 @@ with tempfile.TemporaryDirectory() as BIN:
     check('--next stops on a fix outside the head\'s history, and writes nothing', code != 0
           and 'not in the head\'s history' in out and 'diverged' in out
           and not os.path.exists(os.path.join(SCRATCH, 'fixture-diverged.md')))
-    code, out = nxt(fixture, 'fixture-unknown.md', '--fix', 'eeeeeee5555', 'ccccccc9999',
-                    **dict(merged, STUB_FIX='1234567'))
-    check('--next stops on a fix GitHub cannot compare', code != 0 and 'failed' in out
+    code, out = nxt(fixture, 'fixture-behind.md', '--fix', 'eeeeeee5555', 'ccccccc9999', STUB_FIX_STATUS='behind',
+                    **merged)
+    check('--next stops on a fix that comes after the head, and writes nothing', code != 0 and 'behind' in out
+          and not os.path.exists(os.path.join(SCRATCH, 'fixture-behind.md')))
+    code, out = nxt(fixture, 'fixture-unknown.md', '--fix', 'eeeeeee5555', 'ccccccc9999', STUB_FIX_STATUS='404',
+                    **merged)
+    check('--next stops on a fix GitHub cannot compare', code != 0 and 'Not Found' in out
           and not os.path.exists(os.path.join(SCRATCH, 'fixture-unknown.md')))
+    for status in ('diverged', 'behind'):
+        code, out = nxt(fixture, f'fixture-old-{status}.md', '--fix', 'eeeeeee5555', 'ccccccc9999',
+                        STUB_OLD_STATUS=status, **merged)
+        check(f'--next stops when the last head is {status} against the fix, as after a force push', code != 0
+              and "not in the fix's history" in out and status in out
+              and not os.path.exists(os.path.join(SCRATCH, f'fixture-old-{status}.md')))
+    code, out = nxt(fixture, 'fixture-old-pushed.md', 'ccccccc9999', STUB_OLD_STATUS='diverged',
+                    **dict(merged, STUB_FIX='none'))
+    check('--next stops on a force-pushed head with no --fix too', code != 0 and "not in the fix's history" in out)
+    code, out = nxt(fixture, 'fixture-old-unknown.md', 'ccccccc9999', STUB_OLD_STATUS='404',
+                    **dict(merged, STUB_FIX='none'))
+    check('--next stops when GitHub no longer holds the last head', code != 0 and 'Not Found' in out
+          and not os.path.exists(os.path.join(SCRATCH, 'fixture-old-unknown.md')))
+    code, out = nxt(fixture, 'fixture-unchanged.md', '--fix', 'aaaaaaa', 'ccccccc9999', STUB_FIX='aaaaaaa',
+                    STUB_OLD_STATUS='404', **{k: v for k, v in merged.items() if k != 'STUB_FIX'})
+    check('--next takes a fix that is the last head, for a round that changed nothing, with no compare of the two',
+          code == 0 and 'diff aaaaaaa aaaaaaa' in read(os.path.join(SCRATCH, 'fixture-unchanged.md')))
     code, out = nxt(fixture, 'fixture-other.md', '--fix', 'o/t#7=eeeeeee5555', 'ccccccc9999', **merged)
     check('--next refuses a fix for a pull request the brief does not list', code != 0 and 'no such pull request' in out)
-    code, out = nxt(fixture, 'fixture-twice.md', '--fix', 'eeeeeee5555', '--fix', 'o/r#5=eeeeeee5555', 'ccccccc9999',
+    code, out = nxt(fixture, 'fixture-twice.md', '--fix', 'o/r#5=eeeeeee5555', '--fix', 'O/R#5=eeeeeee5555', 'ccccccc9999',
                     **merged)
-    check('--next refuses two fixes for one pull request', code != 0)
+    check('--next refuses two fixes for one pull request', code != 0 and 'named twice' in out and 'FIX' in out)
     code, out = nxt(fixture, 'fixture-dangling.md', 'ccccccc9999', '--fix', **merged)
     check('--next refuses a --fix with no commit after it', code != 0 and '--fix' in out)
+    code, out = nxt(fixture, 'fixture-nohead.md', '--fix', 'eeeeeee5555', **merged)
+    check('--next refuses a --fix with no head', code != 0 and 'usage' in out)
+    code, out = run('o/r#5=/co', 'O/R#05')
+    check('the first form refuses one pull request named twice', code != 0 and 'named twice' in out
+          and '**o/r PR #5**' not in out)
     code, out = nxt(fixture, 'fixture-heads.md', 'o/r#5=ccccccc9999', 'o/r#5=ddddddd1234', **merged)
     check('--next refuses two heads for one pull request', code != 0 and 'named twice' in out)
-    code, out = nxt(fixture, 'fixture-same.md', '--fix', 'ccccccc', 'ccccccc9999', **dict(merged, STUB_FIX='unused'))
+    code, out = nxt(fixture, 'fixture-same.md', '--fix', 'ccccccc', 'ccccccc9999', **dict(merged, STUB_FIX='none'))
     check('--next takes a fix that is the head itself, with no compare call', code == 0
           and 'diff aaaaaaa ccccccc' in read(os.path.join(SCRATCH, 'fixture-same.md')))
 

@@ -26,8 +26,8 @@ an ancestor of it on GitHub, and every earlier comment by the same login, since
 anyone can comment on a public pull request. It posts on none of them if a head
 differs, an anchor lies outside the head's history, or an earlier comment has
 the same key with other text. The anchor check catches an anchor copied from
-another branch or another pull request, or one a force push dropped, after
-which the review starts again at the new head. It does not catch an earlier
+another branch or another pull request, or one a force push dropped, which
+`review-round.md`'s step 7 says how to handle. It does not catch an earlier
 round's anchor, which is still an ancestor. It skips a pull request that
 already carries this comment, so a retry posts only what is missing. GitHub takes no key on a comment, so this narrows
 the window for a double post rather than closing it. So it counts the copies
@@ -267,7 +267,8 @@ def outside_history(repo, anchor, head):
     if done.returncode:
         return f"GitHub could not compare {anchor[:7]} with the head {head[:7]}: {done.stderr.strip()}"
     status = done.stdout.strip()
-    if status in ("ahead", "identical"):
+    # Two commits that differ never compare "identical", so only "ahead" passes.
+    if status == "ahead":
         return None
     return f"the head {head[:7]} is {status} against the anchor {anchor[:7]}, so the anchor is not in its history"
 
@@ -304,7 +305,8 @@ def comment(args):
     outside = [f"{m['repo']}#{m['num']}: {why}" for (m, _, _), head in zip(targets, heads)
                if (why := outside_history(m["repo"], m["anchor"], head))]
     if outside:
-        sys.exit("posting nothing, because an anchor is neither the head nor an ancestor of it: " + "; ".join(outside))
+        sys.exit("posting nothing, because an anchor is neither the head nor an ancestor of it, which review-round.md's "
+                 "step 7 says how to handle: " + "; ".join(outside))
     login = run("gh", "api", "user", "--jq", ".login").strip()
     pending, doubled = [], []
     for m, text, heading in targets:

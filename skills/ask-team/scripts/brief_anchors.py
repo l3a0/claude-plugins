@@ -20,8 +20,10 @@ next round's brief to NEW_BRIEF. HEAD is the commit the next round anchors at,
 named for every pull request the brief lists, or bare when it lists one. FIX is
 the commit that holds the last round's fixes, where a later commit, such as a
 merge of the base, sits on top of it. It defaults to HEAD, and the run stops on
-a FIX that GitHub does not show as HEAD or an ancestor of it. The run changes
-four things and keeps every other line.
+a FIX that GitHub does not show as HEAD or an ancestor of it, and on a last
+round's head that is not FIX or an ancestor of it, as after a force push, since
+a diff from that head would not show the round's fixes. The run changes four
+things and keeps every other line.
 
 1. The round number at the end of the title goes up by one.
 2. Each item's first line is printed again from GitHub, as the first form
@@ -126,10 +128,17 @@ def placeholder(n):
 
 
 def print_anchors(specs):
-    for i, spec in enumerate(specs, 1):
+    matches, seen = [], set()
+    for spec in specs:
         m = SPEC.match(spec)
         if not m:
             sys.exit(f"not OWNER/REPO#N[=CHECKOUT]: {spec}")
+        key = f"{m['repo']}#{int(m['num'])}".lower()
+        if key in seen:
+            sys.exit(f"{spec}: that pull request is named twice")
+        seen.add(key)
+        matches.append(m)
+    for i, m in enumerate(matches, 1):
         line, _ = anchor(m["repo"], m["num"], m["checkout"])
         if i > 1:
             print()
@@ -221,12 +230,22 @@ def next_brief(previous, out, specs, fix_specs=()):
             sys.exit(f"{it['repo']} PR #{it['num']} is at {head[:7]} on GitHub, not {want[:7]}. Push the fix "
                      f"first, or name the head GitHub shows. Writing nothing")
         fix = fixes.get(f"{it['repo']}#{it['num']}".lower(), head)
-        if not same(head, fix):
-            # "ahead" means the head descends from the fix, as for the merge base above.
+        # "ahead" means the second commit descends from the first, as for the merge base above. Two commits that
+        # differ never compare "identical", so each check accepts only "ahead".
+        if same(head, fix):
+            fix = head
+        else:
             status = run("gh", "api", f"repos/{it['repo']}/compare/{fix}...{head}", "--jq", ".status")
-            if status not in ("ahead", "identical"):
+            if status != "ahead":
                 sys.exit(f"{it['repo']} PR #{it['num']}'s head {head[:7]} is {status} against the fix {fix[:7]}, so "
                          f"the fix is not in the head's history. Name a fixing commit the head holds. Writing nothing")
+        if not same(old, fix):
+            status = run("gh", "api", f"repos/{it['repo']}/compare/{old}...{fix}", "--jq", ".status")
+            if status != "ahead":
+                sys.exit(f"{it['repo']} PR #{it['num']}'s fix {fix[:7]} is {status} against round {finished}'s head "
+                         f"{old}, so that head is not in the fix's history, as after a force push, and a diff from it "
+                         f"would not show the round's fixes. The round reads the whole change, so write its brief by "
+                         f"hand. Writing nothing")
         rounds.append((finished, old))
         listed = ", ".join(f"round {r} `{h}`" for r, h in rounds)
         lines[i] = f"{it['n']}. {line} Earlier rounds read {listed}."
@@ -303,7 +322,8 @@ def main(argv):
     if argv[0] != "--next":
         print_anchors(argv)
         return
-    usage = "usage: brief_anchors.py --next PREVIOUS_BRIEF --out NEW_BRIEF [--fix OWNER/REPO#N=FIX ...] OWNER/REPO#N=HEAD [...]"
+    usage = ("usage: brief_anchors.py --next PREVIOUS_BRIEF --out NEW_BRIEF [--fix OWNER/REPO#N=FIX ...] "
+             "OWNER/REPO#N=HEAD [...], or --next PREVIOUS_BRIEF --out NEW_BRIEF [--fix FIX] HEAD")
     if len(argv) < 5 or argv[2] != "--out":
         sys.exit(usage)
     specs, fixes, rest = [], [], argv[4:]
