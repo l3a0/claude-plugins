@@ -33,14 +33,17 @@ exactly one. A closing comment posts the same way, with R the round it closes
 and ANCHOR the commit that round read. It refuses a first line that reads
 `Review complete` and is not exactly `## Review complete`, such as one with a
 space before or after it or another heading level, because a build board
-counts only that whole line.
+counts only that whole line. Where the round's own comment already opens with
+`## Review complete` under the same round and anchor, that comment closes the
+review, so it posts nothing and says so.
 
 `cost` posts a round's `## Cost` comment on the issue the main pull request
 tracks. It refuses a file whose first line is not exactly `## Cost`, which is
 the only form the `## Cost total` sweep reads, or whose next non-blank line is
 not `Review round R, of ANCHOR, on <the pull request's URL>`, because that line
 is how a retry recognises the post. It takes the issue on trust, since a pull
-request that is only part of an issue names it in no field GitHub returns. It skips the
+request that is only part of an issue names it only in its body's text, which
+the script does not parse. It skips the
 post when the issue already carries a comment by the same login with that
 heading and line, stops when one carries them with other text, and counts the
 copies after posting, as `comment` does.
@@ -66,10 +69,10 @@ FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 ITEM = re.compile(r"^(\d+)\. (.*)$")
 LIST_MARK = re.compile(r"^\s*(\d+[.)]|[-*+])(\s|$)")
 FINAL = "## Review complete"
-NEAR_FINAL = re.compile(r"^\s*#{1,6}\s*Review[\s-]+complete\b", re.IGNORECASE)
+NEAR_FINAL = re.compile(r"^#{1,6}\s*Review[\W_]*complete\b", re.IGNORECASE)
 COST_HEADING = "## Cost"
 COST_LINE = re.compile(r"^Review round (?P<round>\d+), of `?(?P<anchor>[0-9a-f]{7,40})`?, on (?P<link>.+?)\s*$")
-PULL_LINK = re.compile(r"github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/(?P<num>\d+)(?!\d)", re.IGNORECASE)
+PULL_LINK = re.compile(r"https://github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/(?P<num>\d+)(?!\d)", re.IGNORECASE)
 CLOSING = re.compile(r"^(close[sd]?|fix(es|ed)?|resolve[sd]?|part of)\s+(no issue|([\w.-]+/[\w.-]+)?#\d+)", re.IGNORECASE)
 SECTION = "## Revision"
 
@@ -316,6 +319,9 @@ def comment(args):
     for m, text, heading in targets:
         name = f"{m['repo']}#{m['num']}"
         mine = copies(m, heading, args.round, login)
+        if heading == FINAL and any(not same_text(body, text) for body in mine):
+            sys.exit(f"posting nothing, because {name} already carries a {FINAL!r} comment on round "
+                     f"{args.round} and {m['anchor'][:7]}, which closes the review. Post no second one")
         if any(not same_text(body, text) for body in mine):
             sys.exit(f"posting nothing, because {name} already carries this heading, round and anchor with "
                      "different text. Report it, and post by hand once it is settled")

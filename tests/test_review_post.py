@@ -40,10 +40,10 @@ elif args[1] == 'edit' and args[5] == '--body-file' and args[0] == 'pr':
     if os.environ.get('STUB_LOST') == 'edit': sys.exit('stand-in gh: connection lost')
 elif args[1] == 'comment' and args[5] == '--body-file':
     if os.environ.get('STUB_COMMENT_FAIL') == args[2]: sys.exit('stand-in gh: comment refused')
-    pr['comments'].append({'author': {'login': login}, 'body': open(args[6]).read()})
+    pr['comments'].append({'author': {'login': login}, 'body': open(args[6], newline='').read()})
     json.dump(pr, open(path, 'w'))
     if os.environ.get('STUB_DOUBLE') == args[2]:
-        pr['comments'].append({'author': {'login': login}, 'body': open(args[6]).read()})
+        pr['comments'].append({'author': {'login': login}, 'body': open(args[6], newline='').read()})
         json.dump(pr, open(path, 'w'))
     if os.environ.get('STUB_LOST') == 'comment': sys.exit('stand-in gh: connection lost')
     print('https://github.com/' + args[4] + ('/issues/' if args[0] == 'issue' else '/pull/') + args[2] + '#issuecomment-1')
@@ -566,18 +566,27 @@ with tempfile.TemporaryDirectory() as ROOT:
     code, out = post(MAIN, '--dry-run')
     check('a dry run posts nothing', state(5)['comments'] == [] and 'would post' in out)
 
-    for word in ('complete', '²', '-1'):
+    final_round = os.path.join(ROOT, 'final-round.md')
+    with open(final_round, 'w') as f:
+        f.write(f'## Review complete\n\nCloses round 3, of `{A}`, at `{"a" * 7}`, and links the round.\n')
+    seed(5, head=head5, comments=[f'## Review complete\n\nRound 3, of `{A}`, at `{"a" * 7}`, found nothing.\n'])
+    code, out = post(f'o/r#5={head5}={A}={final_round}')
+    check('a closing comment after a round comment that already closes the review posts nothing and says so',
+          code != 0 and 'which closes the review' in out and len(state(5)['comments']) == 1)
+    for word in ('complete', '²', '-1', '٣'):
+        seed(5, head=head5)
         code, out = post(MAIN, round_no=word)
         check(f'a round given as {word!r} names the round to give', code != 0 and 'the round it closes' in out and 'Traceback' not in out and state(5)['comments'] == [])
     crlf = os.path.join(ROOT, 'crlf.md')
     with open(crlf, 'w', newline='') as f:
         f.write(f'## Review complete\r\n\r\nCloses round 3, of `{A}`, at `{"a" * 7}`.\r\n')
-    seed(5, head=head5, comments=[f'## Review complete\n\nCloses round 3, of `{A}`, at `{"a" * 7}`.\n'])
+    seed(5, head=head5, comments=[f'## Review complete\r\n\r\nCloses round 3, of `{A}`, at `{"a" * 7}`.\r\n'])
     code, out = post(f'o/r#5={head5}={A}={crlf}')
     check('a copy that differs only in line endings is skipped', code == 0 and 'skipped' in out and len(state(5)['comments']) == 1)
     near = os.path.join(ROOT, 'near.md')
     for heading in ('## Review complete, round 3', '### Review complete', '## review complete', '## Review complete ',
-                    ' ## Review complete', '## Review  complete', '## Review-complete'):
+                    ' ## Review complete', '## Review  complete', '## Review-complete', '## Review: complete',
+                    '## Review — complete', '## Reviewcomplete'):
         with open(near, 'w') as f:
             f.write(f'{heading}\n\nCloses round 3, of `{A}`, at `{"a" * 7}`.\n')
         seed(5, head=head5)
@@ -670,6 +679,9 @@ with tempfile.TemporaryDirectory() as ROOT:
                        ('a pull request named in its short form', COST.replace('https://github.com/o/r/pull/5', 'o/r#5')),
                        ('a file that links the pull request of another repository', COST.replace('o/r/pull/5', 'o/s/pull/5')),
                        ('a file that links an issue of that number', COST.replace('pull/5', 'issues/5')),
+                       ('a link over plain http', COST.replace('https://', 'http://')),
+                       ('a link with no scheme', COST.replace('https://github.com', 'github.com')),
+                       ('a link to another host', COST.replace('https://github.com', 'https://evilgithub.com')),
                        ('a round line with words before it', COST.replace('\nReview round', '\nDraft: Review round')),
                        ('an empty file', '')):
         seed_issue(40)
