@@ -82,6 +82,10 @@ elif args[1] == 'comment' and args[5] == '--body-file':
     if os.environ.get('STUB_DOUBLE') == args[2]:
         pr['comments'].append({'author': {'login': login}, 'body': open(args[6], newline='').read()})
         json.dump(pr, open(path, 'w'))
+    if os.environ.get('STUB_RACE') == args[2]:
+        # Another run's cost comment for the same round and pull request lands under another anchor.
+        pr['comments'].append({'author': {'login': login}, 'body': open(args[6], newline='').read().replace('`bbbbbbb`', '`ccccccc`')})
+        json.dump(pr, open(path, 'w'))
     if os.environ.get('STUB_LOST') == 'comment': sys.exit('stand-in gh: connection lost')
     print('https://github.com/' + args[4] + ('/issues/' if args[0] == 'issue' else '/pull/') + args[2] + '#issuecomment-1')
 else:
@@ -755,6 +759,10 @@ with tempfile.TemporaryDirectory() as ROOT:
         seed_issue(40, [other])
         code, out = price()
         check(f'a cost comment for another {label} under another anchor does not stop the post', code == 0 and len(issue(40)) == 2)
+    seed_issue(40)
+    code, out = price(STUB_RACE='40')
+    check('a cost comment under another anchor that lands as the post does is reported', code != 0
+          and 'now also carries' in out and 'Keep the copy whose anchor' in out and len(issue(40)) == 2)
     seed_issue(40, [COST.replace(f'`{A}`', f'`{B}`')], login='stranger')
     code, out = price()
     check("another login's cost comment under another anchor does not stop the post", code == 0 and len(issue(40)) == 2)
@@ -903,7 +911,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(91, head='3' * 40, ancestors=('4' * 40,))
     branches({'o/r': {'main': tip, 'claude/x-1': tip, 'dev': '3' * 40, 'x#1': '3' * 40, 'x': tip,
                       'odd': {'out': 'odd\nnot a commit'}, 'framed': {'out': 'framed\nx' + '1' * 40},
-                      'short': {'out': 'short\n' + '1' * 7}, 'one': {'out': tip}}})
+                      'short': {'out': 'short\n' + '1' * 7}, 'one': {'out': tip}, 'old': {'out': 'new\n' + tip}}})
     code, out = gate(f'o/r@main={A}={names(A)}')
     check('check passes an anchor in a branch\'s history', code == 0 and f'o/r@main: the anchor {A} is an ancestor of the head {tip[:7]}' in out)
     code, out = gate(f'o/r@claude/x-1={tip[:7]}={names(tip)}')
@@ -914,6 +922,10 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('check reads a branch whose name holds a hash, rather than the branch before the hash', code == 0 and 'ancestor of the head 3333333' in out)
     code, out = gate(f'o/r@nosuch/../main={A}={names(A)}')
     check('check fails a branch GitHub answers for under another name', code != 0 and "answered for the branch 'main'" in out)
+    code, out = gate(f'o/r@old={A}={names(A)}')
+    check('check fails a renamed branch that GitHub answers for under its new name', code != 0 and "answered for the branch 'new', not 'old'" in out)
+    code, out = gate(f'o/r@main={A}={names(A)}')
+    check('check says a branch target\'s file names the anchor, not the head', code == 0 and 'names the anchor, so it may post' in out)
     code, out = gate(f'o/r@main={A}={names("4" * 7)}')
     check('check fails a file that does not name the anchor on a branch', code != 0 and f'does not name the anchor {A}' in out)
     for label, branch in (('gives no commit', 'odd'), ('gives a commit inside other text', 'framed'),

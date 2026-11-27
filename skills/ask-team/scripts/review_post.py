@@ -55,8 +55,10 @@ OWNER/REPO@BRANCH=ANCHOR=FILE it reads the branch's tip from GitHub, and checks
 that ANCHOR is that tip or an ancestor of it and that FILE names ANCHOR, which
 suits a plan read against `main`. It encodes the branch's name in the request
 and refuses an answer for any other branch, so a name holding `#` reads that
-branch. It exits non-zero naming each file, head and branch that fails, and
-when those all pass, each anchor that fails. It reads no comments, because
+branch. It stops at the first target it cannot parse or whose file is
+missing. Otherwise it exits non-zero naming each file that does not name its
+anchor or head, each head and each branch that fails, and when those all
+pass, each anchor that fails. It reads no comments, because
 each route keys its retry by its own lines. It cannot show that the file it
 read is the file then posted, and like `comment` it reads the file for the
 anchor and head by substring.
@@ -72,8 +74,8 @@ post when the issue already carries a comment by the same login with that
 heading and line, stops when one carries them with other text, and counts the
 copies after posting, as `comment` does. It also stops when the issue carries
 a `## Cost` comment by the same login for this round and pull request under
-another anchor, because a `## Cost total` would count the round twice. It
-runs no check that the anchor is in the pull request's history, because only
+another anchor, because a `## Cost total` would count the round twice, and
+reads again after posting for one that landed meanwhile. It runs no check that the anchor is in the pull request's history, because only
 `cost` reads that anchor, to recognise a retry. In the usual order the round's
 comment posts first, through `comment`, which checks it. Where the round's
 comment did not post, such as after a force push dropped the anchor, whether
@@ -463,7 +465,8 @@ def check(args):
         sys.exit("post nothing, because an anchor was not shown to be the head or an ancestor of it: " + "; ".join(outside))
     for m, (name, tip) in zip(parsed, tips):
         where = "is the head" if tip.startswith(m["anchor"]) else "is an ancestor of the head"
-        print(f"{name}: the anchor {m['anchor'][:7]} {where} {tip[:7]}, and {m['file']} names them, so it may post")
+        named = "names them" if "num" in m.groupdict() else "names the anchor"
+        print(f"{name}: the anchor {m['anchor'][:7]} {where} {tip[:7]}, and {m['file']} {named}, so it may post")
 
 
 def cost_key(text):
@@ -482,6 +485,13 @@ def cost_key(text):
 def cost_copies(repo, num, key, login):
     return [c["body"] for c in view(repo, num, "comments", kind="issue")
             if (c.get("author") or {}).get("login") == login and cost_key(c["body"]) == key]
+
+
+def other_anchors(repo, num, key, login):
+    """Return the anchors of this login's ## Cost comments for the same round and pull request under another anchor."""
+    return {k[1] for c in view(repo, num, "comments", kind="issue")
+            if (c.get("author") or {}).get("login") == login and (k := cost_key(c["body"]))
+            and k[0] == key[0] and k[2:] == key[2:] and k[1] != key[1]}
 
 
 def cost(args):
@@ -503,13 +513,11 @@ def cost(args):
                  "so a retry could not recognise it")
     repo, num, name = issue["repo"], issue["num"], args.issue
     login = run("gh", "api", "user", "--jq", ".login").strip()
-    others = {k[1] for c in view(repo, num, "comments", kind="issue")
-              if (c.get("author") or {}).get("login") == login and (k := cost_key(c["body"]))
-              and k[0] == key[0] and k[2:] == key[2:] and k[1] != key[1]}
+    others = other_anchors(repo, num, key, login)
     if others:
         sys.exit(f"posting nothing, because {name} already carries round {args.round}'s {COST_HEADING} comment for "
                  f"{args.pull} under the anchor {', '.join(sorted(others))}, not {key[1]}, and a {COST_HEADING} total "
-                 "would count the round twice. Report it")
+                 "would count the round twice. Edit that comment's round line by hand, and report it")
     mine = cost_copies(repo, num, key, login)
     if any(not same_text(body, text) for body in mine):
         sys.exit(f"posting nothing, because {name} already carries this round's {COST_HEADING} comment with "
@@ -525,6 +533,11 @@ def cost(args):
     print(f"{name}: posted {write('gh', 'issue', 'comment', num, '-R', repo, '--body-file', args.file)}")
     if len(cost_copies(repo, num, key, login)) != 1:
         sys.exit(f"{name} should hold this comment once and does not. Delete any extra copy, and report it")
+    others = other_anchors(repo, num, key, login)
+    if others:
+        sys.exit(f"{name} now also carries round {args.round}'s {COST_HEADING} comment for {args.pull} under the anchor "
+                 f"{', '.join(sorted(others))}, and a {COST_HEADING} total would count the round twice. Keep the copy "
+                 "whose anchor the round's brief names, delete the other, and report it")
 
 
 def round_number(value):
