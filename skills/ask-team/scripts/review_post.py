@@ -4,6 +4,7 @@
 Usage:
     review_post.py revision OWNER/REPO#N --scratch DIR --file PATH [--replace ITEM] [--dry-run]
     review_post.py comment --round R OWNER/REPO#N=HEAD=ANCHOR=FILE [...] [--dry-run]
+    review_post.py cost --round R OWNER/REPO#ISSUE --pull OWNER/REPO#N --anchor ANCHOR --file PATH [--dry-run]
 
 `revision` adds the one line in PATH to the body's `## Revision` section as a
 numbered item, or replaces item ITEM, and adds the section before the closing lines and footer
@@ -28,7 +29,18 @@ text. It skips a pull request that already carries this comment, so a retry
 posts only what is missing. GitHub takes no key on a comment, so this narrows
 the window for a double post rather than closing it. So it counts the copies
 after posting, and exits non-zero naming any pull request that does not hold
-exactly one.
+exactly one. A closing comment posts the same way, with R the round it closes
+and ANCHOR the commit that round read. It refuses a heading that starts
+`Review complete` and is not exactly `## Review complete`, because a build
+board counts only that whole first line.
+
+`cost` posts a round's `## Cost` comment on the issue the main pull request
+tracks. It refuses a file whose first line is not `## Cost` or whose next
+non-blank line is not `Review round R, of ANCHOR, on <link to the pull
+request>`, because that line is how a retry recognises the post. It skips the
+post when the issue already carries a comment by the same login with that
+heading and line, stops when one carries them with other text, and counts the
+copies after posting, as `comment` does.
 
 A write that fails says the outcome is unknown, since the request may have
 landed. Rerun the same command, which looks before it writes. The tests run
@@ -50,6 +62,11 @@ REVISION = re.compile(r"^ {0,3}#{1,6}\s+Revision\s*$")
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 ITEM = re.compile(r"^(\d+)\. (.*)$")
 LIST_MARK = re.compile(r"^\s*(\d+[.)]|[-*+])(\s|$)")
+FINAL = "## Review complete"
+NEAR_FINAL = re.compile(r"^ {0,3}#{1,6}\s*Review complete\b", re.IGNORECASE)
+COST_HEADING = "## Cost"
+COST_LINE = re.compile(r"^Review round (?P<round>\d+), of `?(?P<anchor>[0-9a-f]{7,40})`?, on (?P<link>.+?)\s*$")
+PULL_LINK = re.compile(r"github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/(?P<num>\d+)(?!\d)", re.IGNORECASE)
 CLOSING = re.compile(r"^(close[sd]?|fix(es|ed)?|resolve[sd]?|part of)\s+(no issue|([\w.-]+/[\w.-]+)?#\d+)", re.IGNORECASE)
 SECTION = "## Revision"
 
@@ -69,9 +86,9 @@ def write(*args, where=""):
     return done.stdout.strip()
 
 
-def view(repo, num, field):
+def view(repo, num, field, kind="pr"):
     # --jq would print one newline more than the string holds, so parse the JSON.
-    return json.loads(run("gh", "pr", "view", num, "-R", repo, "--json", field))[field]
+    return json.loads(run("gh", kind, "view", num, "-R", repo, "--json", field))[field]
 
 
 def outside_fences(lines):
@@ -263,6 +280,9 @@ def comment(args):
         with open(m["file"], encoding="utf-8") as f:
             text = f.read()
         heading = first_line(text)
+        if NEAR_FINAL.match(heading) and heading != FINAL:
+            sys.exit(f"posting nothing, because {m['file']} starts {heading!r}, and a build board counts a "
+                     f"closing comment only when its whole first line is {FINAL!r}")
         if not HEADING.match(heading) or not carries(text, heading, args.round, m["anchor"]):
             sys.exit(f"posting nothing, because {m['file']} does not start with a heading and name "
                      f"round {args.round} and {m['anchor'][:7]}, so a retry could not recognise it")
@@ -305,6 +325,67 @@ def comment(args):
         sys.exit(f"{', '.join(doubled)} should hold this comment once and does not. Delete any extra copy, and report it")
 
 
+def cost_key(text):
+    """Return (round, anchor's first seven, repo, number) from a ## Cost comment, or None."""
+    lines = text.replace("\r", "").split("\n")
+    if lines[0].strip() != COST_HEADING:
+        return None
+    rest = [line for line in lines[1:] if line.strip()]
+    m = COST_LINE.match(rest[0]) if rest else None
+    link = PULL_LINK.search(m["link"]) if m else None
+    if not link:
+        return None
+    return int(m["round"]), m["anchor"][:7], link["repo"].lower(), int(link["num"])
+
+
+def cost_copies(repo, num, key, login):
+    return [c["body"] for c in view(repo, num, "comments", kind="issue")
+            if (c.get("author") or {}).get("login") == login and cost_key(c["body"]) == key]
+
+
+def cost(args):
+    issue, pull = SPEC.match(args.issue), SPEC.match(args.pull)
+    if not issue:
+        sys.exit(f"not OWNER/REPO#N: {args.issue}")
+    if not pull:
+        sys.exit(f"not OWNER/REPO#N: {args.pull}")
+    if not re.fullmatch(r"[0-9a-f]{7,40}", args.anchor):
+        sys.exit(f"not a commit of 7 to 40 hex characters: {args.anchor}")
+    if not os.path.isfile(args.file):
+        sys.exit(f"no comment file at {args.file}")
+    with open(args.file, encoding="utf-8") as f:
+        text = f.read()
+    key = (args.round, args.anchor[:7], pull["repo"].lower(), int(pull["num"]))
+    if cost_key(text) != key:
+        sys.exit(f"posting nothing, because {args.file} does not start with the line {COST_HEADING!r} and then "
+                 f"'Review round {args.round}, of `{args.anchor[:7]}`, on <link to {args.pull}>', "
+                 "so a retry could not recognise it")
+    repo, num, name = issue["repo"], issue["num"], args.issue
+    login = run("gh", "api", "user", "--jq", ".login").strip()
+    mine = cost_copies(repo, num, key, login)
+    if any(body.strip() != text.strip() for body in mine):
+        sys.exit(f"posting nothing, because {name} already carries this round's {COST_HEADING} comment with "
+                 "different text. Edit that comment by hand, and report it")
+    if len(mine) > 1:
+        sys.exit(f"{name} should hold this comment once and does not. Delete any extra copy, and report it")
+    if mine:
+        print(f"{name}: already carries this comment, so skipped")
+        return
+    if args.dry_run:
+        print(f"{name}: would post {args.file}")
+        return
+    print(f"{name}: posted {write('gh', 'issue', 'comment', num, '-R', repo, '--body-file', args.file)}")
+    if len(cost_copies(repo, num, key, login)) != 1:
+        sys.exit(f"{name} should hold this comment once and does not. Delete any extra copy, and report it")
+
+
+def round_number(value):
+    if not value.isdigit():
+        raise argparse.ArgumentTypeError(
+            f"{value!r} is not a round's number. A closing comment names the round it closes, as in --round 12")
+    return int(value)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -319,9 +400,18 @@ def main():
 
     post = commands.add_parser("comment")
     post.add_argument("targets", nargs="+")
-    post.add_argument("--round", type=int, required=True)
+    post.add_argument("--round", type=round_number, required=True)
     post.add_argument("--dry-run", action="store_true")
     post.set_defaults(handler=comment)
+
+    price = commands.add_parser("cost")
+    price.add_argument("issue")
+    price.add_argument("--round", type=round_number, required=True)
+    price.add_argument("--pull", required=True)
+    price.add_argument("--anchor", required=True)
+    price.add_argument("--file", required=True)
+    price.add_argument("--dry-run", action="store_true")
+    price.set_defaults(handler=cost)
 
     args = parser.parse_args()
     args.handler(args)

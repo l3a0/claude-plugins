@@ -27,13 +27,13 @@ if args[:2] == ['api', 'user']:
     if args[2:4] != ['--jq', '.login']: fail()
     print(login)
     sys.exit(0)
-if args[0] != 'pr' or args[3] != '-R': fail()
-path = os.path.join(state, args[4].replace('/', '-') + '-' + args[2] + '.json')
+if args[0] not in ('pr', 'issue') or args[3] != '-R': fail()
+path = os.path.join(state, ('issue-' if args[0] == 'issue' else '') + args[4].replace('/', '-') + '-' + args[2] + '.json')
 if not os.path.exists(path): fail()
 pr = json.load(open(path))
 if args[1] == 'view' and args[5] == '--json':
     print(json.dumps({args[6]: pr[args[6]]}))
-elif args[1] == 'edit' and args[5] == '--body-file':
+elif args[1] == 'edit' and args[5] == '--body-file' and args[0] == 'pr':
     pr['body'] = open(args[6], newline='').read() + os.environ.get('STUB_EDIT_ADDS', '')
     pr['edits'] = pr.get('edits', 0) + 1
     json.dump(pr, open(path, 'w'))
@@ -46,7 +46,7 @@ elif args[1] == 'comment' and args[5] == '--body-file':
         pr['comments'].append({'author': {'login': login}, 'body': open(args[6]).read()})
         json.dump(pr, open(path, 'w'))
     if os.environ.get('STUB_LOST') == 'comment': sys.exit('stand-in gh: connection lost')
-    print('https://github.com/' + args[4] + '/pull/' + args[2] + '#issuecomment-1')
+    print('https://github.com/' + args[4] + ('/issues/' if args[0] == 'issue' else '/pull/') + args[2] + '#issuecomment-1')
 else:
     fail()
 '''
@@ -565,5 +565,101 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5)
     code, out = post(MAIN, '--dry-run')
     check('a dry run posts nothing', state(5)['comments'] == [] and 'would post' in out)
+
+    code, out = post(MAIN, round_no='complete')
+    check('a word for the round names the round to give', code != 0 and 'names the round it closes' in out and state(5)['comments'] == [])
+    near = os.path.join(ROOT, 'near.md')
+    for heading in ('## Review complete, round 3', '### Review complete', '## review complete'):
+        with open(near, 'w') as f:
+            f.write(f'{heading}\n\nCloses round 3, of `{A}`, at `{"a" * 7}`.\n')
+        seed(5, head=head5)
+        code, out = post(f'o/r#5={head5}={A}={near}')
+        check(f'refuses a closing heading written {heading!r}', code != 0 and 'whole first line' in out and state(5)['comments'] == [])
+    with open(near, 'w') as f:
+        f.write(f'## Review completeness, round 3\n\nRound 3, of `{A}`, at `{"a" * 7}`.\n')
+    code, out = post(f'o/r#5={head5}={A}={near}')
+    check('a heading that only shares the first letters still posts', code == 0 and len(state(5)['comments']) == 1)
+
+    # The cost form posts on an issue, which the stand-in keeps in a file of its own, so a call to `gh pr`
+    # with the issue's number fails as unexpected.
+    def seed_issue(num, comments=(), login='me'):
+        with open(os.path.join(STATE, f'issue-o-r-{num}.json'), 'w') as f:
+            json.dump({'comments': [{'author': {'login': login}, 'body': c} for c in comments]}, f)
+
+    def issue(num):
+        with open(os.path.join(STATE, f'issue-o-r-{num}.json')) as f:
+            return json.load(f)['comments']
+
+    def write_cost(text):
+        fd, path = tempfile.mkstemp(prefix='cost-', suffix='.md', dir=ROOT)
+        with os.fdopen(fd, 'w') as f:
+            f.write(text)
+        return path
+
+    COST = f'## Cost\n\nReview round 3, of `{A}`, on https://github.com/o/r/pull/5\n\n1. Four review lenses: at least 2.18 US dollars.\n'
+    cost_file = write_cost(COST)
+
+    def price(*extra, round_no='3', anchor=A, pull='o/r#5', file=None, **env):
+        return run('cost', 'o/r#40', '--round', round_no, '--pull', pull, '--anchor', anchor,
+                   '--file', file or cost_file, *extra, **env)
+
+    seed_issue(40)
+    code, out = price()
+    check('posts the cost comment on the issue', code == 0 and issue(40) == [{'author': {'login': 'me'}, 'body': COST}] and '/issues/40' in out)
+    code, out = price()
+    check('a retried cost post posts nothing more', code == 0 and len(issue(40)) == 1 and 'skipped' in out)
+
+    seed_issue(40, [COST.replace('2.18', '2.19')])
+    code, out = price()
+    check('a cost comment with other text stops the post', code != 0 and 'different text' in out and len(issue(40)) == 1)
+    seed_issue(40, [COST.replace('2.18', '2.19')], login='stranger')
+    code, out = price()
+    check("another login's cost comment does not stop the post", code == 0 and len(issue(40)) == 2)
+    for other in (COST.replace('round 3', 'round 2'), COST.replace(f'`{A}`', f'`{B}`'),
+                  COST.replace('pull/5', 'pull/55'), COST.replace('## Cost\n', '## Cost total\n')):
+        seed_issue(40, [other])
+        code, out = price()
+        check('a cost comment for another round, anchor, pull request or heading does not block the post',
+              code == 0 and len(issue(40)) == 2)
+
+    seed_issue(40)
+    linked = write_cost(COST.replace('https://github.com/o/r/pull/5', '[PR #5](https://github.com/o/r/pull/5)'))
+    code, out = price(file=linked)
+    check('reads a Markdown link to the pull request', code == 0 and len(issue(40)) == 1)
+    code, out = price(anchor=A + 'b' * 33, file=linked)
+    check('a full anchor matches a cost comment naming seven characters', code == 0 and 'skipped' in out)
+
+    seed_issue(40)
+    for name, text in (('a file without the heading', COST.replace('## Cost\n', '## Costs\n')),
+                       ('a file whose round differs', COST.replace('round 3', 'round 4')),
+                       ('a file whose anchor differs', COST.replace(f'`{A}`', f'`{B}`')),
+                       ('a file that links another pull request', COST.replace('pull/5', 'pull/6')),
+                       ('a file whose round line is not the first after the heading', COST.replace('\n\nReview', '\n\nTo date.\n\nReview')),
+                       ('an empty file', '')):
+        code, out = price(file=write_cost(text))
+        check(f'refuses {name}', code != 0 and 'could not recognise it' in out and issue(40) == [] and 'Traceback' not in out)
+
+    seed_issue(40, [COST, COST])
+    code, out = price()
+    check('reports a cost comment already there twice', code != 0 and 'should hold this comment once' in out and len(issue(40)) == 2)
+    seed_issue(40)
+    code, out = price(STUB_DOUBLE='40')
+    check('a cost post that landed twice is reported', code != 0 and 'should hold this comment once' in out)
+    seed_issue(40)
+    code, out = price(STUB_LOST='comment')
+    check('a lost reply on a cost post says the outcome is unknown', code != 0 and 'outcome is unknown' in out)
+    code, out = price()
+    check('the retry after a lost cost reply posts nothing more', code == 0 and len(issue(40)) == 1 and 'skipped' in out)
+    seed_issue(40)
+    code, out = price('--dry-run')
+    check('a cost dry run posts nothing', issue(40) == [] and 'would post' in out)
+    code, out = price(pull='not-a-pull')
+    check('refuses a malformed pull request', code != 0 and 'OWNER/REPO#N' in out)
+    code, out = price(anchor='xyz')
+    check('refuses a malformed anchor', code != 0 and 'hex' in out)
+    code, out = price(file=os.path.join(ROOT, 'missing.md'))
+    check('refuses a cost file that does not exist', code != 0 and 'no comment file' in out)
+    code, out = run('cost', 'o/r#41', '--round', '3', '--pull', 'o/r#5', '--anchor', A, '--file', cost_file)
+    check('a cost post names the issue it was given', code != 0 and 'unexpected call' in out)
 
 sys.exit(1 if failures else 0)
