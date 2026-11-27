@@ -24,13 +24,18 @@ so the line in PATH is the line the section holds, and a retry finds it.
 in PATH, and keeps its heading. HEADING is the heading's whole line, such as
 `## Decision`. The section runs from that line to the next heading of the same
 or a higher level, or to the closing lines and footer when none follows.
-Headings inside code fences do not count. It sends nothing on a body where the
-heading's words appear on no heading or on more than one, at any level, or
-where PATH holds a heading of the section's level or higher, which would end
-the section early. Like `revision`, it saves the body as read, sends only when
-every changed line sits inside the section and a second run would change
-nothing, and reads the body back. So a retry changes nothing. It edits
-`## Revision` too, though `revision` is the command for adding one line there.
+Headings inside code fences do not count, and only a line that is wholly a
+closing line, such as `Closes #12`, starts the closing lines. It finds the
+heading by its whole line, ignoring trailing spaces. It sends nothing on a body
+where that line appears more than once, or, when it appears nowhere, where the
+heading's words appear on no heading or on more than one at any level, or on
+one written another way, which it names. It also refuses a HEADING that is not
+a heading line, `## Revision`, whose numbered lines `revision` keeps, and a
+PATH that holds a heading of the section's level or higher outside a code
+fence, which would end the section early. Like `revision`, it saves the body
+as read, sends only when every changed line sits inside the section, read
+from the body as it was, and a second run would change nothing, and reads the
+body back. So a retry changes nothing.
 
 `comment` takes each comment's heading from its file's first line. It refuses a
 file that does not start with a heading and name the round, its anchor and the
@@ -305,23 +310,46 @@ def revision(args):
 
 
 def heading_level(line):
-    m = re.match(r"^ {0,3}(#{1,6})(\s+(.*?))?\s*#*\s*$", line.rstrip("\r"))
-    return (len(m[1]), (m[3] or "").strip().lower()) if m and HEADING.match(line) else None
+    # A closing run of #s counts only after a space, so "## Using C#" keeps its words.
+    m = re.match(r"^ {0,3}(#{1,6})(?:\s+(.*?))?(?:\s+#+)?\s*$", line.rstrip("\r"))
+    return (len(m[1]), (m[2] or "").strip().lower()) if m and HEADING.match(line) else None
+
+
+CLOSING_LINE = re.compile(r"^(close[sd]?|fix(es|ed)?|resolve[sd]?|part of)\s+(no issue|([\w.-]+/[\w.-]+)?#\d+)\.?\s*$",
+                          re.IGNORECASE)
+
+
+def section_end_limit(lines):
+    """Return where the closing lines and footer start, counting only lines that are wholly a closing line."""
+    def trim(end):
+        while end and not lines[end - 1].strip():
+            end -= 1
+        return end
+
+    end = trim(len(lines))
+    if end and lines[end - 1].startswith("🤖"):
+        end = trim(end - 1)
+    while end and CLOSING_LINE.match(lines[end - 1].strip()):
+        end = trim(end - 1)
+    return end
 
 
 def section_bounds(lines, heading):
     """Return (heading index, end) of the section the heading names, or exit naming why not."""
     wanted = heading_level(heading)
     visible = list(outside_fences(lines))
-    named = [i for i, line in visible if (found := heading_level(line)) and found[1] == wanted[1]]
-    if len(named) != 1:
-        sys.exit(f"the body has {len(named)} headings reading {wanted[1]!r}, so the section is "
-                 f"{'missing' if not named else 'ambiguous'}. Edit it by hand")
-    start = named[0]
-    if lines[start].rstrip("\r") != heading:
-        sys.exit(f"the heading is written {lines[start].rstrip()!r}, not {heading!r}. Name it as written")
-    level = wanted[0]
-    end = insertion_point(lines) if start < insertion_point(lines) else len(lines)
+    exact = [i for i, line in visible if line.rstrip() == heading.rstrip()]
+    if len(exact) != 1:
+        named = [i for i, line in visible if (found := heading_level(line)) and found[1] == wanted[1]]
+        if len(exact) > 1 or len(named) > 1:
+            sys.exit(f"the body has {max(len(exact), len(named))} headings reading {wanted[1]!r}, so the section is "
+                     "ambiguous. Edit it by hand")
+        if not named:
+            sys.exit(f"the body has no heading reading {wanted[1]!r}, so the section is missing. Edit it by hand")
+        sys.exit(f"the heading is written {lines[named[0]].rstrip()!r}, not {heading.rstrip()!r}. Name it as written")
+    start, level = exact[0], wanted[0]
+    limit = section_end_limit(lines)
+    end = limit if start < limit else len(lines)
     for i, line in visible:
         if start < i < end and (found := heading_level(line)) and found[0] <= level:
             end = i
@@ -339,6 +367,20 @@ def replace_section(body, heading, text):
     return None if new == lines else "\n".join(new)
 
 
+def changed_outside_section(old, new, heading):
+    """True when new differs from old outside the section, with the bounds read from old, apart from replace_section."""
+    a, b = old.split("\n"), new.split("\n")
+    start, end = section_bounds(a, heading)
+    shared = min(len(a), len(b))
+    head = 0
+    while head < shared and a[head] == b[head]:
+        head += 1
+    tail = 0
+    while tail < shared - head and a[-1 - tail] == b[-1 - tail]:
+        tail += 1
+    return head <= start or len(a) - tail > end
+
+
 def section(args):
     m = SPEC.match(args.pull)
     if not m:
@@ -346,6 +388,9 @@ def section(args):
     repo, num = m["repo"], m["num"]
     if not heading_level(args.heading) or not heading_level(args.heading)[1]:
         sys.exit(f"not a heading line such as '## Decision': {args.heading!r}")
+    if REVISION.match(args.heading):
+        sys.exit(f"{args.heading!r} is the Revision section, whose numbered lines the revision command keeps. "
+                 "Use revision, with --replace for a line already there")
     with open(args.file, encoding="utf-8") as f:
         text = f.read()
     level = heading_level(args.heading)[0]
@@ -361,16 +406,14 @@ def section(args):
     if new is None:
         print(f"{repo}#{num}: {args.heading} already holds this text, so nothing changed")
         return
-    old_lines, new_lines = body.split("\n"), new.split("\n")
-    start, end = section_bounds(old_lines, args.heading)
-    rest = old_lines[end:]
-    if new_lines[:start + 1] != old_lines[:start + 1] or (rest and new_lines[-len(rest):] != rest):
+    if changed_outside_section(body, new, args.heading):
         sys.exit(f"{repo}#{num}: refusing to send, a line changed outside {args.heading}. The body as read is at {saved}")
     if replace_section(new, args.heading, text) is not None:
         sys.exit(f"{repo}#{num}: refusing to send, a second run would change the body again. Edit it by hand. "
                  f"The body as read is at {saved}")
     if args.dry_run:
-        print("\n".join(new_lines[start:len(new_lines) - len(rest)]))
+        old = set(body.split("\n"))
+        print("".join(f"+{line}\n" for line in new.split("\n") if line not in old))
         return
     sent = keep("sent-" + name, args.scratch, new)
     write("gh", "pr", "edit", num, "-R", repo, "--body-file", sent, where=f"As read: {saved}. As sent: {sent}. ")
