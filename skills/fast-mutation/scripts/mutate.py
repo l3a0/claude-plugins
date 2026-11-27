@@ -70,8 +70,8 @@ selection, because the coverage map is a pytest plugin.
 Workers are not used.
 
 Every mutated ``file`` must resolve inside ``root`` and have no second hard link, or the run stops
-before it writes anything. SIGTERM and SIGHUP restore every file before the runner exits, and a
-second signal during that restore is ignored. SIGKILL cannot be caught, so after one, copy each
+before it writes anything. SIGINT (Ctrl-C), SIGTERM and SIGHUP restore every file before the runner exits, and any of
+them arriving during that last restore is ignored. SIGKILL cannot be caught, so after one, copy each
 file back from ``backup/`` in --out, where ``a/b.py`` is saved as ``a__b.py``. The runner prints
 the --out path before the baseline runs.
 
@@ -140,6 +140,30 @@ def pytest(spec: dict, root: Path, args: list[str], env: dict | None = None,
     return {"status": status, "secs": round(time.monotonic() - start, 2),
             "failed": failed, "summary": summary.strip(), "code": done.returncode,
             "workers": workers, "_out": out}
+
+
+STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+
+
+def quiet_signals() -> None:
+    """Ignore every stop signal, so nothing can cut a restore short."""
+    for sig in STOP_SIGNALS:
+        signal.signal(sig, signal.SIG_IGN)
+
+
+def exit_on_signal(signum, frame) -> None:
+    """Turn a stop signal into SystemExit, which unwinds through main's restore.
+
+    Later signals are ignored first, so a second Ctrl-C or SIGTERM cannot interrupt that restore.
+    """
+    quiet_signals()
+    raise SystemExit(128 + signum)
+
+
+def finish(restore) -> None:
+    """The last restore, with every stop signal ignored, so one arriving now cannot cut it short."""
+    quiet_signals()
+    restore()
 
 
 def is_script(spec: dict) -> bool:
@@ -489,15 +513,8 @@ def main() -> int:
             assert (root / f).read_bytes() == data, f"restore of {f} did not stick"
         clear_pycache(root)
 
-    def stop(signum, frame):
-        # SystemExit unwinds through the finally below, which restores every file. A second
-        # signal must not cut that restore short, so later ones are ignored.
-        for sig in (signal.SIGTERM, signal.SIGHUP):
-            signal.signal(sig, signal.SIG_IGN)
-        raise SystemExit(128 + signum)
-
-    for sig in (signal.SIGTERM, signal.SIGHUP):
-        signal.signal(sig, stop)
+    for sig in STOP_SIGNALS:
+        signal.signal(sig, exit_on_signal)
 
     print(f"out {out}", flush=True)
     clear_pycache(root)
@@ -541,7 +558,7 @@ def main() -> int:
             print("the spec has no escalate selection, so the survivors were not escalated.",
                   flush=True)
     finally:
-        restore()
+        finish(restore)
 
     with (out / "results.jsonl").open("w") as fh:
         for row in rows:

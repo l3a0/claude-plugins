@@ -128,12 +128,17 @@ with tempfile.TemporaryDirectory() as root:
           and rows[1]['failed'] == ['FAIL add'])
 
     survivor = {'name': 'comment only', 'file': 'mod.py', 'edits': [['def add(a, b):', 'def add(a, b):  # x']]}
-    code, out, rows = run(dict(spec, mutants=[survivor], timeout=2, escalate=[['tests/slow.py', '3']]))
+    # A limit of 3 s gives 6 s by default, with 2 s of margin on each side for a loaded runner.
+    code, out, rows = run(dict(spec, mutants=[survivor], timeout=3, escalate=[['tests/slow.py', '4']]))
     check('escalation gets more than the time limit by default', 'SURVIVED-ALL' in out and 'TIMEOUT-WIDE' not in out)
-    code, out, rows = run(dict(spec, mutants=[survivor], timeout=2, escalate=[['tests/slow.py', '5']]))
+    code, out, rows = run(dict(spec, mutants=[survivor], timeout=3, escalate=[['tests/slow.py', '8']]))
     check('escalation gets no more than twice the time limit by default', 'TIMEOUT-WIDE' in out)
-    code, out, rows = run(dict(spec, baseline=[['tests/slow.py', '1.5'], ['tests/slow.py', '1.5']], mutants=[], timeout=2))
-    check('the baseline runs under the escalation limit', code == 0 and 'BASE green' in out)
+    code, out, rows = run(dict(spec, baseline=[['tests/slow.py', '2'], ['tests/slow.py', '2']], mutants=[], timeout=3))
+    check('the baseline gets more than the time limit by default', code == 0 and 'BASE green' in out)
+    code, out, rows = run(dict(spec, baseline=['tests/slow.py', '8'], mutants=[], timeout=3))
+    check('the baseline gets no more than twice the time limit by default', code == 2 and 'BASE timeout' in out)
+    code, out, rows = run(dict(spec, baseline=['tests/slow.py', '1.5'], mutants=[], timeout=3, escalate_timeout=1))
+    check('the baseline runs under escalate_timeout when the spec sets it', code == 2 and 'BASE timeout' in out)
     code, out, rows = run(dict(spec, mutants=[survivor], timeout=1, escalate_timeout=1, escalate=[['tests/slow.py', '1.5']]))
     check('escalate_timeout limits escalation', 'TIMEOUT-WIDE' in out)
     code, out, rows = run({k: v for k, v in dict(spec, mutants=[survivor]).items() if k != 'escalate'})
@@ -173,14 +178,15 @@ with tempfile.TemporaryDirectory() as root:
     with open(os.path.join(root, 'stub-args')) as f:
         check('a spec with no runner key still runs pytest', code == 0 and f.read().startswith('-m pytest'))
 
-    slow_mutant = {'name': 'slow', 'file': 'mod.py', 'edits': [['return a + b', 'return a - b']], 'select': ['tests/slow.py', '30']}
+    slow_mutant = {'name': 'slow', 'file': 'mod.py', 'edits': [['return a + b', 'return a - b']], 'select': ['tests/slow.py', '120']}
     path = os.path.join(root, 'spec-term.json')
     with open(path, 'w') as f:
-        json.dump(dict(spec, mutants=[slow_mutant], timeout=60), f)
-    for sig in (signal.SIGTERM, signal.SIGHUP):
+        json.dump(dict(spec, mutants=[slow_mutant], timeout=300), f)
+    for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
         proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', os.path.join(root, 'out-term'), '--no-escalate'],
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
-        seen, deadline = False, time.monotonic() + 30
+        # A loaded machine can take a while to reach the mutant, so the wait is generous.
+        seen, deadline = False, time.monotonic() + 90
         while time.monotonic() < deadline:
             with open(os.path.join(repo, 'mod.py')) as f:
                 if 'a - b' in f.read():
@@ -204,6 +210,40 @@ with tempfile.TemporaryDirectory() as root:
     check('refuses an unknown runner', code != 0 and "runner must be 'pytest' or 'script'" in out)
     code, out, rows = run(dict(spec, select=[]))
     check('refuses an empty selection', code != 0 and 'names no command' in out)
+
+# The signal functions run in a child, so the signals they ignore stay this process's own.
+UNIT = '''import importlib.util, os, signal, sys
+spec = importlib.util.spec_from_file_location('mutate', sys.argv[1])
+mutate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mutate)
+names = {s: s.name for s in mutate.STOP_SIGNALS}
+print('stops', sorted(names.values()))
+mutate.quiet_signals()
+print('quiet', all(signal.getsignal(s) == signal.SIG_IGN for s in names))
+for s in names:
+    signal.signal(s, signal.SIG_DFL)
+try:
+    mutate.exit_on_signal(signal.SIGTERM, None)
+except SystemExit as stop:
+    print('exit', stop.code, all(signal.getsignal(s) == signal.SIG_IGN for s in names))
+for s in names:
+    signal.signal(s, signal.default_int_handler if s == signal.SIGINT else signal.SIG_DFL)
+done = []
+def restore():
+    os.kill(os.getpid(), signal.SIGINT)
+    done.append(True)
+mutate.finish(restore)
+print('finish', done == [True])
+'''
+done = subprocess.run([sys.executable, '-c', UNIT, SCRIPT], capture_output=True, text=True)
+lines = done.stdout.splitlines()
+check('Ctrl-C, SIGTERM and SIGHUP are the stop signals', "stops ['SIGHUP', 'SIGINT', 'SIGTERM']" in lines)
+check('quiet_signals ignores every stop signal', 'quiet True' in lines)
+check('a stop signal exits with 128 plus its number and ignores the rest', 'exit 143 True' in lines)
+check('a signal during the last restore cannot cut it short', 'finish True' in lines and 'KeyboardInterrupt' not in done.stderr)
+with open(SCRIPT) as f:
+    source = f.read()
+check("main's last restore runs through finish", 'finally:\n        finish(restore)\n' in source)
 
 print('all passed' if not failures else f'{failures} failed')
 sys.exit(1 if failures else 0)

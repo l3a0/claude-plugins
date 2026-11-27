@@ -227,12 +227,12 @@ full reasoning.
 
 ## Safety
 
-The runner restores every file when it ends, including on SIGTERM or SIGHUP, which it turns into
-an ordinary exit. SIGKILL cannot be caught, so a run killed that way leaves the current mutant in
+The runner restores every file when it ends, including on Ctrl-C, SIGTERM or SIGHUP, which it
+turns into an ordinary exit. SIGKILL cannot be caught, so a run killed that way leaves the current mutant in
 place. Copy each file back from `backup/` in the `--out` folder, where the runner wrote a byte copy
 of every file before the first mutant, naming `a/b.py` as `a__b.py`. The runner prints the
-`--out` path on its first line, so a killed run still shows where it is. A second signal during
-the restore is ignored, so it cannot cut the restore short. The runner also refuses a file with
+`--out` path before the baseline runs, so a killed run still shows where it is. Any of those
+signals arriving during the last restore is ignored, so it cannot cut the restore short. The runner also refuses a file with
 a second hard link, because the root check cannot see where the other link sits.
 
 The runner executes code only through pytest, or through the commands a script spec names, in the given worktree. A repository whose
