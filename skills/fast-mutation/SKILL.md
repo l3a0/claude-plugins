@@ -232,7 +232,9 @@ turns into an ordinary exit. SIGKILL cannot be caught, so a run killed that way 
 place. Copy each file back from `backup/` in the `--out` folder, where the runner wrote a byte copy
 of every file before the first mutant, naming `a/b.py` as `a__b.py`. The runner prints the
 `--out` path before the baseline runs, so a killed run still shows where it is. Any of those
-signals arriving during the last restore is ignored, so it cannot cut the restore short. The runner also refuses a file with
+signals arriving during the last restore is ignored, so it cannot cut the restore short, and
+they work again once it is done. A restore that hangs can still be stopped with Ctrl-\ or
+`kill -9`, after which `backup/` holds the copy. The runner also refuses a file with
 a second hard link, because the root check cannot see where the other link sits.
 
 The runner executes code only through pytest, or through the commands a script spec names, in the given worktree. A repository whose

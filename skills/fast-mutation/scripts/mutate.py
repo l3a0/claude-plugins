@@ -161,9 +161,21 @@ def exit_on_signal(signum, frame) -> None:
 
 
 def finish(restore) -> None:
-    """The last restore, with every stop signal ignored, so one arriving now cannot cut it short."""
-    quiet_signals()
-    restore()
+    """The last restore, with every stop signal ignored, so one arriving now cannot cut it short.
+
+    A signal that lands while the handlers are being switched still reaches the restore, through
+    ``finally``. The handlers come back afterwards, so a run blocked writing its results can still
+    be stopped.
+    """
+    saved = {sig: signal.getsignal(sig) for sig in STOP_SIGNALS}
+    try:
+        quiet_signals()
+    finally:
+        try:
+            restore()
+        finally:
+            for sig, handler in saved.items():
+                signal.signal(sig, handler)
 
 
 def is_script(spec: dict) -> bool:
