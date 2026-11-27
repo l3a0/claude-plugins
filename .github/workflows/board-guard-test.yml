@@ -41,3 +41,5 @@ jobs:
         run: python3 tests/test_diagram_words.py
       - name: find-free-cash script tests
         run: python3 tests/test_free_cash.py
+      - name: fast-mutation script runner tests
+        run: python3 tests/test_fast_mutation.py
