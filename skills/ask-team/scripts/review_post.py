@@ -4,7 +4,7 @@
 Usage:
     review_post.py revision OWNER/REPO#N --scratch DIR --file PATH [--replace ITEM] [--dry-run]
     review_post.py comment --round R OWNER/REPO#N=HEAD=ANCHOR=FILE [...] [--dry-run]
-    review_post.py check OWNER/REPO#N=HEAD=ANCHOR | OWNER/REPO@BRANCH=ANCHOR [...]
+    review_post.py check OWNER/REPO#N=HEAD=ANCHOR=FILE | OWNER/REPO@BRANCH=ANCHOR=FILE [...]
     review_post.py cost --round R OWNER/REPO#ISSUE --pull OWNER/REPO#N --anchor ANCHOR --file PATH [--dry-run]
 
 `revision` adds the one line in PATH to the body's `## Revision` section as a
@@ -49,12 +49,17 @@ posts.
 
 `check` runs the head and anchor checks of `comment` and posts nothing, for a
 comment that names an anchor and goes by hand, such as one on an issue. For
-OWNER/REPO#N=HEAD=ANCHOR it checks that the pull request's head is HEAD and
-that ANCHOR is that head or an ancestor of it. For OWNER/REPO@BRANCH=ANCHOR it
-reads the branch's tip from GitHub and checks that ANCHOR is that tip or an
-ancestor of it, which suits a plan read against `main`. It exits non-zero
-naming each target that fails, and reads no comments, because each route keys
-its retry by its own lines.
+OWNER/REPO#N=HEAD=ANCHOR=FILE it checks that the pull request's head is HEAD,
+that ANCHOR is that head or an ancestor of it, and that FILE names both. For
+OWNER/REPO@BRANCH=ANCHOR=FILE it reads the branch's tip from GitHub, and checks
+that ANCHOR is that tip or an ancestor of it and that FILE names ANCHOR, which
+suits a plan read against `main`. It encodes the branch's name in the request
+and refuses an answer for any other branch, so a name holding `#` reads that
+branch. It exits non-zero naming each file, head and branch that fails, and
+when those all pass, each anchor that fails. It reads no comments, because
+each route keys its retry by its own lines. It cannot show that the file it
+read is the file then posted, and like `comment` it reads the file for the
+anchor and head by substring.
 
 `cost` posts a round's `## Cost` comment on the issue the main pull request
 tracks. It refuses a file whose first line is not exactly `## Cost`, which is
@@ -65,11 +70,15 @@ request that is only part of an issue names it only in its body's text, which
 the script does not parse. It skips the
 post when the issue already carries a comment by the same login with that
 heading and line, stops when one carries them with other text, and counts the
-copies after posting, as `comment` does. It runs no anchor check. The anchor
-there is the retry key, and no build board or `## Cost total` reads it. The
-round's comment, which `comment` checked, names the same anchor. Refusing it
-would leave spend that was made unposted, such as after a force push drops
-the anchor.
+copies after posting, as `comment` does. It also stops when the issue carries
+a `## Cost` comment by the same login for this round and pull request under
+another anchor, because a `## Cost total` would count the round twice. It
+runs no check that the anchor is in the pull request's history, because only
+`cost` reads that anchor, to recognise a retry. In the usual order the round's
+comment posts first, through `comment`, which checks it. Where the round's
+comment did not post, such as after a force push dropped the anchor, whether
+its figures post and which `## Cost` comment carries them waits on
+l3a0/claude-plugins#108.
 
 A write that fails says the outcome is unknown, since the request may have
 landed. Rerun the same command, which looks before it writes. The tests run
@@ -83,6 +92,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 
 SPEC = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)#(?P<num>\d+)$")
 TARGET = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)#(?P<num>\d+)=(?P<head>[0-9a-f]{7,40})=(?P<anchor>[0-9a-f]{7,40})=(?P<file>.+)$")
@@ -93,8 +103,7 @@ ITEM = re.compile(r"^(\d+)\. (.*)$")
 LIST_MARK = re.compile(r"^\s*(\d+[.)]|[-*+])(\s|$)")
 FINAL = "## Review complete"
 NEAR_FINAL = re.compile(r"^#{1,6}\s*Review[\W_]*complete\b", re.IGNORECASE)
-CHECK_PULL = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)#(?P<num>\d+)=(?P<head>[0-9a-f]{7,40})=(?P<anchor>[0-9a-f]{7,40})$")
-CHECK_BRANCH = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)@(?P<branch>[^\s=]+)=(?P<anchor>[0-9a-f]{7,40})$")
+CHECK_BRANCH = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)@(?P<branch>[^\s=]+)=(?P<anchor>[0-9a-f]{7,40})=(?P<file>.+)$")
 COST_HEADING = "## Cost"
 COST_LINE = re.compile(r"^Review round (?P<round>\d+), of `?(?P<anchor>[0-9a-f]{7,40})`?, on (?P<link>.+?)\s*$")
 PULL_LINK = re.compile(r"^(?:\[[^\]\n]*\]\()?https://github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/(?P<num>\d+)(?!\d)", re.IGNORECASE)
@@ -409,37 +418,52 @@ def comment(args):
         sys.exit(f"{', '.join(doubled)} should hold this comment once and does not. Delete any extra copy, and report it")
 
 
+def branch_tip(repo, branch):
+    """Return the branch's tip on GitHub, and why it could not be read, or None when it could."""
+    # A raw "#" or "?" would end the path, and GitHub resolves "..", so the name is encoded and the name
+    # GitHub answers for must be the one asked for.
+    done = subprocess.run(("gh", "api", f"repos/{repo}/branches/{urllib.parse.quote(branch, safe='/')}",
+                           "--jq", ".name, .commit.sha"), capture_output=True, text=True)
+    lines = done.stdout.strip().split("\n")
+    if done.returncode or len(lines) != 2 or not re.fullmatch(r"[0-9a-f]{40}", lines[1]):
+        return None, f"GitHub did not give the tip of {branch} in {repo}: {done.stderr.strip() or done.stdout.strip()!r}"
+    if lines[0] != branch:
+        return None, f"GitHub answered for the branch {lines[0]!r}, not {branch!r}"
+    return lines[1], None
+
+
 def check(args):
-    parsed = []
+    parsed, tips, wrong = [], [], []
     for spec in args.targets:
-        m = CHECK_PULL.match(spec) or CHECK_BRANCH.match(spec)
+        m = TARGET.match(spec) or CHECK_BRANCH.match(spec)
         if not m:
-            sys.exit(f"not OWNER/REPO#N=HEAD=ANCHOR or OWNER/REPO@BRANCH=ANCHOR: {spec}")
+            sys.exit(f"not OWNER/REPO#N=HEAD=ANCHOR=FILE or OWNER/REPO@BRANCH=ANCHOR=FILE: {spec}")
+        if not os.path.isfile(m["file"]):
+            sys.exit(f"no comment file at {m['file']}")
         parsed.append(m)
-    tips, wrong = [], []
     for m in parsed:
-        if "num" in m.groupdict():
-            head, why = head_check(m["repo"], m["num"], m["head"])
-            tips.append((f"{m['repo']}#{m['num']}", head))
-            if why:
-                wrong.append(why)
-            continue
-        done = subprocess.run(("gh", "api", f"repos/{m['repo']}/branches/{m['branch']}", "--jq", ".commit.sha"),
-                              capture_output=True, text=True)
-        tip = done.stdout.strip()
-        if done.returncode or not re.fullmatch(r"[0-9a-f]{40}", tip):
-            sys.exit(f"post nothing, because GitHub did not give the tip of {m['branch']} in {m['repo']}: "
-                     f"{done.stderr.strip() or tip!r}")
-        tips.append((f"{m['repo']}@{m['branch']}", tip))
+        pull = "num" in m.groupdict()
+        name = f"{m['repo']}#{m['num']}" if pull else f"{m['repo']}@{m['branch']}"
+        with open(m["file"], encoding="utf-8") as f:
+            text = f.read()
+        missing = [f"the anchor {m['anchor'][:7]}"] if m["anchor"][:7] not in text else []
+        if pull and m["head"][:7] not in text:
+            missing.append(f"the head {m['head'][:7]}")
+        if missing:
+            wrong.append(f"{m['file']} does not name {' and '.join(missing)}")
+        tip, why = head_check(m["repo"], m["num"], m["head"]) if pull else branch_tip(m["repo"], m["branch"])
+        tips.append((name, tip))
+        if why:
+            wrong.append(why if pull else f"{name}: {why}")
     if wrong:
-        sys.exit("post nothing, because a head does not match: " + "; ".join(wrong))
+        sys.exit("post nothing, because a file, a head or a branch does not match: " + "; ".join(wrong))
     outside = [f"{name}: {why}" for m, (name, tip) in zip(parsed, tips)
                if (why := outside_history(m["repo"], m["anchor"], tip))]
     if outside:
         sys.exit("post nothing, because an anchor was not shown to be the head or an ancestor of it: " + "; ".join(outside))
     for m, (name, tip) in zip(parsed, tips):
         where = "is the head" if tip.startswith(m["anchor"]) else "is an ancestor of the head"
-        print(f"{name}: the anchor {m['anchor'][:7]} {where} {tip[:7]}, so a comment naming them may post")
+        print(f"{name}: the anchor {m['anchor'][:7]} {where} {tip[:7]}, and {m['file']} names them, so it may post")
 
 
 def cost_key(text):
@@ -479,6 +503,13 @@ def cost(args):
                  "so a retry could not recognise it")
     repo, num, name = issue["repo"], issue["num"], args.issue
     login = run("gh", "api", "user", "--jq", ".login").strip()
+    others = {k[1] for c in view(repo, num, "comments", kind="issue")
+              if (c.get("author") or {}).get("login") == login and (k := cost_key(c["body"]))
+              and k[0] == key[0] and k[2:] == key[2:] and k[1] != key[1]}
+    if others:
+        sys.exit(f"posting nothing, because {name} already carries round {args.round}'s {COST_HEADING} comment for "
+                 f"{args.pull} under the anchor {', '.join(sorted(others))}, not {key[1]}, and a {COST_HEADING} total "
+                 "would count the round twice. Report it")
     mine = cost_copies(repo, num, key, login)
     if any(not same_text(body, text) for body in mine):
         sys.exit(f"posting nothing, because {name} already carries this round's {COST_HEADING} comment with "

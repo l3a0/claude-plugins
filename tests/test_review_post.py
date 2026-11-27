@@ -28,12 +28,16 @@ if args[:2] == ['api', 'user']:
     print(login)
     sys.exit(0)
 if args[0] == 'api' and args[1].startswith('repos/') and '/branches/' in args[1]:
-    # GitHub's branches API, read for a branch's tip. A branch's name can hold a slash.
-    if args[2:] != ['--jq', '.commit.sha']: fail()
+    # GitHub's branches API, read for a branch's tip. Like the real gh and GitHub, a raw "#" or "?" ends the
+    # path, a percent escape is decoded, and ".." is resolved, so the name answered can differ from the one asked.
+    import posixpath, urllib.parse
+    if args[2:] != ['--jq', '.name, .commit.sha']: fail()
     repo, branch = args[1][len('repos/'):].split('/branches/', 1)
+    branch = posixpath.normpath(urllib.parse.unquote(branch.split('#')[0].split('?')[0]))
     tips = json.load(open(os.path.join(state, 'branches.json'))) if os.path.exists(os.path.join(state, 'branches.json')) else {}
     if branch not in tips.get(repo, {}): sys.exit('gh: Branch not found (HTTP 404)')
-    print(tips[repo][branch])
+    tip = tips[repo][branch]
+    print(tip['out'] if isinstance(tip, dict) else branch + '\\n' + tip)
     sys.exit(0)
 if args[0] == 'api' and args[1].startswith('repos/') and '/compare/' in args[1]:
     # GitHub's compare API: "ahead" when the head descends from the anchor, 404 for a commit the repository lacks.
@@ -742,7 +746,19 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed_issue(40, [COST.replace('2.18', '2.19')], login='stranger')
     code, out = price()
     check("another login's cost comment does not stop the post", code == 0 and len(issue(40)) == 2)
-    for label, other in (('round', COST.replace('round 3', 'round 2')), ('anchor', COST.replace(f'`{A}`', f'`{B}`')),
+    seed_issue(40, [COST.replace(f'`{A}`', f'`{B}`')])
+    code, out = price()
+    check('a cost comment for the same round and pull request under another anchor stops the post',
+          code != 0 and f'under the anchor {B}, not {A}' in out and 'count the round twice' in out and len(issue(40)) == 1)
+    for label, other in (('round', COST.replace(f'`{A}`', f'`{B}`').replace('round 3', 'round 2')),
+                         ('pull request', COST.replace(f'`{A}`', f'`{B}`').replace('pull/5', 'pull/6'))):
+        seed_issue(40, [other])
+        code, out = price()
+        check(f'a cost comment for another {label} under another anchor does not stop the post', code == 0 and len(issue(40)) == 2)
+    seed_issue(40, [COST.replace(f'`{A}`', f'`{B}`')], login='stranger')
+    code, out = price()
+    check("another login's cost comment under another anchor does not stop the post", code == 0 and len(issue(40)) == 2)
+    for label, other in (('round', COST.replace('round 3', 'round 2')),
                          ('pull request number', COST.replace('pull/5', 'pull/55')),
                          ('repository', COST.replace('o/r/pull/5', 'o/s/pull/5')),
                          ('issue link', COST.replace('pull/5', 'issues/5')),
@@ -830,7 +846,8 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('a cost post names the issue it was given', code != 0 and 'unexpected call' in out)
 
     # The check form runs the comment form's head and anchor checks and posts nothing, for a comment
-    # that goes by hand. A branch's tip is seeded as pull request 90, so the stand-in's compare finds it.
+    # that goes by hand, and checks that the comment's file names the anchor, and on a pull request the head.
+    # A branch's tip is seeded as a pull request of its own, so the stand-in's compare finds it.
     def gate(*targets, **env):
         return run('check', *targets, **env)
 
@@ -838,48 +855,76 @@ with tempfile.TemporaryDirectory() as ROOT:
         with open(os.path.join(STATE, 'branches.json'), 'w') as f:
             json.dump(tips, f)
 
+    def names(*shas):
+        fd, path = tempfile.mkstemp(prefix='hand-', suffix='.md', dir=ROOT)
+        with os.fdopen(fd, 'w') as f:
+            f.write('## Review, round 3\n\nRound 3, of ' + ', '.join(f'`{x[:7]}`' for x in shas) + '.\n')
+        return path
+
     seed(5, head=head5, elsewhere=('f' * 40,)), seed(6, head=head6, repo='o-s')
-    code, out = gate(f'o/r#5={head5}={A}', f'o/s#6={head6}={B}')
-    check('check passes a head that matches and an anchor in its history', code == 0
+    code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}', f'o/s#6={head6}={B}={names(B, head6)}')
+    check('check passes a head that matches, an anchor in its history and a file naming both', code == 0
           and f'o/r#5: the anchor {A} is an ancestor of the head {head5[:7]}' in out and 'o/s#6: the anchor' in out)
     check('check posts nothing', state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
-    code, out = gate(f'o/r#5={head5}={head5[:7]}')
+    code, out = gate(f'o/r#5={head5}={head5[:7]}={names(head5)}')
     check('check passes an anchor that is the head', code == 0 and 'is the head' in out)
-    code, out = gate(f'o/r#5={head5}={A}', f'o/s#6={"e" * 40}={B}')
+    code, out = gate(f'o/r#5={head5[:7]}={A}={names(A, head5)}')
+    check('check takes a seven-character head', code == 0)
+    code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}', f'o/s#6={"e" * 40}={B}={names(B, "e" * 40)}')
     check('check fails when one head differs, naming it', code != 0 and f'o/s#6 is at {head6[:7]}, not {"e" * 7}' in out
           and 'post nothing' in out and 'o/r#5: the anchor' not in out)
-    code, out = gate(f'o/r#5={head5}={"f" * 7}')
+    code, out = gate(f'o/r#5={head5}={A}={names(head5)}')
+    check('check fails a file that does not name the anchor', code != 0 and f'does not name the anchor {A}' in out)
+    code, out = gate(f'o/r#5={head5}={A}={names(A)}')
+    check('check fails a file that does not name the head', code != 0 and f'does not name the head {head5[:7]}' in out)
+    code, out = gate(f'o/r#5={head5}={A}={names(head5)}', f'o/s#6={"e" * 40}={B}={names(B)}')
+    check('check names every file and head that fails, not only the first', code != 0
+          and f'does not name the anchor {A}' in out and 'o/s#6 is at' in out and 'does not name the head eeeeeee' in out)
+    code, out = gate(f'o/r#5={head5}={A}={os.path.join(ROOT, "missing.md")}')
+    check('check refuses a file that does not exist', code != 0 and 'no comment file' in out)
+    code, out = gate(f'o/r#5={head5}={"f" * 7}={names("f" * 7, head5)}')
     check('check fails an anchor outside the head\'s history', code != 0 and 'is diverged against the anchor' in out and 'post nothing' in out)
-    code, out = gate(f'o/r#5={head5}={"9" * 7}')
+    code, out = gate(f'o/r#5={head5}={"9" * 7}={names("9" * 7, head5)}')
     check('check fails an anchor GitHub does not hold', code != 0 and 'could not compare' in out)
     seed(5, head=head5, silent=('f' * 40,))
-    code, out = gate(f'o/r#5={head5}={"f" * 7}')
+    code, out = gate(f'o/r#5={head5}={"f" * 7}={names("f" * 7, head5)}')
     check('check fails an answer GitHub does not document', code != 0 and 'none of ahead' in out)
     seed(5, head=head5)
-    code, out = gate(f'o/r#5={head5}={A}={note}')
-    check('check refuses a target that names a comment file, since it posts nothing', code != 0 and 'not OWNER/REPO#N=HEAD=ANCHOR' in out
-          and state(5)['comments'] == [])
-    code, out = gate('o/r#5')
-    check('check refuses a target with no anchor', code != 0 and 'not OWNER/REPO#N=HEAD=ANCHOR' in out)
+    for label, spec in (('a target with no file', f'o/r#5={head5}={A}'), ('a target with no anchor', 'o/r#5'),
+                        ('a six-character head', f'o/r#5={head5[:6]}={A}={note}'),
+                        ('a six-character anchor', f'o/r#5={head5}={A[:6]}={note}'),
+                        ('a six-character anchor on a branch', f'o/r@main={A[:6]}={note}'),
+                        ('a branch target with no file', f'o/r@main={A}')):
+        code, out = gate(spec)
+        check(f'check refuses {label}', code != 0 and 'not OWNER/REPO#N=HEAD=ANCHOR=FILE' in out and state(5)['comments'] == [])
 
     tip = '1' * 40
     seed(90, head=tip, later=('2' * 40,))
-    branches({'o/r': {'main': tip, 'claude/x-1': tip}})
-    code, out = gate(f'o/r@main={A}')
-    check('check passes an anchor in a branch\'s history', code == 0 and f'o/r@main: the anchor {A} is an ancestor of the head {tip[:7]}' in out)
-    code, out = gate(f'o/r@claude/x-1={tip[:7]}')
-    check('check reads a branch whose name holds a slash, and passes its tip', code == 0 and 'o/r@claude/x-1: the anchor' in out and 'is the head' in out)
-    code, out = gate(f'o/r@main={"2" * 7}')
-    check('check fails an anchor that is ahead of the branch', code != 0 and 'is behind against the anchor' in out)
     seed(91, head='3' * 40, ancestors=('4' * 40,))
-    branches({'o/r': {'main': tip, 'dev': '3' * 40, 'odd': 'not a commit'}})
-    code, out = gate(f'o/r@dev={"4" * 7}')
+    branches({'o/r': {'main': tip, 'claude/x-1': tip, 'dev': '3' * 40, 'x#1': '3' * 40, 'x': tip,
+                      'odd': {'out': 'odd\nnot a commit'}, 'framed': {'out': 'framed\nx' + '1' * 40},
+                      'short': {'out': 'short\n' + '1' * 7}, 'one': {'out': tip}}})
+    code, out = gate(f'o/r@main={A}={names(A)}')
+    check('check passes an anchor in a branch\'s history', code == 0 and f'o/r@main: the anchor {A} is an ancestor of the head {tip[:7]}' in out)
+    code, out = gate(f'o/r@claude/x-1={tip[:7]}={names(tip)}')
+    check('check reads a branch whose name holds a slash, and passes its tip', code == 0 and 'o/r@claude/x-1: the anchor' in out and 'is the head' in out)
+    code, out = gate(f'o/r@dev={"4" * 7}={names("4" * 7)}')
     check('check compares the anchor with the tip of the branch it names', code == 0 and 'ancestor of the head 3333333' in out)
-    code, out = gate(f'o/r@odd={A}')
-    check('check fails a branch read that gives no commit', code != 0 and 'did not give the tip of odd' in out)
-    code, out = gate(f'o/r@gone={A}')
+    code, out = gate(f'o/r@x#1={"4" * 7}={names("4" * 7)}')
+    check('check reads a branch whose name holds a hash, rather than the branch before the hash', code == 0 and 'ancestor of the head 3333333' in out)
+    code, out = gate(f'o/r@nosuch/../main={A}={names(A)}')
+    check('check fails a branch GitHub answers for under another name', code != 0 and "answered for the branch 'main'" in out)
+    code, out = gate(f'o/r@main={A}={names("4" * 7)}')
+    check('check fails a file that does not name the anchor on a branch', code != 0 and f'does not name the anchor {A}' in out)
+    for label, branch in (('gives no commit', 'odd'), ('gives a commit inside other text', 'framed'),
+                          ('gives a short commit', 'short'), ('gives one line', 'one')):
+        code, out = gate(f'o/r@{branch}={A}={names(A)}')
+        check(f'check fails a branch read that {label}', code != 0 and f'did not give the tip of {branch}' in out)
+    code, out = gate(f'o/r@main={"2" * 7}={names("2" * 7)}')
+    check('check fails an anchor that is ahead of the branch', code != 0 and 'is behind against the anchor' in out)
+    code, out = gate(f'o/r@gone={A}={names(A)}')
     check('check fails a branch GitHub does not give', code != 0 and 'did not give the tip of gone' in out and 'post nothing' in out)
-    code, out = gate(f'o/r#5={head5}={A}', f'o/r@main={"2" * 7}')
+    code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}', f'o/r@main={"2" * 7}={names("2" * 7)}')
     check('check fails the whole run when one target fails', code != 0 and 'o/r#5: the anchor' not in out)
 
     # The cost form runs no anchor check, so an anchor GitHub cannot compare still posts.
