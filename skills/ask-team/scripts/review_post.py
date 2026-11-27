@@ -33,9 +33,11 @@ exactly one. A closing comment posts the same way, with R the round it closes
 and ANCHOR the commit that round read. It refuses a first line that reads
 `Review complete` and is not exactly `## Review complete`, such as one with a
 space before or after it or another heading level, because a build board
-counts only that whole line. Where the round's own comment already opens with
-`## Review complete` under the same round and anchor, that comment closes the
-review, so it posts nothing and says so.
+counts only that whole line. Where a comment that opens with `## Review complete`
+already names the same round, anchor and head, that comment closes the review,
+so it posts nothing and says so. One naming an older head does not count,
+because a build board reads it only before a later push, so a closing comment
+at the new head posts.
 
 `cost` posts a round's `## Cost` comment on the issue the main pull request
 tracks. It refuses a file whose first line is not exactly `## Cost`, which is
@@ -72,7 +74,7 @@ FINAL = "## Review complete"
 NEAR_FINAL = re.compile(r"^#{1,6}\s*Review[\W_]*complete\b", re.IGNORECASE)
 COST_HEADING = "## Cost"
 COST_LINE = re.compile(r"^Review round (?P<round>\d+), of `?(?P<anchor>[0-9a-f]{7,40})`?, on (?P<link>.+?)\s*$")
-PULL_LINK = re.compile(r"https://github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/(?P<num>\d+)(?!\d)", re.IGNORECASE)
+PULL_LINK = re.compile(r"(?:^|\]\()https://github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/(?P<num>\d+)(?!\d)", re.IGNORECASE)
 CLOSING = re.compile(r"^(close[sd]?|fix(es|ed)?|resolve[sd]?|part of)\s+(no issue|([\w.-]+/[\w.-]+)?#\d+)", re.IGNORECASE)
 SECTION = "## Revision"
 
@@ -266,7 +268,8 @@ def first_line(text):
 
 
 def raw_first_line(text):
-    return text.split("\n", 1)[0].rstrip("\r")
+    # The file is read in text mode, so no carriage return reaches here.
+    return text.split("\n", 1)[0]
 
 
 def same_text(a, b):
@@ -279,8 +282,11 @@ def carries(comment, heading, round_no, anchor):
 
 
 def copies(m, heading, round_no, login):
+    # A closing comment counts only after the head it names, so one naming an older head is
+    # not this post, and a later closing comment names the head it is posted at.
     return [c["body"] for c in view(m["repo"], m["num"], "comments")
-            if (c.get("author") or {}).get("login") == login and carries(c["body"], heading, round_no, m["anchor"])]
+            if (c.get("author") or {}).get("login") == login and carries(c["body"], heading, round_no, m["anchor"])
+            and (heading != FINAL or m["head"][:7] in c["body"])]
 
 
 def comment(args):
@@ -321,7 +327,9 @@ def comment(args):
         mine = copies(m, heading, args.round, login)
         if heading == FINAL and any(not same_text(body, text) for body in mine):
             sys.exit(f"posting nothing, because {name} already carries a {FINAL!r} comment on round "
-                     f"{args.round} and {m['anchor'][:7]}, which closes the review. Post no second one")
+                     f"{args.round} and {m['anchor'][:7]} at the head {m['head'][:7]}, which closes the "
+                     "review, whether it is that round's own comment or an earlier closing comment. "
+                     "Report it, and post no second one")
         if any(not same_text(body, text) for body in mine):
             sys.exit(f"posting nothing, because {name} already carries this heading, round and anchor with "
                      "different text. Report it, and post by hand once it is settled")
