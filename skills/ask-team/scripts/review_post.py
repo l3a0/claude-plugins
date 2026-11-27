@@ -40,6 +40,8 @@ any pull request that does not hold exactly one. Where every copy holds the
 same text, it names the one to keep, the lowest comment number, so two
 sessions that follow it keep the same one. Where a copy holds other text,
 which may be another session's post, it says to delete and edit nothing.
+Where the read after posting shows none, it names the link the post returned
+and says to rerun nothing.
 `cost` does the same. A closing comment posts the
 same way, with R the round it closes and ANCHOR the commit that round read. It
 refuses a first line that reads `Review complete` and is not exactly
@@ -332,11 +334,12 @@ def comment_number(c):
     return int(found[1]) if found else None
 
 
-def settle(name, found, text):
+def settle(name, found, text, link=None):
     """Say what to do about a post that is not held exactly once, so two sessions that follow it keep one copy."""
     if not found:
-        return (f"{name} should hold this comment once and shows none. GitHub's read can lag, so rerun this command, "
-                "which looks before it posts, and post nothing by hand")
+        return (f"{name} should hold this comment once, and the read after posting {link} shows none, which GitHub's "
+                "read can do for a while. Rerun nothing and post nothing by hand. Read the comments again later, and "
+                "report it if it is still missing")
     links = ", ".join(c.get("url") or "(no link)" for c in found)
     if any(not same_text(c["body"], text) for c in found):
         return (f"{name} should hold this comment once and also holds its key with other text, which may be another "
@@ -436,14 +439,23 @@ def comment(args):
             print(f"{name}: already carries this comment, so skipped")
         else:
             pending.append((name, m, text, heading))
-    for name, m, text, heading in pending:
+    posted = []
+    for at, (name, m, text, heading) in enumerate(pending):
         if args.dry_run:
             print(f"{name}: would post {m['file']}")
             continue
-        print(f"{name}: posted {write('gh', 'pr', 'comment', m['num'], '-R', m['repo'], '--body-file', m['file'])}")
+        try:
+            link = write("gh", "pr", "comment", m["num"], "-R", m["repo"], "--body-file", m["file"])
+        except SystemExit as failed:
+            # A rerun of every target would post again on one whose read lags, so name only those not posted.
+            rest = ", ".join(n for n, *_ in pending[at:])
+            sys.exit("; ".join(doubled + [f"{failed}" + (f" Rerun it naming only {rest}, since {', '.join(posted)} "
+                                                         "posted above" if posted else "")]))
+        posted.append(name)
+        print(f"{name}: posted {link}")
         found = copies(m, heading, args.round, login)
         if len(found) != 1:
-            doubled.append(settle(name, found, text))
+            doubled.append(settle(name, found, text, link))
     if doubled:
         sys.exit("; ".join(doubled))
 
@@ -553,7 +565,9 @@ def cost(args):
     if any(not same_text(c["body"], text) for c in mine):
         links = ", ".join(c.get("url") or "(no link)" for c in mine)
         sys.exit(f"posting nothing, because {name} already carries this round's {COST_HEADING} comment with "
-                 f"different text at {links}. Edit nothing, since it may hold another session's spend, and report it")
+                 f"different text at {links}. Where that comment is this file's text plus the build's line this session added at "
+                 "the closing comment or the handover, as review-round.md's step 7 asks, that is expected, so post nothing "
+                 "more. Otherwise edit nothing, since it may hold another session's spend, and report it")
     if len(mine) > 1:
         sys.exit(settle(name, mine, text))
     if mine:
@@ -562,10 +576,11 @@ def cost(args):
     if args.dry_run:
         print(f"{name}: would post {args.file}")
         return
-    print(f"{name}: posted {write('gh', 'issue', 'comment', num, '-R', repo, '--body-file', args.file)}")
+    link = write("gh", "issue", "comment", num, "-R", repo, "--body-file", args.file)
+    print(f"{name}: posted {link}")
     found = cost_copies(repo, num, key, login)
     if len(found) != 1:
-        sys.exit(settle(name, found, text))
+        sys.exit(settle(name, found, text, link))
 
 
 def round_number(value):

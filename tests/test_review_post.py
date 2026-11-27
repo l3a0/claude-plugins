@@ -69,7 +69,14 @@ path = os.path.join(state, ('issue-' if args[0] == 'issue' else '') + args[4].re
 if not os.path.exists(path): fail()
 pr = json.load(open(path))
 if args[1] == 'view' and args[5] == '--json':
-    print(json.dumps({args[6]: pr[args[6]]}))
+    hide = os.path.join(state, 'hide')
+    if args[6] == 'comments' and os.path.exists(hide):
+        # A read that lags behind a write leaves out the comment just posted, once.
+        gone = open(hide).read()
+        os.remove(hide)
+        print(json.dumps({'comments': [c for c in pr['comments'] if c.get('url') != gone]}))
+    else:
+        print(json.dumps({args[6]: pr[args[6]]}))
 elif args[1] == 'edit' and args[5] == '--body-file' and args[0] == 'pr':
     pr['body'] = open(args[6], newline='').read() + os.environ.get('STUB_EDIT_ADDS', '')
     pr['edits'] = pr.get('edits', 0) + 1
@@ -87,6 +94,8 @@ elif args[1] == 'comment' and args[5] == '--body-file':
         json.dump(pr, open(path, 'w'))
         return url
     posted = landed(open(args[6], newline='').read())
+    if os.environ.get('STUB_HIDE') == args[2]:
+        open(os.path.join(state, 'hide'), 'w').write(posted)
     if os.environ.get('STUB_DOUBLE') == args[2]:
         landed(open(args[6], newline='').read())
     if os.environ.get('STUB_RACE') == args[2]:
@@ -470,7 +479,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5), seed(6, head=head6, repo='o-s')
     code, out = post(MAIN, COMP)
     check('posts on every pull request', code == 0 and len(state(5)['comments']) == 1 and len(state(6, 'o-s')['comments']) == 1)
-    check('prints where each comment landed', 'issuecomment-10' in out)
+    check('prints where each comment landed', state(5)['comments'][0]['url'] in out and state(6, 'o-s')['comments'][0]['url'] in out)
 
     code, out = post(MAIN, COMP)
     check('a retry across companions on different anchors posts nothing twice', len(state(5)['comments']) == 1 and len(state(6, 'o-s')['comments']) == 1 and out.count('skipped') == 2)
@@ -612,6 +621,26 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('a post that landed twice is reported', code != 0 and 'should hold this comment once' in out and 'posted' in out)
     first, second = (c['url'] for c in state(5)['comments'])
     check('a post that landed twice names the copy with the lowest comment number to keep', f'Keep {first}' in out and f'delete {second}' in out)
+    seed(5, head=head5)
+    with open(os.path.join(STATE, 'o-r-5.json')) as f:
+        held = json.load(f)
+    body = open(note).read()
+    held['comments'] = [{'author': {'login': 'me'}, 'body': body, 'url': 'https://github.com/o/r/pull/5#issuecomment-1000'},
+                        {'author': {'login': 'me'}, 'body': body, 'url': 'https://github.com/o/r/pull/5#issuecomment-999'}]
+    with open(os.path.join(STATE, 'o-r-5.json'), 'w') as f:
+        json.dump(held, f)
+    code, out = post(MAIN)
+    check('the copy to keep is the lowest comment number, not the first in text order', code != 0
+          and 'Keep https://github.com/o/r/pull/5#issuecomment-999' in out and 'delete https://github.com/o/r/pull/5#issuecomment-1000' in out)
+    seed(5, head=head5)
+    code, out = post(MAIN, STUB_HIDE='5')
+    link = state(5)['comments'][0]['url']
+    check('a post the read after posting does not show says to rerun nothing', code != 0 and 'Rerun nothing' in out
+          and f'the read after posting {link} shows none' in out and len(state(5)['comments']) == 1)
+    seed(5, head=head5), seed(6, head=head6, repo='o-s')
+    code, out = post(MAIN, COMP, STUB_HIDE='5', STUB_COMMENT_FAIL='6')
+    check('a failed post after one the read does not show keeps the rerun-nothing advice and names only the rest', code != 0
+          and 'Rerun nothing' in out and 'naming only o/s#6, since o/r#5 posted above' in out and len(state(5)['comments']) == 1)
     seed(5, head=head5)
     code, out = post(MAIN, STUB_RACE='5')
     check('a post that lands beside a copy with other text deletes nothing', code != 0 and 'Delete and edit nothing' in out
@@ -760,7 +789,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed_issue(40, [COST.replace('2.18', '2.19')])
     code, out = price()
     check('a cost comment with other text stops the post', code != 0 and 'different text' in out and len(issue(40)) == 1)
-    check('a cost comment with other text is not to be edited', 'Edit nothing' in out)
+    check('a cost comment with other text is not to be edited, apart from the build line this session added', "edit nothing, since it may hold another session's spend" in out and "the build's line this session added" in out)
     seed_issue(40, [COST.replace('2.18', '2.19')], login='stranger')
     code, out = price()
     check("another login's cost comment does not stop the post", code == 0 and len(issue(40)) == 2)
@@ -851,6 +880,10 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('a cost post that landed twice is reported', code != 0 and 'should hold this comment once' in out)
     first, second = (c['url'] for c in issue(40))
     check('a cost post that landed twice names the copy with the lowest comment number to keep', f'Keep {first}' in out and f'delete {second}' in out)
+    seed_issue(40)
+    code, out = price(STUB_HIDE='40')
+    check('a cost post the read after posting does not show says to rerun nothing', code != 0 and 'Rerun nothing' in out
+          and issue(40)[0]['url'] in out and len(issue(40)) == 1)
     seed_issue(40)
     code, out = price(STUB_LOST='comment')
     check('a lost reply on a cost post says the outcome is unknown', code != 0 and 'outcome is unknown' in out)
