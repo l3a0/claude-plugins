@@ -5,7 +5,7 @@
 
 The pytest runner and its coverage map need pytest, which CI does not install, so only the script runner is tested.
 """
-import json, os, signal, stat, subprocess, sys, tempfile, time
+import json, os, shutil, signal, stat, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, '..', 'skills', 'fast-mutation', 'scripts', 'mutate.py')
@@ -161,7 +161,8 @@ with tempfile.TemporaryDirectory() as root:
                         ('an absolute path outside root', os.path.join(root, 'outside.py'))):
         code, out, rows = run(dict(spec, mutants=[{'name': 'escape', 'file': name, 'edits': [['X = 1', 'X = 2']]}]))
         with open(os.path.join(root, 'outside.py')) as f:
-            check(f'refuses {label}, and writes nothing', code != 0 and 'must sit inside root' in out and f.read() == 'X = 1\n')
+            check(f'refuses {label}, and writes nothing', code != 0 and 'plain path relative to root' in out
+                  and f.read() == 'X = 1\n')
 
     os.link(os.path.join(root, 'outside.py'), os.path.join(repo, 'linked.py'))
     code, out, rows = run(dict(spec, mutants=[{'name': 'linked', 'file': 'linked.py', 'edits': [['X = 1', 'X = 2']]}]))
@@ -194,14 +195,15 @@ with tempfile.TemporaryDirectory() as root:
     with open(path, 'w') as f:
         json.dump(dict(spec, mutants=[hold], timeout=300), f)
     killed = os.path.join(root, 'out-kill9')
-    proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'],
+    proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'], start_new_session=True,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
     seen, deadline = False, time.monotonic() + 90
     while time.monotonic() < deadline and not seen:
         with open(os.path.join(repo, 'a', 'b.py')) as f:
             seen = 'B = 2' in f.read()
         time.sleep(0.05)
-    proc.kill()
+    # Killing the whole group stands in for a kill -9 and leaves no test script running.
+    os.killpg(proc.pid, signal.SIGKILL)
     proc.wait(timeout=60)
     check('a kill -9 during a mutant leaves no clean marker', seen and not os.path.exists(os.path.join(killed, 'backup', '.clean')))
     done = subprocess.run([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'], capture_output=True,
@@ -212,19 +214,27 @@ with tempfile.TemporaryDirectory() as root:
               and f.read() == 'B = 1\nC = 3\n')
     with open(os.path.join(killed, 'backup', 'a', 'b.py')) as f, open(os.path.join(repo, 'a', 'b.py'), 'w') as g:
         g.write(f.read())
+    quick = os.path.join(root, 'spec-kill9-quick.json')
+    with open(quick, 'w') as f:
+        json.dump(dict(spec, mutants=[dict(hold, select=['tests/near.py'])]), f)
+    done = subprocess.run([sys.executable, SCRIPT, quick, '--out', killed, '--no-escalate'], capture_output=True,
+                          text=True, stdin=subprocess.DEVNULL)
+    check('reruns once the worktree matches the backup a killed run left', done.returncode == 0)
 
     path = os.path.join(root, 'spec-kill-base.json')
     with open(path, 'w') as f:
         json.dump(dict(spec, baseline=['tests/slow.py', '120'], mutants=[both[1]], timeout=300), f)
     killed = os.path.join(root, 'out-kill-base')
-    proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'],
+    proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'], start_new_session=True,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline and not os.path.exists(os.path.join(killed, 'backup', '.clean')):
         time.sleep(0.05)
     time.sleep(0.5)
-    proc.kill()
+    in_baseline = os.path.exists(os.path.join(killed, 'backup', '.clean')) and proc.poll() is None
+    os.killpg(proc.pid, signal.SIGKILL)
     proc.wait(timeout=60)
+    check('the kill lands during the baseline', in_baseline)
     with open(os.path.join(repo, 'a', 'b.py'), 'a') as f:
         f.write('D = 4\n')
     with open(path, 'w') as f:
@@ -242,6 +252,27 @@ with tempfile.TemporaryDirectory() as root:
                               stdin=subprocess.DEVNULL)
         outs.append(done.stdout.splitlines()[0])
     check('without --out a rerun uses the same folder', outs[0] == outs[1] and outs[0].startswith('out '))
+    folder = outs[0][len('out '):]
+    check('without --out the folder is under the user cache, for the user alone',
+          folder.startswith(os.path.realpath(os.path.expanduser('~/.cache/fast-mutation')) + os.sep)
+          and stat.S_IMODE(os.stat(folder).st_mode) == 0o700)
+    shutil.rmtree(folder, ignore_errors=True)
+
+    code, out, rows = run(dict(spec, mutants=[both[1]]), '--no-escalate')
+    code, out, rows = run(dict(spec, mutants=spec['mutants'][:1]), '--no-escalate')
+    check('a clean run empties backup/ of an earlier spec\'s files', code == 0
+          and not os.path.exists(os.path.join(root, 'out', 'backup', 'a', 'b.py'))
+          and os.path.exists(os.path.join(root, 'out', 'backup', 'mod.py')))
+    os.symlink(os.path.join(root, 'outside.py'), os.path.join(repo, 'leak.py'))
+    code, out, rows = run(dict(spec, mutants=[{'name': 'leak', 'file': 'leak.py', 'edits': [['X = 1', 'X = 2']]}]))
+    with open(os.path.join(root, 'outside.py')) as f:
+        check('refuses a symlink inside root that points out, and writes nothing', code != 0 and 'must sit inside root' in out
+              and f.read() == 'X = 1\n')
+    os.remove(os.path.join(repo, 'leak.py'))
+    for label, name in (('an absolute path inside root', os.path.join(repo, 'mod.py')), ('a path with ..', 'a/../mod.py')):
+        code, out, rows = run(dict(spec, mutants=[{'name': 'odd', 'file': name, 'edits': [['return a + b', 'return a - b']]}]))
+        with open(os.path.join(repo, 'mod.py')) as f:
+            check(f'refuses {label}, and writes nothing', code != 0 and 'plain path relative to root' in out and f.read() == MOD)
 
     stub = os.path.join(root, 'stub-python')
     with open(stub, 'w') as f:

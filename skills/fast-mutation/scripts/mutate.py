@@ -69,13 +69,15 @@ reads red, not timeout. The baseline and escalation run the whole suite, so they
 selection, because the coverage map is a pytest plugin.
 Workers are not used.
 
-Every mutated ``file`` must resolve inside ``root`` and have no second hard link, or the run stops
-before it writes anything. SIGINT (Ctrl-C), SIGTERM and SIGHUP restore every file before the runner exits, and any of
+Every mutated ``file`` must be a plain path relative to ``root``, with no ``.`` or ``..`` part,
+that resolves inside ``root`` and has no second hard link, or the run stops before it writes
+anything. SIGINT (Ctrl-C), SIGTERM and SIGHUP restore every file before the runner exits, and any of
 them arriving during that last restore is ignored. SIGKILL cannot be caught, so after one, copy each
 file back from ``backup/`` in --out, which holds each file under its path, such as
 ``backup/a/b.py``. ``backup/.clean`` marks that the worktree matches ``backup/``, so a run that
-finds ``backup/`` without it, holding other bytes than the worktree, refuses to start. Without
---out the folder is fixed per root, so a rerun finds it. The runner prints the --out path before
+finds ``backup/`` without it, holding other bytes than the worktree, refuses to start, and one
+that finds it empties ``backup/`` before taking fresh backups. Without --out the folder is
+``~/.cache/fast-mutation/<hash of root>``, created for the user alone, so a rerun finds it. The runner prints the --out path before
 the baseline runs.
 
 Output: one line per mutant on stdout, ``results.jsonl`` and ``results.txt`` in --out, and
@@ -538,13 +540,21 @@ def main() -> int:
 
     spec = json.loads(Path(opts.spec).read_text())
     root = Path(spec["root"]).resolve()
-    default = Path(tempfile.gettempdir()) / f"mutate-{hashlib.sha1(str(root).encode()).hexdigest()[:12]}"
+    # A folder only this user can reach, fixed per root, so a rerun finds the earlier backups.
+    default = Path.home() / ".cache" / "fast-mutation" / hashlib.sha1(str(root).encode()).hexdigest()[:12]
+    if not opts.out:
+        default.mkdir(parents=True, exist_ok=True, mode=0o700)
+        default.chmod(0o700)
     out = Path(opts.out or default).resolve()
     out.mkdir(parents=True, exist_ok=True)
     mutants = [m for m in spec["mutants"] if opts.only is None or m["name"] in opts.only]
     opts.workers_n = resolve_workers(spec, root, opts)
 
     files = sorted({m["file"] for m in mutants})
+    # backup/ keys each copy on this path, so it must not climb out or be absolute.
+    unplain = [f for f in files if Path(f).is_absolute() or any(p in (".", "..") for p in Path(f).parts)]
+    if unplain:
+        raise SystemExit(f"a mutated file must be a plain path relative to root, with no . or .. part: {', '.join(unplain)}")
     outside = [f for f in files if not (root / f).resolve().is_relative_to(root)]
     if outside:
         raise SystemExit(f"every mutated file must sit inside root {root}: {', '.join(outside)}")
@@ -559,12 +569,19 @@ def main() -> int:
     # hold the only copy of a file's original bytes. A rerun must not overwrite it.
     if backup_dir.exists() and not marker.exists():
         held = [p.relative_to(backup_dir).as_posix() for p in sorted(backup_dir.rglob("*"))
-                if p.is_file() and not p.name.startswith(".")]
+                if p.is_file() and p != marker
+                and not (p.name.startswith(".") and p.name.endswith(".tmp"))]
         differ = [f for f in held if not (root / f).is_file() or (root / f).read_bytes() != (backup_dir / f).read_bytes()]
         if differ:
             raise SystemExit(f"backup/ in {out} is from a run that ended with a mutant applied, and"
-                             f" {', '.join(differ)} differ from it. Compare each with backup/, copy back what"
-                             f" the run changed, then delete {backup_dir} or use a new --out")
+                             f" {', '.join(differ)} differ from it, which that run may have caused. Compare"
+                             f" each with backup/, copy back only what the run changed, then delete"
+                             f" {backup_dir} or use a new --out")
+    # A clean backup/ may still hold copies from a run of another spec, which would make the
+    # marker's promise false, so it starts empty.
+    if backup_dir.exists():
+        shutil.rmtree(backup_dir)
+    backup_dir.mkdir(parents=True)
     for f, data in backups.items():
         dest = backup_dir / f
         dest.parent.mkdir(parents=True, exist_ok=True)
