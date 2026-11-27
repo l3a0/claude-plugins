@@ -27,8 +27,9 @@ or an ancestor of it on GitHub, and every earlier comment by the same login,
 since anyone can comment on a public pull request. An anchor outside the
 head's history still stands when GitHub's timeline records a force push on
 that same pull request that replaced a head holding the anchor, such as a
-rebase, and the script says so. It cannot tell who pushed. A closing comment
-gets no such exception, because no lens read a head a force push wrote. It
+rebase, and the script says so. It cannot tell who pushed. A comment headed
+`## Review complete`, closing or not, gets no such exception, because no lens
+read a head a force push wrote. It
 posts on none of them if a head differs, an anchor is neither in the head's
 history nor held by a head a recorded force push replaced, GitHub cannot
 answer either question, a closing comment's anchor stands only through a force
@@ -432,8 +433,8 @@ def comment(args):
                  + ". Check that each anchor is the commit this round's brief anchors at, and post nothing by hand")
     if unread:
         sys.exit(f"posting nothing, because a {FINAL!r} comment would close the review at a head no lens read: "
-                 + "; ".join(unread) + ". Run a round at the new head first, whose comment can close the review, as "
-                 "review-round.md's step 6 says")
+                 + "; ".join(unread) + ". Post a round's own comment under '## Review, round <N>' instead, and run a "
+                 "round at the new head, whose comment can close the review, as review-round.md's step 6 says")
     for note in notes:
         print(note)
     login = run("gh", "api", "user", "--jq", ".login").strip()

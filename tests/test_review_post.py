@@ -734,6 +734,20 @@ with tempfile.TemporaryDirectory() as ROOT:
         code, out = post(f'o/r#5={head5}={F}={closing_pushed}', '--dry-run')
         check(f'a dry run refuses that closing comment too, where the replaced head {label} the anchor', code != 0
               and 'at a head no lens read' in out and 'would post' not in out)
+    full = os.path.join(ROOT, 'closing-full.md')
+    with open(full, 'w') as f:
+        f.write(f'## Review complete\n\nCloses round 3, of `{"f" * 40}`, at `{"a" * 7}`.\n')
+    seed(5, **dict(pushed, replaced=({'before': 'f' * 40},)))
+    code, out = post(f'o/r#5={head5}={"f" * 40}={full}')
+    check('refuses a closing comment whose full anchor is the head a force push replaced', code != 0
+          and 'at a head no lens read' in out and "'## Review, round <N>' instead" in out and state(5)['comments'] == [])
+    seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]},))), seed(6, head=head6, repo='o-s')
+    clean_closing = os.path.join(ROOT, 'clean-closing.md')
+    with open(clean_closing, 'w') as f:
+        f.write(f'## Review complete\n\nCloses round 3, of `{B}`, at `{"d" * 7}`.\n')
+    code, out = post(f'o/s#6={head6}={B}={clean_closing}', f'o/r#5={head5}={F}={closing_pushed}')
+    check('a refused closing comment on one companion posts on neither', code != 0 and 'at a head no lens read' in out
+          and state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
     seed(5, **dict(pushed, replaced=({'before': 'f' * 40},)))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
     check('a round comment whose anchor is the replaced head still posts', code == 0 and len(state(5)['comments']) == 1)
