@@ -203,6 +203,10 @@ Turns a dense passage in a design doc, an architecture doc, a charter or a READM
 
 Works out how much cash in a linked brokerage account is free to spend without margin, and how many shares of something that cash buys. A broker's cash balance counts money already promised elsewhere. An uncovered short put holds its strike times 100, a credit spread holds its width times 100, and an open buy order holds its cost. A margin account's buying power also adds borrowing against the holdings. The skill reads the account through the read-only SnapTrade tools, judges whether each account's data is live by its prices, and runs `skills/find-free-cash/scripts/free_cash.py`. That script pairs every short option with its cheapest cover, counts every working sell order as filled, and reports the lowest of the broker's cash minus holds, the broker's own buying power and a thinkorswim screenshot's figure. It stops without a figure on an uncovered short call, a negative loan value, or input that would drop a hold. The skill never places, changes or cancels an order.
 
+### fast-mutation
+
+Runs a batch of hand-written mutants in one call, so a mutation review costs about as long as its tests take rather than four tool calls per mutant. `skills/fast-mutation/scripts/mutate.py` takes a JSON spec of exact string edits. For each one it applies the edit, runs the tests that reach it, restores the file from a byte copy and records whether the tests noticed. It drives pytest, where it scopes each survivor's wider run to the tests that start the mutated function, or a suite of plain test scripts such as this repository's own.
+
 ## License
 
 [MIT](LICENSE)

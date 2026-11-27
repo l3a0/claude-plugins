@@ -98,3 +98,10 @@ exact access). Reports of particular interest:
   and place no order. In scope is any path that carries an account's figures
   into a tracked file, an issue or a comment, and any way the skill could
   lead a session to place, change or cancel an order.
+- `fast-mutation` writes mutated copies of a repository's files into the
+  worktree its spec names, runs that repository's tests or the commands the
+  spec lists, and restores each file from a byte copy. It also writes its
+  backups and results into its `--out` folder, and probes the spec's
+  interpreter. In scope is any way it leaves a file mutated after an exit it
+  could catch, writes outside that worktree and its `--out` folder, or runs a
+  program other than the spec's interpreter.

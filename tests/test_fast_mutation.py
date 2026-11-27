@@ -1,0 +1,530 @@
+#!/usr/bin/env python3
+"""Tests for skills/fast-mutation/scripts/mutate.py's script runner, on a repository it builds in a temporary folder.
+
+    python3 tests/test_fast_mutation.py
+
+The pytest runner and its coverage map need pytest, which CI does not install, so only the script runner is tested.
+"""
+import json, os, shutil, signal, stat, subprocess, sys, tempfile, time
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+SCRIPT = os.path.join(HERE, '..', 'skills', 'fast-mutation', 'scripts', 'mutate.py')
+
+failures = 0
+
+
+def check(name, cond):
+    global failures
+    print(('ok   ' if cond else 'FAIL ') + name)
+    failures += not cond
+
+
+MOD = 'def add(a, b):\n    return a + b\n\n\ndef sign(x):\n    return 1 if x > 0 else -1\n'
+NEAR = '''import sys
+sys.path.insert(0, '.')
+from mod import add
+print('ok   setup')
+bad = 0
+for got, want in ((add(2, 3), 5),):
+    print(('ok   ' if got == want else 'FAIL ') + 'add')
+    bad += got != want
+sys.exit(bad)
+'''
+FAR = '''import sys
+sys.path.insert(0, '.')
+from mod import sign
+print('ok   sign' if sign(-2) == -1 else 'FAIL sign of a negative')
+sys.exit(0 if sign(-2) == -1 else 1)
+'''
+CRASH = 'import sys\nsys.exit(3)\n'
+LOUD = 'import sys\nprint("boom", file=sys.stderr)\nsys.exit(3)\n'
+FAILED = 'import sys\nprint("ok   first")\nprint("FAILED the second check")\nsys.exit(1)\n'
+ERRORS = 'import sys\nprint("ERROR: test_lookup (t.T)")\nsys.exit(1)\n'
+SLOW = 'import sys, time\ntime.sleep(float(sys.argv[1]) if len(sys.argv) > 1 else 3)\n'
+READS = 'import sys\nsys.stdin.read()\n'
+
+with tempfile.TemporaryDirectory() as root:
+    repo = os.path.join(root, 'repo')
+    os.makedirs(os.path.join(repo, 'tests'))
+    for path, text in (('mod.py', MOD), ('tests/near.py', NEAR), ('tests/far.py', FAR), ('tests/crash.py', CRASH),
+                       ('tests/loud.py', LOUD), ('tests/failed.py', FAILED), ('tests/errors.py', ERRORS),
+                       ('tests/slow.py', SLOW), ('tests/reads.py', READS)):
+        with open(os.path.join(repo, path), 'w') as f:
+            f.write(text)
+    subprocess.run(['git', '-C', repo, 'init', '-q'], check=True)
+
+    def run(spec, *args):
+        path = os.path.join(root, 'spec.json')
+        with open(path, 'w') as f:
+            json.dump(spec, f)
+        out = os.path.join(root, 'out')
+        # A pipe nobody writes to, so a child that read the runner's stdin would wait on it.
+        quiet, held = os.pipe()
+        try:
+            done = subprocess.run([sys.executable, SCRIPT, path, '--out', out, *args], capture_output=True, text=True,
+                                  stdin=quiet, timeout=120)
+        finally:
+            os.close(quiet), os.close(held)
+        rows = []
+        if os.path.exists(os.path.join(out, 'results.jsonl')):
+            with open(os.path.join(out, 'results.jsonl')) as f:
+                rows = [json.loads(line) for line in f]
+        return done.returncode, done.stdout + done.stderr, rows
+
+    spec = {'runner': 'script', 'root': repo, 'python': sys.executable,
+            'baseline': [['tests/near.py'], ['tests/far.py']], 'select': ['tests/near.py'],
+            'escalate': [['tests/near.py'], ['tests/far.py']],
+            'mutants': [
+                {'name': 'add subtracts', 'file': 'mod.py', 'edits': [['return a + b', 'return a - b']]},
+                {'name': 'sign flips', 'file': 'mod.py', 'edits': [['else -1', 'else 1']]},
+                {'name': 'not there', 'file': 'mod.py', 'edits': [['return a * b', 'return 0']]},
+            ]}
+    code, out, rows = run(spec)
+    by = {r['name']: r for r in rows if not r.get('escalated')}
+    wide = {r['name']: r for r in rows if r.get('escalated')}
+    check('exits 0 on a green baseline', code == 0)
+    check('reads a green baseline of two commands', 'BASE green' in out and by['BASE']['status'] == 'green'
+          and by['BASE']['summary'] == '2 command(s), 0 failure(s)')
+    check('catches a mutant the selection notices', by['add subtracts']['status'] == 'red' and 'CAUGHT' in out)
+    check('names the failing line', by['add subtracts']['failed'] == ['FAIL add'])
+    check('a survivor of the selection is caught by the full escalate run',
+          by['sign flips']['status'] == 'green' and wide['sign flips']['status'] == 'red'
+          and 'CAUGHT-WIDE' in out and 'scope=full (script runner, no coverage map)' in out)
+    check('names the failing line of the escalate run', wide['sign flips']['failed'] == ['FAIL sign of a negative'])
+    check('reports an edit that does not apply', by['not there']['status'] == 'not-applied')
+    with open(os.path.join(repo, 'mod.py')) as f:
+        check('restores the file byte for byte', f.read() == MOD)
+
+    code, out, rows = run(dict(spec, escalate=[['tests/near.py']]))
+    check('a survivor of every run reads SURVIVED-ALL', 'SURVIVED-ALL' in out)
+
+    code, out, rows = run(dict(spec, baseline=['tests/crash.py']))
+    check('stops on a red baseline', code == 2 and 'baseline is not green' in out)
+
+    crashing = dict(spec['mutants'][1], select=['tests/crash.py'])
+    code, out, rows = run(dict(spec, mutants=[crashing]), '--no-escalate')
+    check('names a command that failed without a FAIL line', rows[1]['status'] == 'red'
+          and rows[1]['failed'] == ['tests/crash.py: exit 3'])
+    code, out, rows = run(dict(spec, mutants=[dict(crashing, select=['tests/loud.py'])]), '--no-escalate')
+    check('names a command that failed without a FAIL line by its last output line',
+          rows[1]['failed'] == ['tests/loud.py: boom'])
+    code, out, rows = run(dict(spec, mutants=[dict(crashing, select=[['tests/failed.py'], ['tests/errors.py']])]),
+                          '--no-escalate')
+    check('the default pattern reads FAILED and ERROR lines after an ok line',
+          rows[1]['failed'] == ['FAILED the second check', 'ERROR: test_lookup (t.T)'])
+
+    both = {'name': 'both broken', 'file': 'mod.py', 'edits': [['return a + b', 'return a - b'], ['else -1', 'else 1']]}
+    code, out, rows = run(dict(spec, mutants=[both], select=[['tests/near.py'], ['tests/far.py']]), '--no-escalate')
+    check('keeps the failures of every command that failed', rows[1]['failed'] == ['FAIL add', 'FAIL sign of a negative'])
+
+    code, out, rows = run(dict(spec, mutants=[dict(both, select=['tests/slow.py'])], timeout=1), '--no-escalate')
+    check('a script past its time limit reads TIMEOUT', rows[1]['status'] == 'timeout' and 'TIMEOUT' in out)
+    code, out, rows = run(dict(spec, mutants=[dict(both, select=[['tests/slow.py', '0.7'], ['tests/slow.py', '0.7']])],
+                               timeout=1), '--no-escalate')
+    check('the time limit is shared by the commands of a selection', rows[1]['status'] == 'timeout')
+    code, out, rows = run(dict(spec, mutants=[dict(both, select=[['tests/near.py'], ['tests/slow.py', '5']])], timeout=2),
+                          '--no-escalate')
+    check('a run that failed before its time ran out reads red', rows[1]['status'] == 'red'
+          and rows[1]['failed'] == ['FAIL add'])
+
+    survivor = {'name': 'comment only', 'file': 'mod.py', 'edits': [['def add(a, b):', 'def add(a, b):  # x']]}
+    # A limit of 3 s gives 6 s by default, with 2 s of margin on each side for a loaded runner.
+    code, out, rows = run(dict(spec, mutants=[survivor], timeout=3, escalate=[['tests/slow.py', '4']]))
+    check('escalation gets more than the time limit by default', 'SURVIVED-ALL' in out and 'TIMEOUT-WIDE' not in out)
+    code, out, rows = run(dict(spec, mutants=[survivor], timeout=3, escalate=[['tests/slow.py', '8']]))
+    check('escalation gets no more than twice the time limit by default', 'TIMEOUT-WIDE' in out)
+    code, out, rows = run(dict(spec, baseline=[['tests/slow.py', '2'], ['tests/slow.py', '2']], mutants=[], timeout=3))
+    check('the baseline gets more than the time limit by default', code == 0 and 'BASE green' in out)
+    code, out, rows = run(dict(spec, baseline=['tests/slow.py', '8'], mutants=[], timeout=3))
+    check('the baseline gets no more than twice the time limit by default', code == 2 and 'BASE timeout' in out)
+    code, out, rows = run(dict(spec, baseline=['tests/slow.py', '1.5'], mutants=[], timeout=3, escalate_timeout=1))
+    check('the baseline runs under escalate_timeout when the spec sets it', code == 2 and 'BASE timeout' in out)
+    code, out, rows = run(dict(spec, mutants=[survivor], timeout=1, escalate_timeout=1, escalate=[['tests/slow.py', '1.5']]))
+    check('escalate_timeout limits escalation', 'TIMEOUT-WIDE' in out)
+    code, out, rows = run({k: v for k, v in dict(spec, mutants=[survivor]).items() if k != 'escalate'})
+    check('says when survivors were not escalated because escalate is missing', code == 0
+          and 'no escalate selection' in out)
+    code, out, rows = run({k: v for k, v in dict(spec, mutants=[dict(survivor, select=['tests/near.py'])]).items()
+                           if k != 'select'}, '--no-escalate')
+    check('needs no default select when every mutant has its own', code == 0 and 'SURVIVED' in out)
+    code, out, rows = run({k: v for k, v in dict(spec, mutants=[survivor]).items() if k != 'escalate'}, '--no-escalate')
+    check('says nothing about a missing escalate under --no-escalate', code == 0 and 'no escalate selection' not in out)
+    check('prints the out folder before the baseline', out.splitlines()[0].startswith('out '))
+
+    code, out, rows = run(dict(spec, baseline=['tests/reads.py'], mutants=[], timeout=20))
+    check('a test that reads stdin gets an empty stdin and does not hang', code == 0 and 'BASE green' in out
+          and rows[0]['secs'] < 10)
+
+    with open(os.path.join(root, 'outside.py'), 'w') as f:
+        f.write('X = 1\n')
+    for label, name in (('a path that climbs out of root', '../outside.py'),
+                        ('an absolute path outside root', os.path.join(root, 'outside.py'))):
+        code, out, rows = run(dict(spec, mutants=[{'name': 'escape', 'file': name, 'edits': [['X = 1', 'X = 2']]}]))
+        with open(os.path.join(root, 'outside.py')) as f:
+            check(f'refuses {label}, and writes nothing', code != 0 and 'plain path relative to root' in out
+                  and f.read() == 'X = 1\n')
+
+    os.link(os.path.join(root, 'outside.py'), os.path.join(repo, 'linked.py'))
+    code, out, rows = run(dict(spec, mutants=[{'name': 'linked', 'file': 'linked.py', 'edits': [['X = 1', 'X = 2']]}]))
+    with open(os.path.join(root, 'outside.py')) as f:
+        check('refuses a file with a second hard link, and writes nothing', code != 0 and 'hard link' in out
+              and f.read() == 'X = 1\n')
+    os.remove(os.path.join(repo, 'linked.py'))
+
+    with open(os.path.join(repo, 'a__b.py'), 'w') as f:
+        f.write('A = 1\n')
+    os.makedirs(os.path.join(repo, 'a'), exist_ok=True)
+    with open(os.path.join(repo, 'a', 'b.py'), 'w') as f:
+        f.write('B = 1\n')
+    both = [{'name': 'flat', 'file': 'a__b.py', 'edits': [['A = 1', 'A = 2']]},
+            {'name': 'nested', 'file': 'a/b.py', 'edits': [['B = 1', 'B = 2']]}]
+    code, out, rows = run(dict(spec, mutants=both), '--no-escalate')
+    backup = os.path.join(root, 'out', 'backup')
+    with open(os.path.join(backup, 'a__b.py')) as f, open(os.path.join(backup, 'a', 'b.py')) as g:
+        check('keeps each backup under its own path', code == 0 and f.read() == 'A = 1\n' and g.read() == 'B = 1\n')
+    check('marks the worktree clean after a normal run', os.path.exists(os.path.join(root, 'out', 'clean')))
+
+    with open(os.path.join(repo, 'a', 'b.py'), 'w') as f:
+        f.write('B = 1\nC = 3\n')
+    code, out, rows = run(dict(spec, mutants=[dict(both[1], name='nested again')]), '--no-escalate')
+    with open(os.path.join(backup, 'a', 'b.py')) as f:
+        check('reruns with the same --out after a file was edited on purpose', code == 0 and f.read() == 'B = 1\nC = 3\n')
+
+    path = os.path.join(root, 'spec-kill9.json')
+    hold = {'name': 'held', 'file': 'a/b.py', 'edits': [['B = 1', 'B = 2']], 'select': ['tests/slow.py', '120']}
+    with open(path, 'w') as f:
+        json.dump(dict(spec, mutants=[hold], timeout=300), f)
+    killed = os.path.join(root, 'out-kill9')
+    proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'], start_new_session=True,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    seen, deadline = False, time.monotonic() + 90
+    while time.monotonic() < deadline and not seen:
+        with open(os.path.join(repo, 'a', 'b.py')) as f:
+            seen = 'B = 2' in f.read()
+        time.sleep(0.05)
+    # Killing the whole group stands in for a kill -9 and leaves no test script running.
+    os.killpg(proc.pid, signal.SIGKILL)
+    proc.wait(timeout=60)
+    check('a kill -9 during a mutant leaves no clean marker', seen and not os.path.exists(os.path.join(killed, 'clean')))
+    done = subprocess.run([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'], capture_output=True,
+                          text=True, stdin=subprocess.DEVNULL)
+    with open(os.path.join(killed, 'backup', 'a', 'b.py')) as f:
+        check('refuses to overwrite the backup a killed run left', done.returncode != 0
+              and 'ended with a mutant applied' in done.stdout + done.stderr and 'a/b.py' in done.stdout + done.stderr
+              and f.read() == 'B = 1\nC = 3\n')
+    with open(os.path.join(killed, 'backup', 'a', 'b.py')) as f, open(os.path.join(repo, 'a', 'b.py'), 'w') as g:
+        g.write(f.read())
+    quick = os.path.join(root, 'spec-kill9-quick.json')
+    with open(quick, 'w') as f:
+        json.dump(dict(spec, mutants=[dict(hold, select=['tests/near.py'])]), f)
+    done = subprocess.run([sys.executable, SCRIPT, quick, '--out', killed, '--no-escalate'], capture_output=True,
+                          text=True, stdin=subprocess.DEVNULL)
+    check('reruns once the worktree matches the backup a killed run left', done.returncode == 0)
+
+    # .x.tmp is shaped like a temporary file, .clean is the name an earlier version gave the marker,
+    # and .d.py guards against a filter that skips every dotfile.
+    for name in ('.d.py', '.x.tmp', '.clean'):
+        with open(os.path.join(repo, name), 'w') as f:
+            f.write('V = 1\n')
+        dotted = os.path.join(root, 'out-dot' + name)
+        hidden = {'name': 'hidden', 'file': name, 'edits': [['V = 1', 'V = 2']], 'select': ['tests/slow.py', '120']}
+        path = os.path.join(root, 'spec-dot.json')
+        with open(path, 'w') as f:
+            json.dump(dict(spec, mutants=[hidden], timeout=300), f)
+        proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', dotted, '--no-escalate'], start_new_session=True,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        seen, deadline = False, time.monotonic() + 90
+        while time.monotonic() < deadline and not seen:
+            with open(os.path.join(repo, name)) as f:
+                seen = 'V = 2' in f.read()
+            time.sleep(0.05)
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait(timeout=60)
+        with open(path, 'w') as f:
+            json.dump(dict(spec, mutants=[dict(hidden, select=['tests/near.py'])]), f)
+        done = subprocess.run([sys.executable, SCRIPT, path, '--out', dotted, '--no-escalate'], capture_output=True,
+                              text=True, stdin=subprocess.DEVNULL)
+        with open(os.path.join(dotted, 'backup', name)) as f:
+            check(f'refuses to overwrite the backup a killed run left of {name}', seen and done.returncode != 0
+                  and 'ended with a mutant applied' in done.stdout + done.stderr and f.read() == 'V = 1\n')
+        os.remove(os.path.join(repo, name))
+
+    # A kill while the backups are being written, forced by making os.replace kill the process.
+    torn = os.path.join(root, 'out-torn')
+    path = os.path.join(root, 'spec-torn.json')
+    with open(path, 'w') as f:
+        json.dump(dict(spec, mutants=spec['mutants'][:1]), f)
+    driver = ('import os, runpy, signal, sys\n'
+              'os.replace = lambda *a: os.kill(os.getpid(), signal.SIGKILL)\n'
+              'sys.argv = [sys.argv[1], sys.argv[2], "--out", sys.argv[3], "--no-escalate"]\n'
+              'runpy.run_path(sys.argv[0], run_name="__main__")\n')
+    first = subprocess.run([sys.executable, '-c', driver, SCRIPT, path, torn], capture_output=True, stdin=subprocess.DEVNULL)
+    done = subprocess.run([sys.executable, SCRIPT, path, '--out', torn, '--no-escalate'], capture_output=True, text=True,
+                          stdin=subprocess.DEVNULL)
+    check('reruns after a kill while the backups were being written', first.returncode == -signal.SIGKILL
+          and done.returncode == 0)
+
+
+    # A link planted between write_new's unlink and its open, so only O_EXCL and O_NOFOLLOW stop the write.
+    # backup.writing carries a backup's bytes, so an open that follows the link changes the target even
+    # without O_TRUNC, where the empty marker at clean would not.
+    for name in ('clean', 'backup.writing'):
+        raced = os.path.join(root, 'out-raced-' + name)
+        os.makedirs(raced)
+        target = os.path.join(root, 'precious-raced-' + name)
+        with open(target, 'w') as f:
+            f.write('precious\n')
+        racer = ('import os, pathlib, runpy, sys\n'
+                 'unlink, target, name = pathlib.Path.unlink, sys.argv[4], sys.argv[5]\n'
+                 'def planted(self, missing_ok=False):\n'
+                 '    unlink(self, missing_ok=missing_ok)\n'
+                 '    if self.name == name:\n'
+                 '        os.symlink(target, self)\n'
+                 'pathlib.Path.unlink = planted\n'
+                 'sys.argv = [sys.argv[1], sys.argv[2], "--out", sys.argv[3], "--no-escalate"]\n'
+                 'runpy.run_path(sys.argv[0], run_name="__main__")\n')
+        subprocess.run([sys.executable, '-c', racer, SCRIPT, path, raced, target, name], capture_output=True,
+                       stdin=subprocess.DEVNULL)
+        with open(target) as f:
+            check(f'writes nothing through a link planted at {name} after write_new unlinks the path',
+                  f.read() == 'precious\n')
+
+    for name in ('clean', 'backup.writing'):
+        planted = os.path.join(root, 'out-planted-' + name)
+        os.makedirs(planted)
+        target = os.path.join(root, 'precious-' + name)
+        with open(target, 'w') as f:
+            f.write('precious\n')
+        os.symlink(target, os.path.join(planted, name))
+        subprocess.run([sys.executable, SCRIPT, path, '--out', planted, '--no-escalate'], capture_output=True,
+                       stdin=subprocess.DEVNULL)
+        with open(target) as f:
+            check(f'writes nothing through a link planted at {name} in --out', f.read() == 'precious\n'
+                  and not os.path.islink(os.path.join(planted, name)))
+
+    path = os.path.join(root, 'spec-kill-base.json')
+    with open(path, 'w') as f:
+        json.dump(dict(spec, baseline=['tests/slow.py', '120'], mutants=[both[1]], timeout=300), f)
+    killed = os.path.join(root, 'out-kill-base')
+    proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'], start_new_session=True,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline and not os.path.exists(os.path.join(killed, 'clean')):
+        time.sleep(0.05)
+    time.sleep(0.5)
+    in_baseline = os.path.exists(os.path.join(killed, 'clean')) and proc.poll() is None
+    os.killpg(proc.pid, signal.SIGKILL)
+    proc.wait(timeout=60)
+    check('the kill lands during the baseline', in_baseline)
+    with open(os.path.join(repo, 'a', 'b.py'), 'a') as f:
+        f.write('D = 4\n')
+    with open(path, 'w') as f:
+        json.dump(dict(spec, mutants=[both[1]]), f)
+    done = subprocess.run([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'], capture_output=True,
+                          text=True, stdin=subprocess.DEVNULL)
+    check('reruns after a run killed before its first mutant, once a file was edited', done.returncode == 0)
+
+    path = os.path.join(root, 'spec-default.json')
+    with open(path, 'w') as f:
+        json.dump(dict(spec, mutants=spec['mutants'][:1]), f)
+    # HOME points at the scratch folder, so the default folder is made there and not in the real ~/.cache.
+    home = os.path.join(root, 'home')
+    os.makedirs(home)
+    outs = []
+    for _ in range(2):
+        done = subprocess.run([sys.executable, SCRIPT, path, '--no-escalate'], capture_output=True, text=True,
+                              stdin=subprocess.DEVNULL, env=dict(os.environ, HOME=home))
+        outs.append(done.stdout.splitlines()[0])
+    check('without --out a rerun uses the same folder', outs[0] == outs[1] and outs[0].startswith('out '))
+    folder = outs[0][len('out '):]
+    check('without --out the folder is under the user cache, for the user alone',
+          folder.startswith(os.path.realpath(os.path.join(home, '.cache', 'fast-mutation')) + os.sep)
+          and stat.S_IMODE(os.stat(folder).st_mode) == 0o700)
+    os.chmod(folder, 0o755)
+    subprocess.run([sys.executable, SCRIPT, path, '--no-escalate'], capture_output=True, stdin=subprocess.DEVNULL,
+                   env=dict(os.environ, HOME=home))
+    check('a default folder found with looser permissions is made private again', stat.S_IMODE(os.stat(folder).st_mode) == 0o700)
+
+    code, out, rows = run(dict(spec, mutants=[both[1]]), '--no-escalate')
+    code, out, rows = run(dict(spec, mutants=spec['mutants'][:1]), '--no-escalate')
+    check('a clean run empties backup/ of an earlier spec\'s files', code == 0
+          and not os.path.exists(os.path.join(root, 'out', 'backup', 'a', 'b.py'))
+          and os.path.exists(os.path.join(root, 'out', 'backup', 'mod.py')))
+    os.symlink(os.path.join(root, 'outside.py'), os.path.join(repo, 'leak.py'))
+    code, out, rows = run(dict(spec, mutants=[{'name': 'leak', 'file': 'leak.py', 'edits': [['X = 1', 'X = 2']]}]))
+    with open(os.path.join(root, 'outside.py')) as f:
+        check('refuses a symlink inside root that points out, and writes nothing', code != 0 and 'must sit inside root' in out
+              and f.read() == 'X = 1\n')
+    os.remove(os.path.join(repo, 'leak.py'))
+    for label, name in (('an absolute path inside root', os.path.join(repo, 'mod.py')), ('a path with ..', 'a/../mod.py')):
+        code, out, rows = run(dict(spec, mutants=[{'name': 'odd', 'file': name, 'edits': [['return a + b', 'return a - b']]}]))
+        with open(os.path.join(repo, 'mod.py')) as f:
+            check(f'refuses {label}, and writes nothing', code != 0 and 'plain path relative to root' in out and f.read() == MOD)
+
+    stub = os.path.join(root, 'stub-python')
+    with open(stub, 'w') as f:
+        f.write('#!/bin/sh\necho "$@" >> "$(dirname "$0")/stub-args"\nexit 0\n')
+    os.chmod(stub, os.stat(stub).st_mode | stat.S_IEXEC)
+    code, out, rows = run({'root': repo, 'python': stub, 'baseline': ['tests'], 'select': ['tests'], 'mutants': []})
+    with open(os.path.join(root, 'stub-args')) as f:
+        check('a spec with no runner key still runs pytest', code == 0 and f.read().startswith('-m pytest'))
+
+    slow_mutant = {'name': 'slow', 'file': 'mod.py', 'edits': [['return a + b', 'return a - b']], 'select': ['tests/slow.py', '120']}
+    path = os.path.join(root, 'spec-term.json')
+    with open(path, 'w') as f:
+        json.dump(dict(spec, mutants=[slow_mutant], timeout=300), f)
+    for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', os.path.join(root, 'out-term'), '--no-escalate'],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+        # A loaded machine can take a while to reach the mutant, so the wait is generous.
+        seen, deadline = False, time.monotonic() + 90
+        while time.monotonic() < deadline:
+            with open(os.path.join(repo, 'mod.py')) as f:
+                if 'a - b' in f.read():
+                    seen = True
+                    break
+            time.sleep(0.05)
+        proc.send_signal(sig)
+        proc.wait(timeout=60)
+        with open(os.path.join(repo, 'mod.py')) as f:
+            check(f'{sig.name} during a mutant restores the file', seen and f.read() == MOD and proc.returncode == 128 + sig)
+
+    code, out, rows = run(dict(spec, fail_pattern=r'add$'), '--only', 'add subtracts', '--no-escalate')
+    check('reads failures with the spec\'s fail_pattern', rows[1]['status'] == 'red' and rows[1]['failed'] == ['add'])
+    code, out, rows = run(dict(spec, mutants=spec['mutants'][:1], select=[['tests/near.py'], ['tests/far.py']]))
+    check('runs every command of a selection and keeps each failure', code == 0
+          and rows[1]['status'] == 'red' and rows[1]['failed'] == ['FAIL add'])
+
+    code, out, rows = run(dict(spec, workers=4), '--no-escalate')
+    check('says the script runner does not use workers', 'does not use them' in out)
+    code, out, rows = run(dict(spec, runner='nose'))
+    check('refuses an unknown runner', code != 0 and "runner must be 'pytest' or 'script'" in out)
+    code, out, rows = run(dict(spec, select=[]))
+    check('refuses an empty selection', code != 0 and 'names no command' in out)
+
+# The signal functions run in a child, so the signals they ignore stay this process's own.
+UNIT = '''import importlib.util, os, signal, sys
+spec = importlib.util.spec_from_file_location('mutate', sys.argv[1])
+mutate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mutate)
+names = {s: s.name for s in mutate.STOP_SIGNALS}
+print('stops', sorted(names.values()))
+mutate.quiet_signals()
+print('quiet', all(signal.getsignal(s) == signal.SIG_IGN for s in names))
+for s in names:
+    signal.signal(s, signal.SIG_DFL)
+try:
+    mutate.exit_on_signal(signal.SIGTERM, None)
+except SystemExit as stop:
+    print('exit', stop.code, all(signal.getsignal(s) == signal.SIG_IGN for s in names))
+mutate._stopped = False
+for s in names:
+    signal.signal(s, signal.default_int_handler if s == signal.SIGINT else signal.SIG_DFL)
+def defaults():
+    for s in names:
+        signal.signal(s, signal.default_int_handler if s == signal.SIGINT else signal.SIG_DFL)
+defaults()
+seen = []
+def restore():
+    seen.append(all(signal.getsignal(s) == signal.SIG_IGN for s in names))
+    for s in names:
+        os.kill(os.getpid(), s)
+    seen.append(True)
+mutate.finish(restore)
+print('finish', seen == [True, True])
+marker = lambda signum, frame: None
+for s in names:
+    signal.signal(s, marker)
+mutate.finish(lambda: None)
+print('handlers back', all(signal.getsignal(s) is marker for s in names))
+def broken():
+    raise OSError('disk full')
+try:
+    mutate.finish(broken)
+except OSError:
+    print('handlers back after a failed restore', all(signal.getsignal(s) is marker for s in names))
+quiet, done = mutate.quiet_signals, []
+def interrupted():
+    raise SystemExit(143)
+mutate.quiet_signals = interrupted
+try:
+    mutate.finish(lambda: done.append(True))
+except SystemExit as stop:
+    print('race', stop.code, done == [True])
+mutate.quiet_signals, getsignal, done = quiet, signal.getsignal, []
+def landed(sig):
+    signal.getsignal = getsignal
+    raise SystemExit(130)
+signal.getsignal = landed
+try:
+    mutate.finish(lambda: done.append(True))
+except SystemExit as stop:
+    print('save window', stop.code, done == [True])
+real, calls, done = mutate.finish, [], []
+def entered(restore):
+    calls.append(True)
+    if len(calls) == 1:
+        raise SystemExit(143)
+    real(restore)
+mutate.finish = entered
+try:
+    mutate.last_restore(lambda: done.append(True))
+except SystemExit as stop:
+    print('entry window', stop.code, done == [True], len(calls))
+mutate._stopped, done, calls = False, [], []
+def restored(restore):
+    calls.append(True)
+    real(restore)
+    raise SystemExit(143)
+mutate.finish = restored
+try:
+    mutate.last_restore(lambda: done.append(True))
+except SystemExit as stop:
+    print('done once', stop.code, done == [True], len(calls))
+mutate.finish, mutate._stopped = real, False
+defaults()
+try:
+    mutate.exit_on_signal(signal.SIGTERM, None)
+except SystemExit:
+    pass
+for s in names:
+    signal.signal(s, marker)
+mutate._stopped = True
+mutate.finish(lambda: None)
+print('stay ignored after a stop', all(signal.getsignal(s) == signal.SIG_IGN for s in names))
+mutate._stopped = False
+for s in names:
+    signal.signal(s, mutate.exit_on_signal)
+count, getsignal = [], signal.getsignal
+def mid_save(sig):
+    count.append(sig)
+    if len(count) == 2:
+        signal.getsignal = getsignal
+        mutate.exit_on_signal(signal.SIGTERM, None)
+    return getsignal(sig)
+signal.getsignal = mid_save
+try:
+    mutate.finish(lambda: None)
+except SystemExit as stop:
+    print('mid save', stop.code, all(signal.getsignal(s) == signal.SIG_IGN for s in names))
+'''
+done = subprocess.run([sys.executable, '-c', UNIT, SCRIPT], capture_output=True, text=True)
+lines = done.stdout.splitlines()
+check('Ctrl-C, SIGTERM and SIGHUP are the stop signals', "stops ['SIGHUP', 'SIGINT', 'SIGTERM']" in lines)
+check('quiet_signals ignores every stop signal', 'quiet True' in lines)
+check('a stop signal exits with 128 plus its number and ignores the rest', 'exit 143 True' in lines)
+check('every stop signal is ignored during the last restore', 'finish True' in lines and 'KeyboardInterrupt' not in done.stderr)
+check('the stop signals work again after the last restore', 'handlers back True' in lines)
+check('the stop signals work again after a failed restore', 'handlers back after a failed restore True' in lines)
+check('a signal while the handlers are being switched still reaches the restore', 'race 143 True' in lines)
+check('a signal while the handlers are being saved still reaches the restore', 'save window 130 True' in lines)
+with open(SCRIPT) as f:
+    source = f.read()
+check('a signal as the last restore is entered gets a second restore', 'entry window 143 True 2' in lines)
+check('a restore that finished is not run a second time', 'done once 143 True 1' in lines)
+check('finish leaves the stop signals ignored once a stop signal has fired', 'stay ignored after a stop True' in lines)
+check('a stop signal halfway through the save leaves every stop signal ignored', 'mid save 143 True' in lines)
+check("main's last restore runs through last_restore", 'finally:\n        last_restore(restore)\n' in source)
+
+print('all passed' if not failures else f'{failures} failed')
+sys.exit(1 if failures else 0)

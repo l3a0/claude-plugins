@@ -153,7 +153,7 @@ Wait for every notification before reading the findings together. Never predict 
 
 A finding is a claim until something executes it. For every veto and every must-fix, launch a verifier whose only job is to refute it. Give it the finding and the anchor, not the role's reasoning. Verify by running, not by reading. A verifier that edits code, such as one that mutates it, runs with `isolation: "worktree"`, so its edits cannot land in the session's checkout.
 
-1. A claim that a test misses a bug: mutate the code with the `fast-mutation` skill where it is installed, or by hand in the verifier's worktree, and see whether the test fails.
+1. A claim that a test misses a bug: mutate the code with this plugin's `fast-mutation` skill, or by hand in the verifier's worktree, and see whether the test fails.
 2. A claim that a path exists, such as an order reaching a broker around the gate: write the call and run it.
 3. A claim about another repository or a vendor: read the file at its commit, or the vendor's own page.
 

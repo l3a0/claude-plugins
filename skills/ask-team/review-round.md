@@ -107,7 +107,7 @@ Before writing a fix, name the cause, and fix that rather than the form the lens
 
 1. Apply the fixes on each pull request's branch, in its own checkout. A fix to a rule that touches mechanics or a waiting question listed under the brief's `## Out of scope` stays a guarantee and a pointer, takes no side on the question, and keeps in full what the brief keeps in full, whatever fix a verifier proposed.
 2. Where the change cites a source, recheck every citation against it with the brief's helper, whether or not a lens flagged it, and list each miss.
-3. Where the fixes change code, show the test catches what it claims by breaking the code, with the `fast-mutation` skill or a fixture the code fails on before the fix.
+3. Where the fixes change code, show the test catches what it claims by breaking the code, with this plugin's `fast-mutation` skill or a fixture the code fails on before the fix.
 4. Run every check the repository's CI workflow runs, such as this repository's `.github/workflows/board-guard-test.yml`, and note what each printed.
 5. Commit, naming in each message the round it answers. Before pushing, run the script below over every pull request, from the round's anchor to the new commit. It prints each run of words the fix removed and each file, in any checkout, that still holds five of them in a row. Check the cuts and moves kept for the comment against the runs, and read each `still in` line. A line on a companion that carries the rule is a cut not yet made there, unless the fix moved the words or the companion keeps them on purpose.
 
