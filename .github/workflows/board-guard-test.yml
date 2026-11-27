@@ -29,6 +29,8 @@ jobs:
         run: python3 tests/test_removed_tests.py
       - name: next_version tests
         run: python3 tests/test_next_version.py
+      - name: The plugin manifest describes every skill
+        run: python3 tests/test_plugin_manifest.py
       - name: ask-team's cross-references hold
         run: python3 tests/test_ask_team_links.py
       - name: Every table has a title
