@@ -46,9 +46,9 @@ the anchor. That catches an anchor copied forward from a round that pushed a
 fix, which is still an ancestor, and a closing comment for a round a later
 round has read past. It reads only the compare it already makes, and refuses
 a compare whose pages disagree or whose list of commits does not match its
-count or leaves out the head. An anchor that stands only through a force push
-is outside the head's history, so the head holds no commit after it and this
-check refuses none. A pull request that a round left untouched is read at the same commit
+count or leaves out the head. For an anchor that stands only through a force
+push, it reads instead the commits every replaced head that holds the anchor
+held after it, and not the commits the force push wrote. A pull request that a round left untouched is read at the same commit
 by the next round, and the earlier comment names no later commit, so that post
 goes through. So does a round rerun on the same commit, such as after a lens
 failed, which keeps its round number. The script cannot tell that companion
@@ -424,7 +424,8 @@ FORCE_PUSHES = ("query($owner: String!, $name: String!, $num: Int!, $endCursor: 
 
 
 def replaced_head(repo, num, anchor):
-    """Return a head that a force push on this pull request replaced and that holds the anchor, and why one could not be read."""
+    """Return a head that a force push on this pull request replaced and that holds the anchor, the commits every such
+    head holds after the anchor, and why one could not be read."""
     owner, name = repo.split("/", 1)
     # GitHub records each force push on the pull request's timeline, with the head it replaced. A commit GitHub no
     # longer holds has no beforeCommit, and the jq filter skips it.
@@ -433,24 +434,30 @@ def replaced_head(repo, num, anchor):
                            ".data.repository.pullRequest.timelineItems.nodes[].beforeCommit.oid // empty"),
                           capture_output=True, text=True)
     if done.returncode:
-        return None, f"GitHub's record of force pushes on {repo}#{num} could not be read: {done.stderr.strip()}"
+        return None, [], f"GitHub's record of force pushes on {repo}#{num} could not be read: {done.stderr.strip()}"
     befores = list(dict.fromkeys(line.strip() for line in done.stdout.split("\n") if line.strip()))
+    # Every replaced head that holds the anchor counts, because a later round may have read any of them.
+    found, later, unread = None, [], []
     for before in befores:
         if before.startswith(anchor):
-            return before, None
-    unread = []
-    for before in befores:
-        why, _, status = compare_status(repo, anchor, before)
+            found = found or before
+            continue
+        why, after, status = compare_status(repo, anchor, before)
         if why is None:
-            return before, None
-        if status is None:
-            unread.append(f"GitHub could not compare the anchor with the replaced head {before[:7]}: {why}")
-    return None, "; ".join(unread) or None
+            found = found or before
+            later += [c for c in after if c not in later]
+        elif status is None:
+            unread.append(f"GitHub's compare of the anchor with the replaced head {before[:7]} gave no usable "
+                          f"answer: {why}")
+    if found:
+        return found, later, None
+    return None, [], "; ".join(unread) or None
 
 
 def force_pushed(repo, num, anchor, head, why, replaced):
-    """Return why an anchor outside the head's history is refused, or None where a recorded force push replaced a head that holds it."""
-    before, unread = replaced_head(repo, num, anchor)
+    """Return why an anchor outside the head's history is refused, or None where a recorded force push replaced a head
+    that holds it, and the commits that head holds after the anchor."""
+    before, later, unread = replaced_head(repo, num, anchor)
     if before:
         if replaced is not None:
             replaced["before"] = before
@@ -458,9 +465,22 @@ def force_pushed(repo, num, anchor, head, why, replaced):
                                 f"force push on this pull request that replaced the head {before[:7]}, which holds it, "
                                 f"so the anchor stands. The next round reads the whole change, as review-round.md's "
                                 f"step 1 says")
-        return None
+        return None, later
     why += ", and no force push GitHub records on this pull request replaced a head that holds it"
-    return why + (f" ({unread})" if unread else "")
+    return why + (f" ({unread})" if unread else ""), []
+
+
+def check_anchor(repo, num, anchor, head, replaced):
+    """Return why the anchor is refused, or None, and the commits read after it, for the reuse check.
+
+    Those are the commits the head holds after the anchor, or, for an anchor that stands only through a force push,
+    the commits the replaced head held after it. The force-push record is read only when GitHub answers behind or
+    diverged, so a compare that failed or gave no usable answer still refuses.
+    """
+    why, later, status = compare_status(repo, anchor, head)
+    if why and num is not None and status in ("behind", "diverged"):
+        return force_pushed(repo, num, anchor, head, why, replaced)
+    return why, later
 
 
 def outside_history(repo, anchor, head, num=None, replaced=None):
@@ -472,10 +492,7 @@ def outside_history(repo, anchor, head, num=None, replaced=None):
     """
     if num is None:
         return compare_range(repo, anchor, head)[0]
-    why, _, status = compare_status(repo, anchor, head)
-    if why and status in ("behind", "diverged"):
-        return force_pushed(repo, num, anchor, head, why, replaced)
-    return why
+    return check_anchor(repo, num, anchor, head, replaced)[0]
 
 
 def comment(args):
@@ -519,9 +536,7 @@ def comment(args):
     history, unread, notes = [], [], []
     for (m, text, heading), head in zip(targets, heads):
         found = {}
-        why, later, status = compare_status(m["repo"], m["anchor"], head)
-        if why and status in ("behind", "diverged"):
-            why = force_pushed(m["repo"], m["num"], m["anchor"], head, why, found)
+        why, later = check_anchor(m["repo"], m["num"], m["anchor"], head, found)
         history.append((why, later))
         if not why and found:
             # A closing comment ends the review, and no lens read a head a force push wrote, so the review takes a

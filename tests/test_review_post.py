@@ -733,12 +733,49 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, **dict(pushed, replaced=({'before': G, 'gone': True}, {'before': H, 'ancestors': []})))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
     check('refuses and names a replaced head GitHub can no longer compare', code != 0
-          and f'could not compare the anchor with the replaced head {G[:7]}' in out and 'Not Found' in out
+          and f"compare of the anchor with the replaced head {G[:7]} gave no usable answer" in out and 'Not Found' in out
           and f'replaced head {H[:7]}' not in out and state(5)['comments'] == [])
     seed(5, **dict(pushed, replaced=({'before': G, 'gone': True}, {'before': H, 'ancestors': ['f' * 40]})))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
     check('posts where one replaced head is gone and another holds the anchor', code == 0
           and len(state(5)['comments']) == 1 and f'replaced the head {H[:7]}' in out)
+    # The force-push record is read only when GitHub answers behind or diverged. A compare that failed, or gave no
+    # answer GitHub documents, still refuses, even where a replaced head holds the anchor.
+    for label, extra, reason in (('GitHub cannot compare', dict(elsewhere=()), 'could not compare'),
+                                 ('GitHub gives no documented answer for', dict(elsewhere=(), silent=('f' * 40,)),
+                                  'none of ahead')):
+        seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]},), **extra))
+        code, out = post(f'o/r#5={head5}={F}={unrelated}')
+        check(f'refuses an anchor {label} even where a replaced head holds it', code != 0 and reason in out
+              and 'the anchor stands' not in out and state(5)['comments'] == [])
+        gate_found = {}
+        os.environ.update(PATH=BIN + os.pathsep + os.environ['PATH'], STUB_STATE=STATE)
+        why = load().outside_history('o/r', F, head5, num='5', replaced=gate_found)
+        check(f'the gate with a number refuses an anchor {label} even where a replaced head holds it',
+              isinstance(why, str) and reason in why and gate_found == {})
+    # PR #111's reuse check reads the commits the replaced head held after a force-pushed anchor, so an anchor
+    # copied forward from a round that read past it is refused, as it is without a force push.
+    seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]},),
+                   comments=[f'## Review, round 2\n\nRound 2, of `{F}`, fixed in `{G[:7]}`.\n']))
+    code, out = post(f'o/r#5={head5}={F}={unrelated}')
+    check('refuses a force-pushed anchor that an earlier round read past, naming the replaced head', code != 0
+          and 'another round read past this anchor' in out and f"names {F} as its anchor and also {G[:7]}" in out
+          and len(state(5)['comments']) == 1)
+    # Two force pushes each replaced a head that holds the anchor, and round 2 read the second one, so it read past
+    # the anchor too.
+    for first in ({'before': G, 'ancestors': ['f' * 40]}, {'before': 'f' * 40}):
+        seed(5, **dict(pushed, replaced=(first, {'before': H, 'ancestors': ['f' * 40]}),
+                       comments=[f'## Review, round 2\n\nRound 2, of `{H[:7]}`, at `{H[:7]}`.\n']))
+        code, out = post(f'o/r#5={head5}={F}={unrelated}')
+        check(f'refuses a force-pushed anchor a round read past through the second of two replaced heads, the first '
+              f'{"holding" if first["before"] == G else "being"} the anchor', code != 0
+              and 'another round read past this anchor' in out and f'reads {H[:7]} as its anchor' in out
+              and len(state(5)['comments']) == 1)
+    seed(5, **dict(pushed, replaced=({'before': 'f' * 40},),
+                   comments=[f'## Review, round 2\n\nRound 2, of `{F}`, at `{"f" * 7}`.\n']))
+    code, out = post(f'o/r#5={head5}={F}={unrelated}')
+    check('posts a force-pushed anchor that was itself the replaced head, which no round read past', code == 0
+          and len(state(5)['comments']) == 2 and 'the anchor stands' in out)
     seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]},)))
     code, out = post(f'o/r#5={head5}={F}={unrelated}', STUB_GRAPHQL_FAIL='1')
     check('refuses when GitHub\'s record of force pushes cannot be read', code != 0
