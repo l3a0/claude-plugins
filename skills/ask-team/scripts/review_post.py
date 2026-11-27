@@ -47,8 +47,9 @@ fix, which is still an ancestor, and a closing comment for a round a later
 round has read past. It reads only the compare it already makes, and refuses
 a compare whose pages disagree or whose list of commits does not match its
 count or leaves out the head. For an anchor that stands only through a force
-push, it reads instead the commits every replaced head that holds the anchor
-held after it, and not the commits the force push wrote. A pull request that a round left untouched is read at the same commit
+push, it reads instead the commits the last replaced head that holds the anchor
+held after it, and not the commits the force push wrote or a history a later
+force push replaced, and it refuses where any replaced head cannot be read. A pull request that a round left untouched is read at the same commit
 by the next round, and the earlier comment names no later commit, so that post
 goes through. So does a round rerun on the same commit, such as after a lens
 failed, which keeps its round number. The script cannot tell that companion
@@ -424,8 +425,8 @@ FORCE_PUSHES = ("query($owner: String!, $name: String!, $num: Int!, $endCursor: 
 
 
 def replaced_head(repo, num, anchor):
-    """Return a head that a force push on this pull request replaced and that holds the anchor, the commits every such
-    head holds after the anchor, and why one could not be read."""
+    """Return the last head that a force push on this pull request replaced and that holds the anchor, the commits
+    that head holds after the anchor, and why any replaced head could not be read."""
     owner, name = repo.split("/", 1)
     # GitHub records each force push on the pull request's timeline, with the head it replaced. A commit GitHub no
     # longer holds has no beforeCommit, and the jq filter skips it.
@@ -435,29 +436,33 @@ def replaced_head(repo, num, anchor):
                           capture_output=True, text=True)
     if done.returncode:
         return None, [], f"GitHub's record of force pushes on {repo}#{num} could not be read: {done.stderr.strip()}"
-    befores = list(dict.fromkeys(line.strip() for line in done.stdout.split("\n") if line.strip()))
-    # Every replaced head that holds the anchor counts, because a later round may have read any of them.
+    # A head a force push restored and replaced again counts where it last appears.
+    lines = [line.strip() for line in done.stdout.split("\n") if line.strip()]
+    befores = list(dict.fromkeys(reversed(lines)))[::-1]
+    # GitHub lists force pushes oldest first. The last replaced head that holds the anchor is the history a round
+    # read past it on, and an older one may hold commits no history kept, so only the last one counts.
     found, later, unread = None, [], []
     for before in befores:
         if before.startswith(anchor):
-            found = found or before
+            found, later = before, []
             continue
         why, after, status = compare_status(repo, anchor, before)
         if why is None:
-            found = found or before
-            later += [c for c in after if c not in later]
+            found, later = before, after
         elif status is None:
             unread.append(f"GitHub's compare of the anchor with the replaced head {before[:7]} gave no usable "
                           f"answer: {why}")
-    if found:
-        return found, later, None
-    return None, [], "; ".join(unread) or None
+    return found, (later if found else []), "; ".join(unread) or None
 
 
 def force_pushed(repo, num, anchor, head, why, replaced):
     """Return why an anchor outside the head's history is refused, or None where a recorded force push replaced a head
-    that holds it, and the commits that head holds after the anchor."""
+    that holds it, and the commits the last such head holds after the anchor. A replaced head GitHub cannot read
+    refuses, because the reuse check would then read an incomplete history."""
     before, later, unread = replaced_head(repo, num, anchor)
+    if before and unread:
+        return (f"{why}, and GitHub records a force push that replaced a head holding it, but another replaced head "
+                f"could not be read, so the check for a round that read past it cannot finish ({unread})"), []
     if before:
         if replaced is not None:
             replaced["before"] = before
@@ -474,7 +479,7 @@ def check_anchor(repo, num, anchor, head, replaced):
     """Return why the anchor is refused, or None, and the commits read after it, for the reuse check.
 
     Those are the commits the head holds after the anchor, or, for an anchor that stands only through a force push,
-    the commits the replaced head held after it. The force-push record is read only when GitHub answers behind or
+    the commits the last replaced head that holds it held after it. The force-push record is read only when GitHub answers behind or
     diverged, so a compare that failed or gave no usable answer still refuses.
     """
     why, later, status = compare_status(repo, anchor, head)
