@@ -77,17 +77,23 @@ elif args[1] == 'edit' and args[5] == '--body-file' and args[0] == 'pr':
     if os.environ.get('STUB_LOST') == 'edit': sys.exit('stand-in gh: connection lost')
 elif args[1] == 'comment' and args[5] == '--body-file':
     if os.environ.get('STUB_COMMENT_FAIL') == args[2]: sys.exit('stand-in gh: comment refused')
-    pr['comments'].append({'author': {'login': login}, 'body': open(args[6], newline='').read()})
-    json.dump(pr, open(path, 'w'))
+    # Like GitHub, each comment gets a link whose number rises with every post.
+    counter = os.path.join(state, 'counter')
+    def landed(body):
+        n = int(open(counter).read()) + 1 if os.path.exists(counter) else 1001
+        open(counter, 'w').write(str(n))
+        url = 'https://github.com/' + args[4] + ('/issues/' if args[0] == 'issue' else '/pull/') + args[2] + '#issuecomment-' + str(n)
+        pr['comments'].append({'author': {'login': login}, 'body': body, 'url': url})
+        json.dump(pr, open(path, 'w'))
+        return url
+    posted = landed(open(args[6], newline='').read())
     if os.environ.get('STUB_DOUBLE') == args[2]:
-        pr['comments'].append({'author': {'login': login}, 'body': open(args[6], newline='').read()})
-        json.dump(pr, open(path, 'w'))
+        landed(open(args[6], newline='').read())
     if os.environ.get('STUB_RACE') == args[2]:
-        # Another run's cost comment for the same round and pull request lands under another anchor.
-        pr['comments'].append({'author': {'login': login}, 'body': open(args[6], newline='').read().replace('`bbbbbbb`', '`ccccccc`')})
-        json.dump(pr, open(path, 'w'))
+        # Another run's comment under the same key lands as this one does, with other text.
+        landed(open(args[6], newline='').read().rstrip('\\n') + ' Another session.\\n')
     if os.environ.get('STUB_LOST') == 'comment': sys.exit('stand-in gh: connection lost')
-    print('https://github.com/' + args[4] + ('/issues/' if args[0] == 'issue' else '/pull/') + args[2] + '#issuecomment-1')
+    print(posted)
 else:
     fail()
 '''
@@ -464,7 +470,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5), seed(6, head=head6, repo='o-s')
     code, out = post(MAIN, COMP)
     check('posts on every pull request', code == 0 and len(state(5)['comments']) == 1 and len(state(6, 'o-s')['comments']) == 1)
-    check('prints where each comment landed', 'issuecomment-1' in out)
+    check('prints where each comment landed', 'issuecomment-10' in out)
 
     code, out = post(MAIN, COMP)
     check('a retry across companions on different anchors posts nothing twice', len(state(5)['comments']) == 1 and len(state(6, 'o-s')['comments']) == 1 and out.count('skipped') == 2)
@@ -597,12 +603,19 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5, comments=[copy, copy])
     code, out = post(MAIN)
     check('reports a double post already there', code != 0 and 'should hold this comment once' in out and len(state(5)['comments']) == 2)
+    check('a double post with no comment numbers names no copy to delete', 'Delete nothing' in out and 'Keep ' not in out)
     seed(5, head=head5, comments=[copy, copy]), seed(6, head=head6, repo='o-s')
     code, out = post(MAIN, COMP)
     check('a double post on one companion does not stop the other', code != 0 and 'o/r#5' in out and len(state(6, 'o-s')['comments']) == 1 and len(state(5)['comments']) == 2)
     seed(5, head=head5)
     code, out = post(MAIN, STUB_DOUBLE='5')
     check('a post that landed twice is reported', code != 0 and 'should hold this comment once' in out and 'posted' in out)
+    first, second = (c['url'] for c in state(5)['comments'])
+    check('a post that landed twice names the copy with the lowest comment number to keep', f'Keep {first}' in out and f'delete {second}' in out)
+    seed(5, head=head5)
+    code, out = post(MAIN, STUB_RACE='5')
+    check('a post that lands beside a copy with other text deletes nothing', code != 0 and 'Delete and edit nothing' in out
+          and 'Keep ' not in out and len(state(5)['comments']) == 2)
     seed(5, head=head5, comments=[copy])
     pr5 = state(5)
     pr5['comments'][0]['author'] = None
@@ -740,20 +753,22 @@ with tempfile.TemporaryDirectory() as ROOT:
 
     seed_issue(40)
     code, out = price()
-    check('posts the cost comment on the issue', code == 0 and issue(40) == [{'author': {'login': 'me'}, 'body': COST}] and '/issues/40' in out)
+    check('posts the cost comment on the issue', code == 0 and [(c['author'], c['body']) for c in issue(40)] == [({'login': 'me'}, COST)] and '/issues/40' in out)
     code, out = price()
     check('a retried cost post posts nothing more', code == 0 and len(issue(40)) == 1 and 'skipped' in out)
 
     seed_issue(40, [COST.replace('2.18', '2.19')])
     code, out = price()
     check('a cost comment with other text stops the post', code != 0 and 'different text' in out and len(issue(40)) == 1)
+    check('a cost comment with other text is not to be edited', 'Edit nothing' in out)
     seed_issue(40, [COST.replace('2.18', '2.19')], login='stranger')
     code, out = price()
     check("another login's cost comment does not stop the post", code == 0 and len(issue(40)) == 2)
     seed_issue(40, [COST.replace(f'`{A}`', f'`{B}`')])
     code, out = price()
     check('a cost comment for the same round and pull request under another anchor stops the post',
-          code != 0 and f'under the anchor {B}, not {A}' in out and 'count the round twice' in out and len(issue(40)) == 1)
+          code != 0 and f'under the anchor {B}, not {A}' in out and 'count the round twice' in out
+          and 'Delete and edit nothing' in out and len(issue(40)) == 1)
     for label, other in (('round', COST.replace(f'`{A}`', f'`{B}`').replace('round 3', 'round 2')),
                          ('pull request', COST.replace(f'`{A}`', f'`{B}`').replace('pull/5', 'pull/6'))):
         seed_issue(40, [other])
@@ -761,8 +776,8 @@ with tempfile.TemporaryDirectory() as ROOT:
         check(f'a cost comment for another {label} under another anchor does not stop the post', code == 0 and len(issue(40)) == 2)
     seed_issue(40)
     code, out = price(STUB_RACE='40')
-    check('a cost comment under another anchor that lands as the post does is reported', code != 0
-          and 'now also carries' in out and 'Keep the copy whose anchor' in out and len(issue(40)) == 2)
+    check('a cost post that lands beside a copy with other text deletes nothing', code != 0
+          and 'Delete and edit nothing' in out and 'Keep ' not in out and len(issue(40)) == 2)
     seed_issue(40, [COST.replace(f'`{A}`', f'`{B}`')], login='stranger')
     code, out = price()
     check("another login's cost comment under another anchor does not stop the post", code == 0 and len(issue(40)) == 2)
@@ -834,6 +849,8 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed_issue(40)
     code, out = price(STUB_DOUBLE='40')
     check('a cost post that landed twice is reported', code != 0 and 'should hold this comment once' in out)
+    first, second = (c['url'] for c in issue(40))
+    check('a cost post that landed twice names the copy with the lowest comment number to keep', f'Keep {first}' in out and f'delete {second}' in out)
     seed_issue(40)
     code, out = price(STUB_LOST='comment')
     check('a lost reply on a cost post says the outcome is unknown', code != 0 and 'outcome is unknown' in out)
@@ -875,7 +892,7 @@ with tempfile.TemporaryDirectory() as ROOT:
           and f'o/r#5: the anchor {A} is an ancestor of the head {head5[:7]}' in out and 'o/s#6: the anchor' in out)
     check('check posts nothing', state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
     code, out = gate(f'o/r#5={head5}={head5[:7]}={names(head5)}')
-    check('check passes an anchor that is the head', code == 0 and 'is the head' in out)
+    check('check passes an anchor that is the head', code == 0 and 'is the head' in out and 'names them, so it may post' in out)
     code, out = gate(f'o/r#5={head5[:7]}={A}={names(A, head5)}')
     check('check takes a seven-character head', code == 0)
     code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}', f'o/s#6={"e" * 40}={B}={names(B, "e" * 40)}')

@@ -36,7 +36,11 @@ anchor, which is still an ancestor. It skips a pull request that already
 carries this comment, so a retry posts only what is missing. GitHub takes no
 key on a comment, so this narrows the window for a double post rather than
 closing it. So it counts the copies after posting, and exits non-zero naming
-any pull request that does not hold exactly one. A closing comment posts the
+any pull request that does not hold exactly one. Where every copy holds the
+same text, it names the one to keep, the lowest comment number, so two
+sessions that follow it keep the same one. Where a copy holds other text,
+which may be another session's post, it says to delete and edit nothing.
+`cost` does the same. A closing comment posts the
 same way, with R the round it closes and ANCHOR the commit that round read. It
 refuses a first line that reads `Review complete` and is not exactly
 `## Review complete`, such as one with a space before or after it or another
@@ -74,8 +78,8 @@ post when the issue already carries a comment by the same login with that
 heading and line, stops when one carries them with other text, and counts the
 copies after posting, as `comment` does. It also stops when the issue carries
 a `## Cost` comment by the same login for this round and pull request under
-another anchor, because a `## Cost total` would count the round twice, and
-reads again after posting for one that landed meanwhile. It runs no check that the anchor is in the pull request's history, because only
+another anchor, because a `## Cost total` would count the round twice. It
+runs no check that the anchor is in the pull request's history, because only
 `cost` reads that anchor, to recognise a retry. In the usual order the round's
 comment posts first, through `comment`, which checks it. Where the round's
 comment did not post, such as after a force push dropped the anchor, whether
@@ -318,9 +322,32 @@ def carries(comment, heading, round_no, anchor):
 def copies(m, heading, round_no, login):
     # A closing comment counts only after the head it names, so one naming an older head is
     # not this post, and a later closing comment names the head it is posted at.
-    return [c["body"] for c in view(m["repo"], m["num"], "comments")
+    return [c for c in view(m["repo"], m["num"], "comments")
             if (c.get("author") or {}).get("login") == login and carries(c["body"], heading, round_no, m["anchor"])
             and (heading != FINAL or m["head"][:7] in c["body"])]
+
+
+def comment_number(c):
+    found = re.search(r"issuecomment-(\d+)$", c.get("url") or "")
+    return int(found[1]) if found else None
+
+
+def settle(name, found, text):
+    """Say what to do about a post that is not held exactly once, so two sessions that follow it keep one copy."""
+    if not found:
+        return (f"{name} should hold this comment once and shows none. GitHub's read can lag, so rerun this command, "
+                "which looks before it posts, and post nothing by hand")
+    links = ", ".join(c.get("url") or "(no link)" for c in found)
+    if any(not same_text(c["body"], text) for c in found):
+        return (f"{name} should hold this comment once and also holds its key with other text, which may be another "
+                f"session's post: {links}. Delete and edit nothing, and report these links")
+    if any(comment_number(c) is None for c in found):
+        return (f"{name} should hold this comment once and holds it {len(found)} times, and GitHub gave no comment "
+                f"number to order them by: {links}. Delete nothing, and report it")
+    first, *rest = sorted(found, key=comment_number)
+    return (f"{name} should hold this comment once and holds it {len(found)} times. Keep {first['url']}, the one with "
+            f"the lowest comment number, delete {', '.join(c['url'] for c in rest)}, read the comments again to "
+            "confirm one is left, and report it")
 
 
 def outside_history(repo, anchor, head):
@@ -394,30 +421,31 @@ def comment(args):
     for m, text, heading in targets:
         name = f"{m['repo']}#{m['num']}"
         mine = copies(m, heading, args.round, login)
-        if heading == FINAL and any(not same_text(body, text) for body in mine):
+        if heading == FINAL and any(not same_text(c["body"], text) for c in mine):
             sys.exit(f"posting nothing, because {name} already carries a {FINAL!r} comment on round "
                      f"{args.round} and {m['anchor'][:7]} at the head {m['head'][:7]}, which closes the "
                      "review, whether it is that round's own comment or an earlier closing comment. "
                      "Report it, and post no second one")
-        if any(not same_text(body, text) for body in mine):
+        if any(not same_text(c["body"], text) for c in mine):
             sys.exit(f"posting nothing, because {name} already carries this heading, round and anchor with "
                      "different text. Report it, and once it is settled post by hand after the checks review-round.md's step 7 "
                      "gives for a hand post")
         if len(mine) > 1:
-            doubled.append(name)
+            doubled.append(settle(name, mine, text))
         elif mine:
             print(f"{name}: already carries this comment, so skipped")
         else:
-            pending.append((name, m, heading))
-    for name, m, heading in pending:
+            pending.append((name, m, text, heading))
+    for name, m, text, heading in pending:
         if args.dry_run:
             print(f"{name}: would post {m['file']}")
             continue
         print(f"{name}: posted {write('gh', 'pr', 'comment', m['num'], '-R', m['repo'], '--body-file', m['file'])}")
-        if len(copies(m, heading, args.round, login)) != 1:
-            doubled.append(name)
+        found = copies(m, heading, args.round, login)
+        if len(found) != 1:
+            doubled.append(settle(name, found, text))
     if doubled:
-        sys.exit(f"{', '.join(doubled)} should hold this comment once and does not. Delete any extra copy, and report it")
+        sys.exit("; ".join(doubled))
 
 
 def branch_tip(repo, branch):
@@ -483,15 +511,15 @@ def cost_key(text):
 
 
 def cost_copies(repo, num, key, login):
-    return [c["body"] for c in view(repo, num, "comments", kind="issue")
+    return [c for c in view(repo, num, "comments", kind="issue")
             if (c.get("author") or {}).get("login") == login and cost_key(c["body"]) == key]
 
 
 def other_anchors(repo, num, key, login):
-    """Return the anchors of this login's ## Cost comments for the same round and pull request under another anchor."""
-    return {k[1] for c in view(repo, num, "comments", kind="issue")
+    """Return this login's ## Cost comments for the same round and pull request under another anchor."""
+    return [c for c in view(repo, num, "comments", kind="issue")
             if (c.get("author") or {}).get("login") == login and (k := cost_key(c["body"]))
-            and k[0] == key[0] and k[2:] == key[2:] and k[1] != key[1]}
+            and k[0] == key[0] and k[2:] == key[2:] and k[1] != key[1]]
 
 
 def cost(args):
@@ -515,15 +543,19 @@ def cost(args):
     login = run("gh", "api", "user", "--jq", ".login").strip()
     others = other_anchors(repo, num, key, login)
     if others:
+        anchors = ", ".join(sorted({cost_key(c["body"])[1] for c in others}))
+        links = ", ".join(c.get("url") or "(no link)" for c in others)
         sys.exit(f"posting nothing, because {name} already carries round {args.round}'s {COST_HEADING} comment for "
-                 f"{args.pull} under the anchor {', '.join(sorted(others))}, not {key[1]}, and a {COST_HEADING} total "
-                 "would count the round twice. Edit that comment's round line by hand, and report it")
+                 f"{args.pull} under the anchor {anchors}, not {key[1]}, at {links}, and a {COST_HEADING} total would "
+                 "count the round twice. Delete and edit nothing, since either may hold another session's spend, "
+                 "and report the links")
     mine = cost_copies(repo, num, key, login)
-    if any(not same_text(body, text) for body in mine):
+    if any(not same_text(c["body"], text) for c in mine):
+        links = ", ".join(c.get("url") or "(no link)" for c in mine)
         sys.exit(f"posting nothing, because {name} already carries this round's {COST_HEADING} comment with "
-                 "different text. Edit that comment by hand, and report it")
+                 f"different text at {links}. Edit nothing, since it may hold another session's spend, and report it")
     if len(mine) > 1:
-        sys.exit(f"{name} should hold this comment once and does not. Delete any extra copy, and report it")
+        sys.exit(settle(name, mine, text))
     if mine:
         print(f"{name}: already carries this comment, so skipped")
         return
@@ -531,13 +563,9 @@ def cost(args):
         print(f"{name}: would post {args.file}")
         return
     print(f"{name}: posted {write('gh', 'issue', 'comment', num, '-R', repo, '--body-file', args.file)}")
-    if len(cost_copies(repo, num, key, login)) != 1:
-        sys.exit(f"{name} should hold this comment once and does not. Delete any extra copy, and report it")
-    others = other_anchors(repo, num, key, login)
-    if others:
-        sys.exit(f"{name} now also carries round {args.round}'s {COST_HEADING} comment for {args.pull} under the anchor "
-                 f"{', '.join(sorted(others))}, and a {COST_HEADING} total would count the round twice. Keep the copy "
-                 "whose anchor the round's brief names, delete the other, and report it")
+    found = cost_copies(repo, num, key, login)
+    if len(found) != 1:
+        sys.exit(settle(name, found, text))
 
 
 def round_number(value):
