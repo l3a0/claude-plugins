@@ -219,6 +219,8 @@ def last_restore(restore) -> None:
 def write_new(path: Path, data: bytes) -> None:
     """Write a file the runner owns in --out, never through a link planted where it sits."""
     path.unlink(missing_ok=True)
+    # O_CREAT with O_EXCL fails on any path that exists, a link included, and O_NOFOLLOW fails on a link.
+    # Either one alone refuses a link planted after the unlink, and both are kept.
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
     with os.fdopen(fd, "wb") as f:
         f.write(data)
