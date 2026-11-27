@@ -1109,6 +1109,11 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('check passes a head that matches, an anchor in its history and a file naming both', code == 0
           and f'o/r#5: the anchor {A} is an ancestor of the head {head5[:7]}' in out and 'o/s#6: the anchor' in out)
     check('check posts nothing', state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
+    seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2, of `{A}`, fixed in `{"a" * 7}`.\n'])
+    code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}')
+    check("check refuses an anchor another round's comment shows it read past, as comment does", code != 0
+          and 'another round read past this anchor' in out and "round 2's comment names" in out)
+    seed(5, head=head5, elsewhere=('f' * 40,))
     code, out = gate(f'o/r#5={head5}={head5[:7]}={names(head5)}')
     check('check passes an anchor that is the head', code == 0 and 'is the head' in out and 'names them, so it may post' in out)
     code, out = gate(f'o/r#5={head5[:7]}={A}={names(A, head5)}')

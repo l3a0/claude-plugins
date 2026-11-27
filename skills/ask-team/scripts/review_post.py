@@ -79,7 +79,10 @@ OWNER/REPO#N=HEAD=ANCHOR=FILE it checks that the pull request's head is HEAD,
 that ANCHOR is that head or an ancestor of it, and that FILE names both. For
 OWNER/REPO@BRANCH=ANCHOR=FILE it reads the branch's tip from GitHub, and checks
 that ANCHOR is that tip or an ancestor of it and that FILE names ANCHOR, which
-suits a plan read against `main`. It encodes the branch's name in the request
+suits a plan read against `main`. On a pull request it also refuses an anchor
+another round's comment by the same login shows it read past, as `comment`
+does, taking the round from the file's own "round K, of <anchor>". It encodes
+the branch's name in the request
 and refuses an answer for any other branch, so a name holding `#` reads that
 branch. It stops at the first target it cannot parse or whose file is
 missing. Otherwise it exits non-zero naming each file that does not name its
@@ -607,10 +610,24 @@ def check(args):
             wrong.append(why if pull else f"{name}: {why}")
     if wrong:
         sys.exit("post nothing, because a file, a head or a branch does not match: " + "; ".join(wrong))
-    outside = [f"{name}: {why}" for m, (name, tip) in zip(parsed, tips)
-               if (why := outside_history(m["repo"], m["anchor"], tip))]
+    history = [compare_range(m["repo"], m["anchor"], tip) for m, (_, tip) in zip(parsed, tips)]
+    outside = [f"{name}: {why}" for (name, _), (why, _) in zip(tips, history) if why]
     if outside:
         sys.exit("post nothing, because an anchor was not shown to be the head or an ancestor of it: " + "; ".join(outside))
+    # On a pull request, refuse an anchor another round read past, as comment does. The round is the comment's own.
+    pulls = [(m, later) for m, (_, later) in zip(parsed, history) if "num" in m.groupdict()]
+    if pulls:
+        login = run("gh", "api", "user", "--jq", ".login").strip()
+        reused = []
+        for m, later in pulls:
+            with open(m["file"], encoding="utf-8") as f:
+                own = own_round(f.read())
+            bodies = [c["body"] for c in by_login(m, login)]
+            reused += [f"{m['repo']}#{m['num']}: {why}"
+                       for _, why in pushed_after(bodies, own[0] if own else None, m["anchor"], later)]
+        if reused:
+            sys.exit("post nothing, because another round read past this anchor: " + "; ".join(reused)
+                     + ". Check that each anchor is the commit this round's brief anchors at")
     for m, (name, tip) in zip(parsed, tips):
         where = "is the head" if tip.startswith(m["anchor"]) else "is an ancestor of the head"
         named = "names them" if "num" in m.groupdict() else "names the anchor"
