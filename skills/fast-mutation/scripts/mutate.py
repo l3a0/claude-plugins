@@ -60,20 +60,24 @@ escalation pays the worker startup.
 then one command, a list of arguments the target interpreter runs, such as
 ``["tests/test_x.py"]``, or a list of such commands that must all pass. Each command reads an
 empty stdin. A run is green when every command exits 0. Its failures are the output lines that
-match ``fail_pattern``, by default ``^(?:FAIL|ERROR)(?:ED)?\b.*``, and a command that exits
+match ``fail_pattern``, by default ``^(?:FAIL|ERROR)(?:ED)?\b.*``, which reads ``FAIL``,
+``FAILED`` and ``unittest``'s ``ERROR:`` lines, and a command that exits
 non-zero with no such line is named by its last line of output. ``timeout`` is one budget for
 all the commands of a selection, and a run that has already failed when the budget runs out
-reads red, not timeout. Escalation runs the full ``escalate`` selection, because the coverage
-map is a pytest plugin, under ``escalate_timeout``, which defaults to twice ``timeout``.
+reads red, not timeout. The baseline and escalation run the whole suite, so they run under
+``escalate_timeout``, which defaults to twice ``timeout``. Escalation runs the full ``escalate``
+selection, because the coverage map is a pytest plugin.
 Workers are not used.
 
-Every mutated ``file`` must resolve inside ``root``, or the run stops before it writes anything.
-SIGTERM and SIGHUP restore every file before the runner exits. SIGKILL cannot be caught, so after
-one, copy each file back from ``backup/`` in --out.
+Every mutated ``file`` must resolve inside ``root`` and have no second hard link, or the run stops
+before it writes anything. SIGTERM and SIGHUP restore every file before the runner exits, and a
+second signal during that restore is ignored. SIGKILL cannot be caught, so after one, copy each
+file back from ``backup/`` in --out, where ``a/b.py`` is saved as ``a__b.py``. The runner prints
+the --out path before the baseline runs.
 
 Output: one line per mutant on stdout, ``results.jsonl`` and ``results.txt`` in --out, and
 ``cover_map.json`` when escalation was scoped. A red baseline stops the run with exit code 2 and
-writes only ``results.txt``. A red map run exits with code 3.
+writes only ``results.txt``. A map run that is not green exits with code 3.
 """
 
 from __future__ import annotations
@@ -470,6 +474,10 @@ def main() -> int:
     outside = [f for f in files if not (root / f).resolve().is_relative_to(root)]
     if outside:
         raise SystemExit(f"every mutated file must sit inside root {root}: {', '.join(outside)}")
+    # A hard link shares its bytes with a file the root check cannot see.
+    linked = [f for f in files if (root / f).stat().st_nlink > 1]
+    if linked:
+        raise SystemExit(f"a mutated file has another hard link, which may sit outside root: {', '.join(linked)}")
     backups = {f: (root / f).read_bytes() for f in files}
     (out / "backup").mkdir(exist_ok=True)
     for f, data in backups.items():
@@ -482,14 +490,20 @@ def main() -> int:
         clear_pycache(root)
 
     def stop(signum, frame):
-        # SystemExit unwinds through the finally below, which restores every file.
+        # SystemExit unwinds through the finally below, which restores every file. A second
+        # signal must not cut that restore short, so later ones are ignored.
+        for sig in (signal.SIGTERM, signal.SIGHUP):
+            signal.signal(sig, signal.SIG_IGN)
         raise SystemExit(128 + signum)
 
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, stop)
 
+    print(f"out {out}", flush=True)
     clear_pycache(root)
-    base = run_tests(spec, root, spec["baseline"])
+    base = run_tests(spec, root, spec["baseline"],
+                     timeout=spec.get("escalate_timeout", 2 * spec.get("timeout", 300))
+                     if is_script(spec) else None)
     line = f"BASE {base['status']} {base['secs']}s {base.get('summary', '')}"
     print(line, flush=True)
     rows = [{"name": "BASE", **clean(base)}]

@@ -47,12 +47,12 @@ selection, and `--workers N` to spread the wide runs over pytest-xdist workers.
 
 A suite of plain scripts, each run as `python3 tests/<file>` and exiting non-zero on a failure, has no pytest to drive. l3a0/claude-plugins is one: most of its test files print an `ok` or `FAIL` line per check, and two use `unittest`. On l3a0/claude-plugins [PR #100](https://github.com/l3a0/claude-plugins/pull/100), the test engineer in each of seven review rounds wrote its own loop to apply a mutant, run the script and restore the file, because this runner only drove pytest.
 
-Set `"runner": "script"` in the spec for such a suite. Each selection is then a command the spec's interpreter runs, such as `["tests/test_brief_anchors.py"]`, or a list of such commands that must all pass. Each command reads an empty stdin, so a test that waits for input fails rather than hangs. A run is green when every command exits 0. Its failures are the output lines that match `fail_pattern`, which defaults to lines starting `FAIL`, `FAILED`, `ERROR` or `ERRORED`, the last two being what `unittest` prints for a test that raises. A command that fails without such a line is reported by its last output line.
+Set `"runner": "script"` in the spec for such a suite. Each selection is then a command the spec's interpreter runs, such as `["tests/test_brief_anchors.py"]`, or a list of such commands that must all pass. Each command reads an empty stdin, so a test that waits for input fails rather than hangs. A run is green when every command exits 0. Its failures are the output lines that match `fail_pattern`, which defaults to lines starting `FAIL`, `FAILED` or `ERROR`, the last being what `unittest` prints for a test that raises. A command that fails without such a line is reported by its last output line.
 
 The baseline and each mutant run the same way as with pytest, including the byte-copy restore and the cleared `__pycache__`. Four things differ in this mode.
 
 1. `timeout` is one budget for all the commands of a selection. A run that has already failed when the budget runs out reads red, so a mutant one command caught is not reported as a timeout.
-2. A survivor escalates against the full `escalate` selection, because the coverage map is a pytest plugin. Its line says `scope=full (script runner, no coverage map)`, unless `--escalate-full` was given. Escalation runs under `escalate_timeout`, which defaults to twice `timeout`, because the full list takes longer than one script. When `escalate` names the same command as `select`, a survivor learns nothing from it, so name the whole suite there or pass `--no-escalate`.
+2. A survivor escalates against the full `escalate` selection, because the coverage map is a pytest plugin. Its line says `scope=full (script runner, no coverage map)`, unless `--escalate-full` was given. The baseline and escalation run under `escalate_timeout`, which defaults to twice `timeout`, because the whole suite takes longer than one script. When `escalate` names the same command as `select`, a survivor learns nothing from it, so name the whole suite there or pass `--no-escalate`.
 3. Workers are not used, and asking for them prints a line that says so.
 4. Every command runs through the interpreter, so a shell test such as `tests/test_board_guard.sh` goes in as `["-c", "import subprocess, sys; sys.exit(subprocess.call(['sh', 'tests/test_board_guard.sh']))"]`.
 
@@ -230,7 +230,10 @@ full reasoning.
 The runner restores every file when it ends, including on SIGTERM or SIGHUP, which it turns into
 an ordinary exit. SIGKILL cannot be caught, so a run killed that way leaves the current mutant in
 place. Copy each file back from `backup/` in the `--out` folder, where the runner wrote a byte copy
-of every file before the first mutant.
+of every file before the first mutant, naming `a/b.py` as `a__b.py`. The runner prints the
+`--out` path on its first line, so a killed run still shows where it is. A second signal during
+the restore is ignored, so it cannot cut the restore short. The runner also refuses a file with
+a second hard link, because the root check cannot see where the other link sits.
 
 The runner executes code only through pytest, or through the commands a script spec names, in the given worktree. A repository whose
 default paths point at live configuration must redirect them in its test setup. Marketlake's

@@ -122,14 +122,18 @@ with tempfile.TemporaryDirectory() as root:
     code, out, rows = run(dict(spec, mutants=[dict(both, select=[['tests/slow.py', '0.7'], ['tests/slow.py', '0.7']])],
                                timeout=1), '--no-escalate')
     check('the time limit is shared by the commands of a selection', rows[1]['status'] == 'timeout')
-    code, out, rows = run(dict(spec, mutants=[dict(both, select=[['tests/near.py'], ['tests/slow.py']])], timeout=1),
+    code, out, rows = run(dict(spec, mutants=[dict(both, select=[['tests/near.py'], ['tests/slow.py', '5']])], timeout=2),
                           '--no-escalate')
     check('a run that failed before its time ran out reads red', rows[1]['status'] == 'red'
           and rows[1]['failed'] == ['FAIL add'])
 
     survivor = {'name': 'comment only', 'file': 'mod.py', 'edits': [['def add(a, b):', 'def add(a, b):  # x']]}
-    code, out, rows = run(dict(spec, mutants=[survivor], timeout=1, escalate=[['tests/slow.py', '1.5']]))
-    check('escalation gets twice the time limit by default', 'SURVIVED-ALL' in out and 'TIMEOUT-WIDE' not in out)
+    code, out, rows = run(dict(spec, mutants=[survivor], timeout=2, escalate=[['tests/slow.py', '3']]))
+    check('escalation gets more than the time limit by default', 'SURVIVED-ALL' in out and 'TIMEOUT-WIDE' not in out)
+    code, out, rows = run(dict(spec, mutants=[survivor], timeout=2, escalate=[['tests/slow.py', '5']]))
+    check('escalation gets no more than twice the time limit by default', 'TIMEOUT-WIDE' in out)
+    code, out, rows = run(dict(spec, baseline=[['tests/slow.py', '1.5'], ['tests/slow.py', '1.5']], mutants=[], timeout=2))
+    check('the baseline runs under the escalation limit', code == 0 and 'BASE green' in out)
     code, out, rows = run(dict(spec, mutants=[survivor], timeout=1, escalate_timeout=1, escalate=[['tests/slow.py', '1.5']]))
     check('escalate_timeout limits escalation', 'TIMEOUT-WIDE' in out)
     code, out, rows = run({k: v for k, v in dict(spec, mutants=[survivor]).items() if k != 'escalate'})
@@ -138,6 +142,9 @@ with tempfile.TemporaryDirectory() as root:
     code, out, rows = run({k: v for k, v in dict(spec, mutants=[dict(survivor, select=['tests/near.py'])]).items()
                            if k != 'select'}, '--no-escalate')
     check('needs no default select when every mutant has its own', code == 0 and 'SURVIVED' in out)
+    code, out, rows = run({k: v for k, v in dict(spec, mutants=[survivor]).items() if k != 'escalate'}, '--no-escalate')
+    check('says nothing about a missing escalate under --no-escalate', code == 0 and 'no escalate selection' not in out)
+    check('prints the out folder before the baseline', out.splitlines()[0].startswith('out '))
 
     code, out, rows = run(dict(spec, baseline=['tests/reads.py'], mutants=[], timeout=20))
     check('a test that reads stdin gets an empty stdin and does not hang', code == 0 and 'BASE green' in out
@@ -151,6 +158,13 @@ with tempfile.TemporaryDirectory() as root:
         with open(os.path.join(root, 'outside.py')) as f:
             check(f'refuses {label}, and writes nothing', code != 0 and 'must sit inside root' in out and f.read() == 'X = 1\n')
 
+    os.link(os.path.join(root, 'outside.py'), os.path.join(repo, 'linked.py'))
+    code, out, rows = run(dict(spec, mutants=[{'name': 'linked', 'file': 'linked.py', 'edits': [['X = 1', 'X = 2']]}]))
+    with open(os.path.join(root, 'outside.py')) as f:
+        check('refuses a file with a second hard link, and writes nothing', code != 0 and 'hard link' in out
+              and f.read() == 'X = 1\n')
+    os.remove(os.path.join(repo, 'linked.py'))
+
     stub = os.path.join(root, 'stub-python')
     with open(stub, 'w') as f:
         f.write('#!/bin/sh\necho "$@" >> "$(dirname "$0")/stub-args"\nexit 0\n')
@@ -163,18 +177,20 @@ with tempfile.TemporaryDirectory() as root:
     path = os.path.join(root, 'spec-term.json')
     with open(path, 'w') as f:
         json.dump(dict(spec, mutants=[slow_mutant], timeout=60), f)
-    proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', os.path.join(root, 'out-term'), '--no-escalate'],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
-    deadline = time.monotonic() + 30
-    while time.monotonic() < deadline:
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', os.path.join(root, 'out-term'), '--no-escalate'],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+        seen, deadline = False, time.monotonic() + 30
+        while time.monotonic() < deadline:
+            with open(os.path.join(repo, 'mod.py')) as f:
+                if 'a - b' in f.read():
+                    seen = True
+                    break
+            time.sleep(0.05)
+        proc.send_signal(sig)
+        proc.wait(timeout=60)
         with open(os.path.join(repo, 'mod.py')) as f:
-            if 'a - b' in f.read():
-                break
-        time.sleep(0.05)
-    proc.send_signal(signal.SIGTERM)
-    proc.wait(timeout=60)
-    with open(os.path.join(repo, 'mod.py')) as f:
-        check('SIGTERM during a mutant restores the file', f.read() == MOD and proc.returncode == 128 + signal.SIGTERM)
+            check(f'{sig.name} during a mutant restores the file', seen and f.read() == MOD and proc.returncode == 128 + sig)
 
     code, out, rows = run(dict(spec, fail_pattern=r'add$'), '--only', 'add subtracts', '--no-escalate')
     check('reads failures with the spec\'s fail_pattern', rows[1]['status'] == 'red' and rows[1]['failed'] == ['add'])
