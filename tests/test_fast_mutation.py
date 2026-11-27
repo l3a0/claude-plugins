@@ -221,6 +221,7 @@ with tempfile.TemporaryDirectory() as root:
                           text=True, stdin=subprocess.DEVNULL)
     check('reruns once the worktree matches the backup a killed run left', done.returncode == 0)
 
+    # .x.tmp is shaped like a temporary file, and .d.py guards against a filter that skips every dotfile.
     for name in ('.d.py', '.x.tmp'):
         with open(os.path.join(repo, name), 'w') as f:
             f.write('V = 1\n')
@@ -246,6 +247,44 @@ with tempfile.TemporaryDirectory() as root:
             check(f'refuses to overwrite the backup a killed run left of {name}', seen and done.returncode != 0
                   and 'ended with a mutant applied' in done.stdout + done.stderr and f.read() == 'V = 1\n')
         os.remove(os.path.join(repo, name))
+
+    # A kill while the backups are being written, forced by making os.replace kill the process.
+    torn = os.path.join(root, 'out-torn')
+    path = os.path.join(root, 'spec-torn.json')
+    with open(path, 'w') as f:
+        json.dump(dict(spec, mutants=spec['mutants'][:1]), f)
+    driver = ('import os, runpy, signal, sys\n'
+              'os.replace = lambda *a: os.kill(os.getpid(), signal.SIGKILL)\n'
+              'sys.argv = [sys.argv[1], sys.argv[2], "--out", sys.argv[3], "--no-escalate"]\n'
+              'runpy.run_path(sys.argv[0], run_name="__main__")\n')
+    first = subprocess.run([sys.executable, '-c', driver, SCRIPT, path, torn], capture_output=True, stdin=subprocess.DEVNULL)
+    done = subprocess.run([sys.executable, SCRIPT, path, '--out', torn, '--no-escalate'], capture_output=True, text=True,
+                          stdin=subprocess.DEVNULL)
+    check('reruns after a kill while the backups were being written', first.returncode == -signal.SIGKILL
+          and done.returncode == 0)
+
+    legacy = os.path.join(root, 'out-legacy')
+    os.makedirs(os.path.join(legacy, 'backup'))
+    with open(os.path.join(legacy, 'backup', 'mod.py'), 'w') as f:
+        f.write(MOD)
+    with open(os.path.join(legacy, 'backup', '.clean'), 'w') as f:
+        pass
+    done = subprocess.run([sys.executable, SCRIPT, path, '--out', legacy, '--no-escalate'], capture_output=True, text=True,
+                          stdin=subprocess.DEVNULL)
+    check('reads a clean --out an earlier version left, with its marker inside backup/', done.returncode == 0)
+
+    for name in ('clean', 'backup.writing'):
+        planted = os.path.join(root, 'out-planted-' + name)
+        os.makedirs(planted)
+        target = os.path.join(root, 'precious-' + name)
+        with open(target, 'w') as f:
+            f.write('precious\n')
+        os.symlink(target, os.path.join(planted, name))
+        subprocess.run([sys.executable, SCRIPT, path, '--out', planted, '--no-escalate'], capture_output=True,
+                       stdin=subprocess.DEVNULL)
+        with open(target) as f:
+            check(f'writes nothing through a link planted at {name} in --out', f.read() == 'precious\n'
+                  and not os.path.islink(os.path.join(planted, name)))
 
     path = os.path.join(root, 'spec-kill-base.json')
     with open(path, 'w') as f:

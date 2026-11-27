@@ -216,6 +216,14 @@ def last_restore(restore) -> None:
         raise
 
 
+def write_new(path: Path, data: bytes) -> None:
+    """Write a file the runner owns in --out, never through a link planted where it sits."""
+    path.unlink(missing_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+
+
 def is_script(spec: dict) -> bool:
     runner = spec.get("runner", "pytest")
     if runner not in ("pytest", "script"):
@@ -571,7 +579,8 @@ def main() -> int:
     pending = out / "backup.writing"
     # A backup/ without its marker comes from a run that ended with a mutant applied, so it may
     # hold the only copy of a file's original bytes. A rerun must not overwrite it.
-    if backup_dir.exists() and not marker.exists():
+    # backup/.clean is where an earlier version of this runner kept the marker.
+    if backup_dir.exists() and not marker.exists() and not (backup_dir / ".clean").exists():
         held = [p.relative_to(backup_dir).as_posix() for p in sorted(backup_dir.rglob("*")) if p.is_file()]
         differ = [f for f in held if not (root / f).is_file() or (root / f).read_bytes() != (backup_dir / f).read_bytes()]
         if differ:
@@ -587,9 +596,9 @@ def main() -> int:
     for f, data in backups.items():
         dest = backup_dir / f
         dest.parent.mkdir(parents=True, exist_ok=True)
-        pending.write_bytes(data)
+        write_new(pending, data)
         os.replace(pending, dest)
-    marker.write_text("")
+    write_new(marker, b"")
     global _clean_marker
     _clean_marker = marker
 
@@ -598,7 +607,7 @@ def main() -> int:
             (root / f).write_bytes(data)
             assert (root / f).read_bytes() == data, f"restore of {f} did not stick"
         clear_pycache(root)
-        marker.write_text("")
+        write_new(marker, b"")
 
     for sig in STOP_SIGNALS:
         signal.signal(sig, exit_on_signal)
