@@ -94,9 +94,10 @@ behind a write. While it lags, a rerun posts a second copy wherever the read
 still hides the first, and the count after posting counts one, so nothing
 reports it. A rerun can follow a write that failed or had an unknown outcome,
 or a read that failed after a post landed, whose message gives no advice. In a
-run over several pull requests, a failed write ends the run with only that
-write's message, and drops what the run found on the pull requests before it,
-such as one whose read after posting showed none. l3a0/claude-plugins#117
+run over several pull requests, a failed write or a failed read after a post
+ends the run with only its own message, and drops every finding the run held
+on any pull request, such as a double already there on one after it, or a
+read after posting that showed none on one before it. l3a0/claude-plugins#117
 owns reruns that a lagging read cannot double. The tests run
 against a stand-in `gh`, so no test covers what the real one prints.
 """
