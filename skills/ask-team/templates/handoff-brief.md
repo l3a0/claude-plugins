@@ -17,7 +17,7 @@ Before pushing anything, check whether a session already owns this work. <The se
 
 What to do:
 
-1. Bring each branch up to date with its `main`. <In l3a0/claude-plugins, run `python3 scripts/next_version.py --pr <n>` after the merge, and keep or move the version as it says.>
+1. Bring each branch up to date with its `main` by merging `main` into it, never by rebasing or any other push that needs force, as step 5 of `review-round.md` says. <In l3a0/claude-plugins, run `python3 scripts/next_version.py --pr <n>` after the merge, and keep or move the version as it says.>
 2. <What a merge changed underneath this work, and what to sweep for.>
 3. Run each further round by the ask-team skill's `review-round.md`, across the pull requests together.
 4. Continue until `review-round.md`'s step 6 ends the review.
