@@ -96,6 +96,11 @@ A repo drifts when two surfaces describe the same thing and only one gets update
 
   The owner's global file wins over both, so a change there reaches each. This file's `## Writing style` leaves the rule out, because it governs how a design doc draws a figure, and this repository holds no design doc. The four standards above sit in `## Writing style` all the same, because the skills here apply them to other repositories' design docs, and the reader lens's question 7 points at them.
 - **The four standards for a design or architecture doc** sit in three places here: `## Writing style` above, the reader lens's question 7 in `skills/ask-team/SKILL.md`, and steps 2, 3 and 7 of `skills/clear-wall-of-text/SKILL.md`. A change to one reaches the other two.
+- **The checks a comment posted by hand passes, and the decision that `review_post.py cost` checks no anchor history,** each sit in more than one place, so a change to one reaches the others.
+  1. The hand-post checks sit in step 6 of `skills/ask-team/SKILL.md`, in step 5's paragraph that starts "Text bound for an issue" and step 7's paragraph that starts "The script counts only comments by the session's own login" in `skills/ask-team/review-round.md`, in the `check` paragraph of `skills/ask-team/scripts/review_post.py`'s docstring, and in the `review_post.py` item of [SECURITY.md](SECURITY.md)'s scope list.
+  2. The cost decision sits in the `cost` paragraph of that docstring and in step 7's paragraph on the `## Cost` comment, which starts "One pull request is the main one".
+
+  `tests/test_review_post.py` holds what `check` refuses, and that `cost` posts with an anchor GitHub cannot compare, so a change to either changes a test too.
 - **The blog post** in `blog/how-to-take-back-your-kindle-highlights.md` is also published on Substack, and nothing syncs the two copies.
 
 Before reporting a change done, sweep the prose surfaces for what the change could have invalidated, and end the response with a short **Consistency sweep** note listing what was checked, what was updated, and what is still stale. For a pure-internal refactor that changes no observable behavior, say "no prose-facing surfaces affected" so it is clear the check was considered rather than forgotten.

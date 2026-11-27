@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Post a review round's comments and its cost on the issue, and edit a pull request's Revision section.
+"""Post a review round's comments and its cost on the issue, check a comment posted by hand, and edit a pull request's Revision section.
 
 Usage:
     review_post.py revision OWNER/REPO#N --scratch DIR --file PATH [--replace ITEM] [--dry-run]
     review_post.py comment --round R OWNER/REPO#N=HEAD=ANCHOR=FILE [...] [--dry-run]
+    review_post.py check OWNER/REPO#N=HEAD=ANCHOR=FILE | OWNER/REPO@BRANCH=ANCHOR=FILE [...]
     review_post.py cost --round R OWNER/REPO#ISSUE --pull OWNER/REPO#N --anchor ANCHOR --file PATH [--dry-run]
 
 `revision` adds the one line in PATH to the body's `## Revision` section as a
@@ -55,7 +56,13 @@ request it posts on. It skips a pull request that already
 carries this comment, so a retry posts only what is missing. GitHub takes no
 key on a comment, so this narrows the window for a double post rather than
 closing it. So it counts the copies after posting, and exits non-zero naming
-any pull request that does not hold exactly one. A closing comment posts the
+any pull request that does not hold exactly one. Where every copy holds the
+same text, it names the one to keep, the lowest comment number, so two
+sessions that follow it keep the same one. Where a copy holds other text,
+which may be another session's post, it says to delete and edit nothing.
+Where the read after posting shows none, it names the link the post returned
+and says to rerun nothing.
+`cost` does the same. A closing comment posts the
 same way, with R the round it closes and ANCHOR the commit that round read. It
 refuses a first line that reads `Review complete` and is not exactly
 `## Review complete`, such as one with a space before or after it or another
@@ -66,6 +73,26 @@ so. One naming an older head does not count, because a build board counts it
 only when posted after the head commit, so a closing comment at the new head
 posts.
 
+`check` runs the head and anchor checks of `comment` and posts nothing, for a
+comment that names an anchor and goes by hand, such as one on an issue. For
+OWNER/REPO#N=HEAD=ANCHOR=FILE it checks that the pull request's head is HEAD,
+that ANCHOR is that head or an ancestor of it, and that FILE names both. For
+OWNER/REPO@BRANCH=ANCHOR=FILE it reads the branch's tip from GitHub, and checks
+that ANCHOR is that tip or an ancestor of it and that FILE names ANCHOR, which
+suits a plan read against `main`. On a pull request it also refuses an anchor
+another round's comment by the same login shows it read past, as `comment`
+does. It skips the file's own round, read from its first "round K, of
+<anchor>" where that names ANCHOR, and checks every round otherwise. It encodes
+the branch's name in the request
+and refuses an answer for any other branch, so a name holding `#` reads that
+branch. It stops at the first target it cannot parse or whose file is
+missing. Otherwise it exits non-zero naming each file that does not name its
+anchor or head, each head and each branch that fails, and when those all
+pass, each anchor that fails. It reads no comments, because
+each route keys its retry by its own lines. It cannot show that the file it
+read is the file then posted, and like `comment` it reads the file for the
+anchor and head by substring.
+
 `cost` posts a round's `## Cost` comment on the issue the main pull request
 tracks. It refuses a file whose first line is not exactly `## Cost`, which is
 the only form the `## Cost total` sweep reads, or whose next non-blank line is
@@ -75,10 +102,27 @@ request that is only part of an issue names it only in its body's text, which
 the script does not parse. It skips the
 post when the issue already carries a comment by the same login with that
 heading and line, stops when one carries them with other text, and counts the
-copies after posting, as `comment` does.
+copies after posting, as `comment` does. It also stops when the issue carries
+a `## Cost` comment by the same login for this round and pull request under
+another anchor, because a `## Cost total` would count the round twice. It
+runs no check that the anchor is in the pull request's history, because only
+`cost` reads that anchor, to recognise a retry. In the usual order the round's
+comment posts first, through `comment`, which checks it. Where the round's
+comment did not post, such as after a force push dropped the anchor, whether
+its figures post and which `## Cost` comment carries them waits on
+l3a0/claude-plugins#108.
 
 A write that fails says the outcome is unknown, since the request may have
-landed. Rerun the same command, which looks before it writes. The tests run
+landed. Rerun the same command, which looks before it writes. A read can lag
+behind a write. While it lags, a rerun posts a second copy wherever the read
+still hides the first, and the count after posting counts one, so nothing
+reports it. A rerun can follow a write that failed or had an unknown outcome,
+or a read that failed after a post landed, whose message gives no advice. In a
+run over several pull requests, a failed write or a failed read after a post
+ends the run with only its own message, and drops every finding the run held
+on any pull request, such as a double already there on one after it, or a
+read after posting that showed none on one before it. l3a0/claude-plugins#117
+owns reruns that a lagging read cannot double. The tests run
 against a stand-in `gh`, so no test covers what the real one prints.
 """
 
@@ -89,6 +133,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 
 SPEC = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)#(?P<num>\d+)$")
 TARGET = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)#(?P<num>\d+)=(?P<head>[0-9a-f]{7,40})=(?P<anchor>[0-9a-f]{7,40})=(?P<file>.+)$")
@@ -99,6 +144,7 @@ ITEM = re.compile(r"^(\d+)\. (.*)$")
 LIST_MARK = re.compile(r"^\s*(\d+[.)]|[-*+])(\s|$)")
 FINAL = "## Review complete"
 NEAR_FINAL = re.compile(r"^#{1,6}\s*Review[\W_]*complete\b", re.IGNORECASE)
+CHECK_BRANCH = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)@(?P<branch>[^\s=]+)=(?P<anchor>[0-9a-f]{7,40})=(?P<file>.+)$")
 OWN_ROUND = re.compile(r"\bround (?P<round>\d+),? of `?(?P<anchor>[0-9a-f]{7,40})(?![0-9a-f])", re.IGNORECASE)
 COST_HEADING = "## Cost"
 COST_LINE = re.compile(r"^Review round (?P<round>\d+), of `?(?P<anchor>[0-9a-f]{7,40})`?, on (?P<link>.+?)\s*$")
@@ -310,14 +356,14 @@ def carries(comment, heading, round_no, anchor):
 
 
 def by_login(m, login):
-    return [c["body"] for c in view(m["repo"], m["num"], "comments") if (c.get("author") or {}).get("login") == login]
+    return [c for c in view(m["repo"], m["num"], "comments") if (c.get("author") or {}).get("login") == login]
 
 
-def copies(m, heading, round_no, bodies):
+def copies(m, heading, round_no, records):
     # A closing comment counts only after the head it names, so one naming an older head is
     # not this post, and a later closing comment names the head it is posted at.
-    return [body for body in bodies if carries(body, heading, round_no, m["anchor"])
-            and (heading != FINAL or m["head"][:7] in body)]
+    return [c for c in records if carries(c["body"], heading, round_no, m["anchor"])
+            and (heading != FINAL or m["head"][:7] in c["body"])]
 
 
 def own_round(text):
@@ -404,9 +450,43 @@ def compare_range(repo, anchor, head):
     return f"the head {head[:7]} is {status} against the anchor {anchor[:7]}, so the anchor is not in its history", []
 
 
+def comment_number(c):
+    found = re.search(r"issuecomment-(\d+)$", c.get("url") or "")
+    return int(found[1]) if found else None
+
+
+def settle(name, found, text, link=None):
+    """Say what to do about a post that is not held exactly once, so two sessions that follow it keep one copy."""
+    if not found:
+        return (f"{name} should hold this comment once, and the read after posting {link} shows none, which GitHub's "
+                "read can do for a while. Rerun nothing and post nothing by hand. Read the comments again later, and "
+                "report it if it is still missing")
+    links = ", ".join(c.get("url") or "(no link)" for c in found)
+    if any(not same_text(c["body"], text) for c in found):
+        return (f"{name} should hold this comment once and also holds its key with other text, which may be another "
+                f"session's post: {links}. Delete and edit nothing, and report these links")
+    if any(comment_number(c) is None for c in found):
+        return (f"{name} should hold this comment once and holds it {len(found)} times, and GitHub gave no comment "
+                f"number to order them by: {links}. Delete nothing, and report it")
+    first, *rest = sorted(found, key=comment_number)
+    return (f"{name} should hold this comment once and holds it {len(found)} times. Keep {first['url']}, the one with "
+            f"the lowest comment number, delete {', '.join(c['url'] for c in rest)}, read the comments again to "
+            "confirm one is left, and report it")
+
+
 def outside_history(repo, anchor, head):
     """Return why the anchor is not the head or an ancestor of it, or None when it is."""
     return compare_range(repo, anchor, head)[0]
+
+
+def head_check(repo, num, named):
+    """Return the pull request's head on GitHub, and why it is not the head named, or None when it is."""
+    head = view(repo, num, "headRefOid")
+    if head.startswith(named):
+        return head, None
+    # Two heads that share their first seven characters are named in full, so the message tells them apart.
+    width = 7 if head[:7] != named[:7] else len(head)
+    return head, f"{repo}#{num} is at {head[:width]}, not {named[:width]}"
 
 
 def comment(args):
@@ -437,14 +517,8 @@ def comment(args):
             sys.exit(f"posting nothing, because {m['repo']}#{m['num']} is named twice")
         seen.add(pull)
         targets.append((m, text, heading))
-    wrong, heads = [], []
-    for m, _, _ in targets:
-        head = view(m["repo"], m["num"], "headRefOid")
-        heads.append(head)
-        if not head.startswith(m["head"]):
-            # Two heads that share their first seven characters are named in full, so the message tells them apart.
-            width = 7 if head[:7] != m["head"][:7] else len(head)
-            wrong.append(f"{m['repo']}#{m['num']} is at {head[:width]}, not {m['head'][:width]}")
+    checked = [head_check(m["repo"], m["num"], m["head"]) for m, _, _ in targets]
+    heads, wrong = [head for head, _ in checked], [why for _, why in checked if why]
     if wrong:
         sys.exit("posting nothing, because a head does not match: " + "; ".join(wrong))
     history = [compare_range(m["repo"], m["anchor"], head) for (m, _, _), head in zip(targets, heads)]
@@ -457,7 +531,7 @@ def comment(args):
     # This runs before the checks below, because one of them sends the session to post by hand.
     reused = [f"{m['repo']}#{m['num']}: {why}"
               for (m, _, _), bodies, (_, later) in zip(targets, read, history)
-              for _, why in pushed_after(bodies, args.round, m["anchor"], later)]
+              for _, why in pushed_after([c["body"] for c in bodies], args.round, m["anchor"], later)]
     if reused:
         landed = [f"{m['repo']}#{m['num']}" for (m, _, heading), bodies in zip(targets, read)
                   if copies(m, heading, args.round, bodies)]
@@ -470,30 +544,96 @@ def comment(args):
     for (m, text, heading), bodies in zip(targets, read):
         name = f"{m['repo']}#{m['num']}"
         mine = copies(m, heading, args.round, bodies)
-        if heading == FINAL and any(not same_text(body, text) for body in mine):
+        if heading == FINAL and any(not same_text(c["body"], text) for c in mine):
             sys.exit(f"posting nothing, because {name} already carries a {FINAL!r} comment on round "
                      f"{args.round} and {m['anchor'][:7]} at the head {m['head'][:7]}, which closes the "
                      "review, whether it is that round's own comment or an earlier closing comment. "
                      "Report it, and post no second one")
-        if any(not same_text(body, text) for body in mine):
+        if any(not same_text(c["body"], text) for c in mine):
             sys.exit(f"posting nothing, because {name} already carries this heading, round and anchor with "
                      "different text. Report it, and once it is settled post by hand after the checks review-round.md's step 7 "
                      "gives for a hand post")
         if len(mine) > 1:
-            doubled.append(name)
+            doubled.append(settle(name, mine, text))
         elif mine:
             print(f"{name}: already carries this comment, so skipped")
         else:
-            pending.append((name, m, heading))
-    for name, m, heading in pending:
+            pending.append((name, m, text, heading))
+    for name, m, text, heading in pending:
         if args.dry_run:
             print(f"{name}: would post {m['file']}")
             continue
-        print(f"{name}: posted {write('gh', 'pr', 'comment', m['num'], '-R', m['repo'], '--body-file', m['file'])}")
-        if len(copies(m, heading, args.round, by_login(m, login))) != 1:
-            doubled.append(name)
+        link = write("gh", "pr", "comment", m["num"], "-R", m["repo"], "--body-file", m["file"])
+        print(f"{name}: posted {link}")
+        found = copies(m, heading, args.round, by_login(m, login))
+        if len(found) != 1:
+            doubled.append(settle(name, found, text, link))
     if doubled:
-        sys.exit(f"{', '.join(doubled)} should hold this comment once and does not. Delete any extra copy, and report it")
+        sys.exit("; ".join(doubled))
+
+
+def branch_tip(repo, branch):
+    """Return the branch's tip on GitHub, and why it could not be read, or None when it could."""
+    # A raw "#" or "?" would end the path, and GitHub resolves "..", so the name is encoded and the name
+    # GitHub answers for must be the one asked for.
+    done = subprocess.run(("gh", "api", f"repos/{repo}/branches/{urllib.parse.quote(branch, safe='/')}",
+                           "--jq", ".name, .commit.sha"), capture_output=True, text=True)
+    lines = done.stdout.strip().split("\n")
+    if done.returncode or len(lines) != 2 or not re.fullmatch(r"[0-9a-f]{40}", lines[1]):
+        return None, f"GitHub did not give the tip of {branch} in {repo}: {done.stderr.strip() or done.stdout.strip()!r}"
+    if lines[0] != branch:
+        return None, f"GitHub answered for the branch {lines[0]!r}, not {branch!r}"
+    return lines[1], None
+
+
+def check(args):
+    parsed, tips, wrong = [], [], []
+    for spec in args.targets:
+        m = TARGET.match(spec) or CHECK_BRANCH.match(spec)
+        if not m:
+            sys.exit(f"not OWNER/REPO#N=HEAD=ANCHOR=FILE or OWNER/REPO@BRANCH=ANCHOR=FILE: {spec}")
+        if not os.path.isfile(m["file"]):
+            sys.exit(f"no comment file at {m['file']}")
+        parsed.append(m)
+    for m in parsed:
+        pull = "num" in m.groupdict()
+        name = f"{m['repo']}#{m['num']}" if pull else f"{m['repo']}@{m['branch']}"
+        with open(m["file"], encoding="utf-8") as f:
+            text = f.read()
+        missing = [f"the anchor {m['anchor'][:7]}"] if m["anchor"][:7] not in text else []
+        if pull and m["head"][:7] not in text:
+            missing.append(f"the head {m['head'][:7]}")
+        if missing:
+            wrong.append(f"{m['file']} does not name {' and '.join(missing)}")
+        tip, why = head_check(m["repo"], m["num"], m["head"]) if pull else branch_tip(m["repo"], m["branch"])
+        tips.append((name, tip))
+        if why:
+            wrong.append(why if pull else f"{name}: {why}")
+    if wrong:
+        sys.exit("post nothing, because a file, a head or a branch does not match: " + "; ".join(wrong))
+    history = [compare_range(m["repo"], m["anchor"], tip) for m, (_, tip) in zip(parsed, tips)]
+    outside = [f"{name}: {why}" for (name, _), (why, _) in zip(tips, history) if why]
+    if outside:
+        sys.exit("post nothing, because an anchor was not shown to be the head or an ancestor of it: " + "; ".join(outside))
+    # On a pull request, refuse an anchor another round read past, as comment does. The round is the comment's own.
+    pulls = [(m, later) for m, (_, later) in zip(parsed, history) if "num" in m.groupdict()]
+    if pulls:
+        login = run("gh", "api", "user", "--jq", ".login").strip()
+        reused = []
+        for m, later in pulls:
+            with open(m["file"], encoding="utf-8") as f:
+                own = own_round(f.read())
+            bodies = [c["body"] for c in by_login(m, login)]
+            # Skip only the file's own round, and only when its round line names this anchor.
+            mine = own[0] if own and same_commit(own[1], m["anchor"]) else None
+            reused += [f"{m['repo']}#{m['num']}: {why}" for _, why in pushed_after(bodies, mine, m["anchor"], later)]
+        if reused:
+            sys.exit("post nothing, because another round read past this anchor: " + "; ".join(reused)
+                     + ". Check that each anchor is the commit this round's brief anchors at")
+    for m, (name, tip) in zip(parsed, tips):
+        where = "is the head" if tip.startswith(m["anchor"]) else "is an ancestor of the head"
+        named = "names them" if "num" in m.groupdict() else "names the anchor"
+        print(f"{name}: the anchor {m['anchor'][:7]} {where} {tip[:7]}, and {m['file']} {named}, so it may post")
 
 
 def cost_key(text):
@@ -510,8 +650,15 @@ def cost_key(text):
 
 
 def cost_copies(repo, num, key, login):
-    return [c["body"] for c in view(repo, num, "comments", kind="issue")
+    return [c for c in view(repo, num, "comments", kind="issue")
             if (c.get("author") or {}).get("login") == login and cost_key(c["body"]) == key]
+
+
+def other_anchors(repo, num, key, login):
+    """Return this login's ## Cost comments for the same round and pull request under another anchor."""
+    return [c for c in view(repo, num, "comments", kind="issue")
+            if (c.get("author") or {}).get("login") == login and (k := cost_key(c["body"]))
+            and k[0] == key[0] and k[2:] == key[2:] and k[1] != key[1]]
 
 
 def cost(args):
@@ -533,21 +680,34 @@ def cost(args):
                  "so a retry could not recognise it")
     repo, num, name = issue["repo"], issue["num"], args.issue
     login = run("gh", "api", "user", "--jq", ".login").strip()
+    others = other_anchors(repo, num, key, login)
+    if others:
+        anchors = ", ".join(sorted({cost_key(c["body"])[1] for c in others}))
+        links = ", ".join(c.get("url") or "(no link)" for c in others)
+        sys.exit(f"posting nothing, because {name} already carries round {args.round}'s {COST_HEADING} comment for "
+                 f"{args.pull} under the anchor {anchors}, not {key[1]}, at {links}, and a {COST_HEADING} total would "
+                 "count the round twice. Delete and edit nothing, since either may hold another session's spend, "
+                 "and report the links")
     mine = cost_copies(repo, num, key, login)
-    if any(not same_text(body, text) for body in mine):
+    if any(not same_text(c["body"], text) for c in mine):
+        links = ", ".join(c.get("url") or "(no link)" for c in mine)
         sys.exit(f"posting nothing, because {name} already carries this round's {COST_HEADING} comment with "
-                 "different text. Edit that comment by hand, and report it")
+                 f"different text at {links}. Where that comment is this file's text plus the build's line this session added at "
+                 "the closing comment or the handover, as review-round.md's steps 6 and 7 ask, that is expected, so post nothing "
+                 "more. Otherwise edit nothing, since it may hold another session's spend, and report it")
     if len(mine) > 1:
-        sys.exit(f"{name} should hold this comment once and does not. Delete any extra copy, and report it")
+        sys.exit(settle(name, mine, text))
     if mine:
         print(f"{name}: already carries this comment, so skipped")
         return
     if args.dry_run:
         print(f"{name}: would post {args.file}")
         return
-    print(f"{name}: posted {write('gh', 'issue', 'comment', num, '-R', repo, '--body-file', args.file)}")
-    if len(cost_copies(repo, num, key, login)) != 1:
-        sys.exit(f"{name} should hold this comment once and does not. Delete any extra copy, and report it")
+    link = write("gh", "issue", "comment", num, "-R", repo, "--body-file", args.file)
+    print(f"{name}: posted {link}")
+    found = cost_copies(repo, num, key, login)
+    if len(found) != 1:
+        sys.exit(settle(name, found, text, link))
 
 
 def round_number(value):
@@ -575,6 +735,10 @@ def main():
     post.add_argument("--round", type=round_number, required=True)
     post.add_argument("--dry-run", action="store_true")
     post.set_defaults(handler=comment)
+
+    gate = commands.add_parser("check")
+    gate.add_argument("targets", nargs="+")
+    gate.set_defaults(handler=check)
 
     price = commands.add_parser("cost")
     price.add_argument("issue")
