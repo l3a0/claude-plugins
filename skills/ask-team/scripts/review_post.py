@@ -304,13 +304,15 @@ def comment(args):
         head = view(m["repo"], m["num"], "headRefOid")
         heads.append(head)
         if not head.startswith(m["head"]):
-            wrong.append(f"{m['repo']}#{m['num']} is at {head[:7]}, not {m['head'][:7]}")
+            # Two heads that share their first seven characters are named in full, so the message tells them apart.
+            width = 7 if head[:7] != m["head"][:7] else len(head)
+            wrong.append(f"{m['repo']}#{m['num']} is at {head[:width]}, not {m['head'][:width]}")
     if wrong:
         sys.exit("posting nothing, because a head does not match: " + "; ".join(wrong))
     outside = [f"{m['repo']}#{m['num']}: {why}" for (m, _, _), head in zip(targets, heads)
                if (why := outside_history(m["repo"], m["anchor"], head))]
     if outside:
-        sys.exit("posting nothing, because an anchor is neither the head nor an ancestor of it: " + "; ".join(outside)
+        sys.exit("posting nothing, because no anchor was shown to be the head or an ancestor of it: " + "; ".join(outside)
                  + ". Check that each anchor is the commit this round's brief anchors at, and post nothing by hand")
     login = run("gh", "api", "user", "--jq", ".login").strip()
     pending, doubled = [], []

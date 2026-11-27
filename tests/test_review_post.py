@@ -46,6 +46,8 @@ if args[0] == 'api' and args[1].startswith('repos/') and '/compare/' in args[1]:
             print('behind')
         elif any(c.startswith(anchor) for c in pr.get('silent', [])):
             print('')
+        elif any(c.startswith(anchor) for c in pr.get('twins', [])):
+            print('identical')
         else:
             sys.exit('gh: Not Found (HTTP 404)')
         sys.exit(0)
@@ -137,9 +139,9 @@ with tempfile.TemporaryDirectory() as ROOT:
 
     # Every anchor the comment tests name, bbbbbbb and ccccccc, is an ancestor of the head unless a test says otherwise.
     def seed(num, body=BODY, head='a' * 40, comments=(), repo='o-r', login='me', ancestors=('b' * 40, 'c' * 40),
-             elsewhere=(), later=(), silent=()):
+             elsewhere=(), later=(), silent=(), twins=()):
         with open(os.path.join(STATE, f'{repo}-{num}.json'), 'w') as f:
-            json.dump({'body': body, 'headRefOid': head, 'ancestors': list(ancestors), 'elsewhere': list(elsewhere), 'later': list(later), 'silent': list(silent),
+            json.dump({'body': body, 'headRefOid': head, 'ancestors': list(ancestors), 'elsewhere': list(elsewhere), 'later': list(later), 'silent': list(silent), 'twins': list(twins),
                        'comments': [{'author': {'login': login}, 'body': c} for c in comments]}, f)
 
     def state(num, repo='o-r'):
@@ -457,13 +459,14 @@ with tempfile.TemporaryDirectory() as ROOT:
         f.write(f'## Review, round 3\n\nRound 3, of `{B}`, fixed in `{"e" * 7}`.\n')
     code, out = post(MAIN, f'o/s#6={"e" * 40}={B}={moved}')
     check('posts on no companion when one head differs', code != 0 and state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
+    check('names the head that differs', f'o/s#6 is at {head6[:7]}' in out)
     near = os.path.join(ROOT, 'near.md')
     with open(near, 'w') as f:
-        f.write(f'## Review, round 3\n\nRound 3, of `{B}`, fixed in `{"d" * 6}e`.\n')
-    code, out = post(MAIN, f'o/s#6={"d" * 6 + "e" * 34}={B}={near}')
-    check('refuses a head that shares only its first characters with the real head', code != 0
-          and 'is at ddddddd' in out and state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
-    check('names the head that differs', f'o/s#6 is at {head6[:7]}' in out)
+        f.write(f'## Review, round 3\n\nRound 3, of `{B}`, fixed in `{"d" * 7}`.\n')
+    code, out = post(MAIN, f'o/s#6={"d" * 7 + "e" * 33}={B}={near}')
+    check('refuses a head that shares its first seven characters with the real head, and names both in full',
+          code != 0 and f'is at {head6}, not {"d" * 7 + "e" * 33}' in out
+          and state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
 
     code, out = post(f'o/r#5={head5[:7]}={A}={note}')
     check('takes a seven-character head', code == 0 and len(state(5)['comments']) == 1)
@@ -611,7 +614,8 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5, elsewhere=('f' * 40,)), seed(6, head=head6, repo='o-s')
     code, out = post(COMP, f'o/r#5={head5}={F}={unrelated}')
     check('refuses an anchor on another branch, and posts on no companion', code != 0
-          and 'neither the head nor an ancestor' in out and 'diverged' in out and f'o/r#5' in out
+          and 'no anchor was shown to be the head or an ancestor' in out and 'is diverged against the anchor' in out
+          and 'none of ahead' not in out and f'o/r#5' in out
           and 'post nothing by hand' in out
           and state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
 
@@ -619,12 +623,17 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5, elsewhere=(twin,))
     code, out = post(f'o/r#5={head5}={twin}={at_head}')
     check('refuses an anchor that shares the head\'s first seven characters but is another commit', code != 0
-          and 'diverged' in out and state(5)['comments'] == [])
+          and 'is diverged against the anchor' in out and 'none of ahead' not in out and state(5)['comments'] == [])
+
+    seed(5, head=head5, twins=('f' * 40,))
+    code, out = post(f'o/r#5={head5}={F}={unrelated}')
+    check('refuses an anchor GitHub compares as identical to another head', code != 0
+          and 'is identical against the anchor' in out and state(5)['comments'] == [])
 
     seed(5, head=head5, later=('f' * 40,))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
     check('refuses an anchor that comes after the head, as after a force push back', code != 0
-          and 'behind' in out and state(5)['comments'] == [])
+          and 'is behind against the anchor' in out and 'none of ahead' not in out and state(5)['comments'] == [])
 
     seed(5, head=head5, silent=('f' * 40,))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
@@ -637,7 +646,7 @@ with tempfile.TemporaryDirectory() as ROOT:
           and 'Not Found' in out and state(5)['comments'] == [])
 
     code, out = post(f'o/r#5={head5}={F}={unrelated}', '--dry-run')
-    check('a dry run checks the anchor too', code != 0 and 'neither the head nor an ancestor' in out)
+    check('a dry run checks the anchor too', code != 0 and 'no anchor was shown to be the head or an ancestor' in out)
 
     code, out = post('not-a-target')
     check('refuses a malformed target', code != 0 and 'OWNER/REPO#N=HEAD=ANCHOR=FILE' in out)
