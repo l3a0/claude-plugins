@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Post a review round's comments and edit a pull request's Revision section.
+"""Post a review round's comments and its cost on the issue, and edit a pull request's Revision section.
 
 Usage:
     review_post.py revision OWNER/REPO#N --scratch DIR --file PATH [--replace ITEM] [--dry-run]
@@ -30,14 +30,17 @@ posts only what is missing. GitHub takes no key on a comment, so this narrows
 the window for a double post rather than closing it. So it counts the copies
 after posting, and exits non-zero naming any pull request that does not hold
 exactly one. A closing comment posts the same way, with R the round it closes
-and ANCHOR the commit that round read. It refuses a heading that starts
-`Review complete` and is not exactly `## Review complete`, because a build
-board counts only that whole first line.
+and ANCHOR the commit that round read. It refuses a first line that reads
+`Review complete` and is not exactly `## Review complete`, such as one with a
+space before or after it or another heading level, because a build board
+counts only that whole line.
 
 `cost` posts a round's `## Cost` comment on the issue the main pull request
-tracks. It refuses a file whose first line is not `## Cost` or whose next
-non-blank line is not `Review round R, of ANCHOR, on <link to the pull
-request>`, because that line is how a retry recognises the post. It skips the
+tracks. It refuses a file whose first line is not exactly `## Cost`, which is
+the only form the `## Cost total` sweep reads, or whose next non-blank line is
+not `Review round R, of ANCHOR, on <the pull request's URL>`, because that line
+is how a retry recognises the post. It takes the issue on trust, since a pull
+request that is only part of an issue names it in no field GitHub returns. It skips the
 post when the issue already carries a comment by the same login with that
 heading and line, stops when one carries them with other text, and counts the
 copies after posting, as `comment` does.
@@ -63,7 +66,7 @@ FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 ITEM = re.compile(r"^(\d+)\. (.*)$")
 LIST_MARK = re.compile(r"^\s*(\d+[.)]|[-*+])(\s|$)")
 FINAL = "## Review complete"
-NEAR_FINAL = re.compile(r"^ {0,3}#{1,6}\s*Review complete\b", re.IGNORECASE)
+NEAR_FINAL = re.compile(r"^\s*#{1,6}\s*Review[\s-]+complete\b", re.IGNORECASE)
 COST_HEADING = "## Cost"
 COST_LINE = re.compile(r"^Review round (?P<round>\d+), of `?(?P<anchor>[0-9a-f]{7,40})`?, on (?P<link>.+?)\s*$")
 PULL_LINK = re.compile(r"github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/(?P<num>\d+)(?!\d)", re.IGNORECASE)
@@ -259,6 +262,14 @@ def first_line(text):
     return text.split("\n", 1)[0].strip()
 
 
+def raw_first_line(text):
+    return text.split("\n", 1)[0].rstrip("\r")
+
+
+def same_text(a, b):
+    return a.replace("\r\n", "\n").strip() == b.replace("\r\n", "\n").strip()
+
+
 def carries(comment, heading, round_no, anchor):
     return first_line(comment) == heading and anchor[:7] in comment \
         and re.search(rf"\bround {round_no}\b", comment, re.IGNORECASE) is not None
@@ -280,8 +291,8 @@ def comment(args):
         with open(m["file"], encoding="utf-8") as f:
             text = f.read()
         heading = first_line(text)
-        if NEAR_FINAL.match(heading) and heading != FINAL:
-            sys.exit(f"posting nothing, because {m['file']} starts {heading!r}, and a build board counts a "
+        if NEAR_FINAL.match(heading) and raw_first_line(text) != FINAL:
+            sys.exit(f"posting nothing, because {m['file']} starts {raw_first_line(text)!r}, and a build board counts a "
                      f"closing comment only when its whole first line is {FINAL!r}")
         if not HEADING.match(heading) or not carries(text, heading, args.round, m["anchor"]):
             sys.exit(f"posting nothing, because {m['file']} does not start with a heading and name "
@@ -305,7 +316,7 @@ def comment(args):
     for m, text, heading in targets:
         name = f"{m['repo']}#{m['num']}"
         mine = copies(m, heading, args.round, login)
-        if any(body.strip() != text.strip() for body in mine):
+        if any(not same_text(body, text) for body in mine):
             sys.exit(f"posting nothing, because {name} already carries this heading, round and anchor with "
                      "different text. Report it, and post by hand once it is settled")
         if len(mine) > 1:
@@ -327,8 +338,8 @@ def comment(args):
 
 def cost_key(text):
     """Return (round, anchor's first seven, repo, number) from a ## Cost comment, or None."""
-    lines = text.replace("\r", "").split("\n")
-    if lines[0].strip() != COST_HEADING:
+    lines = text.replace("\r\n", "\n").split("\n")
+    if lines[0] != COST_HEADING:
         return None
     rest = [line for line in lines[1:] if line.strip()]
     m = COST_LINE.match(rest[0]) if rest else None
@@ -358,12 +369,12 @@ def cost(args):
     key = (args.round, args.anchor[:7], pull["repo"].lower(), int(pull["num"]))
     if cost_key(text) != key:
         sys.exit(f"posting nothing, because {args.file} does not start with the line {COST_HEADING!r} and then "
-                 f"'Review round {args.round}, of `{args.anchor[:7]}`, on <link to {args.pull}>', "
+                 f"'Review round {args.round}, of `{args.anchor[:7]}`, on <the URL of {args.pull}>', "
                  "so a retry could not recognise it")
     repo, num, name = issue["repo"], issue["num"], args.issue
     login = run("gh", "api", "user", "--jq", ".login").strip()
     mine = cost_copies(repo, num, key, login)
-    if any(body.strip() != text.strip() for body in mine):
+    if any(not same_text(body, text) for body in mine):
         sys.exit(f"posting nothing, because {name} already carries this round's {COST_HEADING} comment with "
                  "different text. Edit that comment by hand, and report it")
     if len(mine) > 1:
@@ -380,9 +391,10 @@ def cost(args):
 
 
 def round_number(value):
-    if not value.isdigit():
+    if not re.fullmatch(r"[0-9]+", value):
         raise argparse.ArgumentTypeError(
-            f"{value!r} is not a round's number. A closing comment names the round it closes, as in --round 12")
+            f"{value!r} is not a round's number. Give the number of the round the comment reports, "
+            "and for a closing comment the round it closes, as in --round 12")
     return int(value)
 
 

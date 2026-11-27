@@ -566,10 +566,18 @@ with tempfile.TemporaryDirectory() as ROOT:
     code, out = post(MAIN, '--dry-run')
     check('a dry run posts nothing', state(5)['comments'] == [] and 'would post' in out)
 
-    code, out = post(MAIN, round_no='complete')
-    check('a word for the round names the round to give', code != 0 and 'names the round it closes' in out and state(5)['comments'] == [])
+    for word in ('complete', '²', '-1'):
+        code, out = post(MAIN, round_no=word)
+        check(f'a round given as {word!r} names the round to give', code != 0 and 'the round it closes' in out and 'Traceback' not in out and state(5)['comments'] == [])
+    crlf = os.path.join(ROOT, 'crlf.md')
+    with open(crlf, 'w', newline='') as f:
+        f.write(f'## Review complete\r\n\r\nCloses round 3, of `{A}`, at `{"a" * 7}`.\r\n')
+    seed(5, head=head5, comments=[f'## Review complete\n\nCloses round 3, of `{A}`, at `{"a" * 7}`.\n'])
+    code, out = post(f'o/r#5={head5}={A}={crlf}')
+    check('a copy that differs only in line endings is skipped', code == 0 and 'skipped' in out and len(state(5)['comments']) == 1)
     near = os.path.join(ROOT, 'near.md')
-    for heading in ('## Review complete, round 3', '### Review complete', '## review complete'):
+    for heading in ('## Review complete, round 3', '### Review complete', '## review complete', '## Review complete ',
+                    ' ## Review complete', '## Review  complete', '## Review-complete'):
         with open(near, 'w') as f:
             f.write(f'{heading}\n\nCloses round 3, of `{A}`, at `{"a" * 7}`.\n')
         seed(5, head=head5)
@@ -615,12 +623,34 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed_issue(40, [COST.replace('2.18', '2.19')], login='stranger')
     code, out = price()
     check("another login's cost comment does not stop the post", code == 0 and len(issue(40)) == 2)
-    for other in (COST.replace('round 3', 'round 2'), COST.replace(f'`{A}`', f'`{B}`'),
-                  COST.replace('pull/5', 'pull/55'), COST.replace('## Cost\n', '## Cost total\n')):
+    for label, other in (('round', COST.replace('round 3', 'round 2')), ('anchor', COST.replace(f'`{A}`', f'`{B}`')),
+                         ('pull request number', COST.replace('pull/5', 'pull/55')),
+                         ('repository', COST.replace('o/r/pull/5', 'o/s/pull/5')),
+                         ('issue link', COST.replace('pull/5', 'issues/5')),
+                         ('heading', COST.replace('## Cost\n', '## Cost total\n'))):
         seed_issue(40, [other])
         code, out = price()
-        check('a cost comment for another round, anchor, pull request or heading does not block the post',
-              code == 0 and len(issue(40)) == 2)
+        check(f'a cost comment for another {label} does not block the post', code == 0 and len(issue(40)) == 2)
+    seed_issue(40, [COST.replace('o/r/pull/5', 'O/R/pull/5')])
+    code, out = price()
+    check('a copy linking the repository in other case is the same key, so its other text stops the post',
+          code != 0 and 'different text' in out and len(issue(40)) == 1)
+    for label, same in (('trailing blank lines', COST + '\n\n'),):
+        seed_issue(40, [same])
+        code, out = price()
+        check(f'a cost copy that differs only in {label} is skipped', code == 0 and 'skipped' in out and len(issue(40)) == 1)
+    seed_issue(40, [COST])
+    held = issue(40) + [{'author': None, 'body': COST}]
+    with open(os.path.join(STATE, 'issue-o-r-40.json'), 'w') as f:
+        json.dump({'comments': held}, f)
+    code, out = price()
+    check('a cost comment from a deleted account is passed over', code == 0 and 'skipped' in out and 'Traceback' not in out)
+
+    seed_issue(40)
+    bare = write_cost(COST.replace(f'`{A}`', A))
+    code, out = price(file=bare)
+    code2, out2 = price(file=bare)
+    check('posts and then skips a round line whose anchor has no backticks', code == 0 and code2 == 0 and 'skipped' in out2 and len(issue(40)) == 1)
 
     seed_issue(40)
     linked = write_cost(COST.replace('https://github.com/o/r/pull/5', '[PR #5](https://github.com/o/r/pull/5)'))
@@ -635,10 +665,20 @@ with tempfile.TemporaryDirectory() as ROOT:
                        ('a file whose anchor differs', COST.replace(f'`{A}`', f'`{B}`')),
                        ('a file that links another pull request', COST.replace('pull/5', 'pull/6')),
                        ('a file whose round line is not the first after the heading', COST.replace('\n\nReview', '\n\nTo date.\n\nReview')),
+                       ('a heading with a space after it', COST.replace('## Cost\n', '## Cost \n')),
+                       ('a heading with a space before it', ' ' + COST),
+                       ('a pull request named in its short form', COST.replace('https://github.com/o/r/pull/5', 'o/r#5')),
+                       ('a file that links the pull request of another repository', COST.replace('o/r/pull/5', 'o/s/pull/5')),
+                       ('a file that links an issue of that number', COST.replace('pull/5', 'issues/5')),
+                       ('a round line with words before it', COST.replace('\nReview round', '\nDraft: Review round')),
                        ('an empty file', '')):
+        seed_issue(40)
         code, out = price(file=write_cost(text))
         check(f'refuses {name}', code != 0 and 'could not recognise it' in out and issue(40) == [] and 'Traceback' not in out)
 
+    seed_issue(40, [COST.replace('\n', '\r\n')])
+    code, out = price()
+    check('a cost copy that differs only in line endings is skipped', code == 0 and 'skipped' in out and len(issue(40)) == 1)
     seed_issue(40, [COST, COST])
     code, out = price()
     check('reports a cost comment already there twice', code != 0 and 'should hold this comment once' in out and len(issue(40)) == 2)
@@ -657,6 +697,8 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('refuses a malformed pull request', code != 0 and 'OWNER/REPO#N' in out)
     code, out = price(anchor='xyz')
     check('refuses a malformed anchor', code != 0 and 'hex' in out)
+    code, out = run('cost', 'bad', '--round', '3', '--pull', 'o/r#5', '--anchor', A, '--file', cost_file)
+    check('refuses a malformed issue', code != 0 and 'OWNER/REPO#N' in out and 'Traceback' not in out)
     code, out = price(file=os.path.join(ROOT, 'missing.md'))
     check('refuses a cost file that does not exist', code != 0 and 'no comment file' in out)
     code, out = run('cost', 'o/r#41', '--round', '3', '--pull', 'o/r#5', '--anchor', A, '--file', cost_file)
