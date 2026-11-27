@@ -58,7 +58,8 @@ exact access). Reports of particular interest:
   permissions is out of scope, since the session's permission mode is the
   boundary there.
 - `review_post.py`, in `ask-team`, posts review comments on pull requests,
-  posts a round's cost comment on an issue, and edits pull request bodies as
+  posts a round's cost comment on an issue, reads a pull request's head or a
+  branch's tip to check a comment posted by hand, and edits pull request bodies as
   the user's `gh` login, sending back a body it read from GitHub. It reads
   every comment on those pull requests and issues, which anyone can write on
   a public repository. In scope is any path where text in a pull request or an
