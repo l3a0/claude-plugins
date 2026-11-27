@@ -24,8 +24,11 @@ so the line in PATH is the line the section holds, and a retry finds it.
 in PATH, and keeps its heading. HEADING is the heading's whole line, such as
 `## Decision`. The section runs from that line to the next heading of the same
 or a higher level, or to the closing lines and footer when none follows.
-Headings inside code fences do not count, and only a line that is wholly a
-closing line, such as `Closes #12`, starts the closing lines. It finds the
+Headings inside code fences do not count. Only a line that is wholly a
+closing line, such as `Closes #12` or `Closes #12, part of #9.`, starts the
+closing lines, and it stops on a line that only opens like one, such as
+`Fixes #12 in the parser`, because that may close an issue or belong to the
+section. It finds the
 heading by its whole line, ignoring trailing spaces. It sends nothing on a body
 where that line appears more than once, or, when it appears nowhere, where the
 heading's words appear on no heading or on more than one at any level, or on
@@ -101,6 +104,7 @@ against a stand-in `gh`, so no test covers what the real one prints.
 """
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -315,8 +319,10 @@ def heading_level(line):
     return (len(m[1]), (m[2] or "").strip().lower()) if m and HEADING.match(line) else None
 
 
-CLOSING_LINE = re.compile(r"^(close[sd]?|fix(es|ed)?|resolve[sd]?|part of)\s+(no issue|([\w.-]+/[\w.-]+)?#\d+)\.?\s*$",
-                          re.IGNORECASE)
+_KEYWORD = r"(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|part of)"
+_REF = r"(?:no issue|(?:[\w.-]+/[\w.-]+)?#\d+)"
+# A whole closing line: a keyword and a reference, then more references, each after a comma or "and" and a keyword.
+CLOSING_LINE = re.compile(rf"^{_KEYWORD}\s+{_REF}(?:\s*(?:,|\band\b)\s*(?:{_KEYWORD}\s+)?{_REF})*\.?\s*$", re.IGNORECASE)
 
 
 def section_end_limit(lines):
@@ -331,6 +337,10 @@ def section_end_limit(lines):
         end = trim(end - 1)
     while end and CLOSING_LINE.match(lines[end - 1].strip()):
         end = trim(end - 1)
+    if end and CLOSING.match(lines[end - 1].strip()):
+        # A line that opens like a closing line but is not one may close an issue or belong to the section.
+        sys.exit(f"the line {lines[end - 1].strip()!r} opens like a closing line and is not wholly one, so it is not "
+                 "known whether it closes an issue or belongs to the last section. Edit it by hand")
     return end
 
 
@@ -388,7 +398,7 @@ def section(args):
     repo, num = m["repo"], m["num"]
     if not heading_level(args.heading) or not heading_level(args.heading)[1]:
         sys.exit(f"not a heading line such as '## Decision': {args.heading!r}")
-    if REVISION.match(args.heading):
+    if args.heading.rstrip() == SECTION:
         sys.exit(f"{args.heading!r} is the Revision section, whose numbered lines the revision command keeps. "
                  "Use revision, with --replace for a line already there")
     with open(args.file, encoding="utf-8") as f:
@@ -412,8 +422,8 @@ def section(args):
         sys.exit(f"{repo}#{num}: refusing to send, a second run would change the body again. Edit it by hand. "
                  f"The body as read is at {saved}")
     if args.dry_run:
-        old = set(body.split("\n"))
-        print("".join(f"+{line}\n" for line in new.split("\n") if line not in old))
+        print("\n".join(difflib.unified_diff(body.split("\n"), new.split("\n"), "as read", "as it would be sent",
+                                             lineterm="")))
         return
     sent = keep("sent-" + name, args.scratch, new)
     write("gh", "pr", "edit", num, "-R", repo, "--body-file", sent, where=f"As read: {saved}. As sent: {sent}. ")

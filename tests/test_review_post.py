@@ -1102,13 +1102,24 @@ Closes #109
           and '## Using C#\n\nOne fact.\n\n## Using C\n' in state(30)['body'])
     code, out = part('## using c#', 'One fact.\n')
     check('a trailing # keeps two headings apart by their words too', code != 0 and "written '## Using C#'" in out)
+    seed(30, SECTIONED.replace('3. Adds the third thing.\n', '3. Adds the third thing.\n\n### Revision\n\nA subsection.\n'))
+    code, out = part('### Revision', 'Another subsection.\n')
+    check('section edits a Revision subsection at another level', code == 0 and '### Revision\n\nAnother subsection.' in state(30)['body'])
+    seed(30, SECTIONED.replace('## Decision\n\nTwo', '## Decision ##\n\nTwo'))
+    code, out = part('## Decision', 'x\n')
+    check('section strips a closing run of #s from the words, and names the heading as written', code != 0
+          and "written '## Decision ##'" in out and state(30).get('edits') is None)
+    seed(30, SECTIONED.replace('## Scope', '### Decision'))
+    code, out = part('## decision', 'x\n')
+    check('section calls a heading line it cannot find ambiguous when two headings share its words', code != 0
+          and 'ambiguous' in out and state(30).get('edits') is None)
     seed(30, SECTIONED + '## Revision\n\n1. `r1` answers round 1.\n')
     code, out = part('## Revision', '1. only one now\n')
     check('section refuses the Revision section and names revision', code != 0 and 'Use revision' in out and state(30).get('edits') is None)
     seed(30, SECTIONED.replace('```\n\nCloses #109', '```\n\nFixes #12 in the parser only.\n\nCloses #109'))
     code, out = part('## Scope', 'New.\n')
-    check('section counts a sentence that opens with a closing word as part of the last section', code == 0
-          and 'Fixes #12 in the parser only.' not in state(30)['body'] and '## Scope\n\nNew.\n\nCloses #109' in state(30)['body'])
+    check('section stops on a line that only opens like a closing line, naming it', code != 0
+          and "'Fixes #12 in the parser only.' opens like a closing line" in out and state(30).get('edits') is None)
     seed(30, SECTIONED.replace('## Scope', '# Top'))
     code, out = part('## Decision', 'One fact.\n')
     check('section ends at a higher heading', code == 0 and '# Top\n\nOut of scope: nothing.' in state(30)['body'])
@@ -1121,6 +1132,11 @@ Closes #109
         code, out = part(heading, text)
         check(f'section refuses {label}, which a second run would change again', code != 0
               and 'a second run would change' in out and state(30).get('edits') is None)
+    for closing in ('Closes #118, part of #109.', 'Closes #118 and closes #119', 'Fixes #1, fixes #2'):
+        seed(30, SECTIONED.replace('Closes #109', closing))
+        code, out = part('## Scope', 'New.\n')
+        check(f'section keeps a closing line with several references outside the last section: {closing}', code == 0
+              and f'## Scope\n\nNew.\n\n{closing}\n\n🤖' in state(30)['body'])
     module = load()
     inside = SECTIONED.replace('Two facts decide it.', 'One fact decides it.')
     check('the guard passes a change inside the section', not module.changed_outside_section(SECTIONED, inside, '## Decision'))
@@ -1137,7 +1153,8 @@ Closes #109
     check('section refuses a heading written another way, naming how it is written', code != 0 and "'## decision'" in out and state(30).get('edits') is None)
     seed(30, SECTIONED)
     code, out = part('## Decision', 'One fact.\n', '--dry-run')
-    check('a section dry run sends nothing and prints the added lines', code == 0 and state(30).get('edits') is None and '+One fact.' in out)
+    check('a section dry run sends nothing and prints the change as a diff', code == 0 and state(30).get('edits') is None
+          and '+One fact.' in out and '-Two facts decide it.' in out)
     seed(30, SECTIONED)
     code, out = part('## Decision', 'One fact.\n', STUB_EDIT_ADDS='changed')
     check('a section edit that reads back differently is reported', code != 0 and 'differs from what was sent' in out)
