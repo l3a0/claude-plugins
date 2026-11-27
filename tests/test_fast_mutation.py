@@ -221,8 +221,9 @@ with tempfile.TemporaryDirectory() as root:
                           text=True, stdin=subprocess.DEVNULL)
     check('reruns once the worktree matches the backup a killed run left', done.returncode == 0)
 
-    # .x.tmp is shaped like a temporary file, and .d.py guards against a filter that skips every dotfile.
-    for name in ('.d.py', '.x.tmp'):
+    # .x.tmp is shaped like a temporary file, .clean is the name an earlier version gave the marker,
+    # and .d.py guards against a filter that skips every dotfile.
+    for name in ('.d.py', '.x.tmp', '.clean'):
         with open(os.path.join(repo, name), 'w') as f:
             f.write('V = 1\n')
         dotted = os.path.join(root, 'out-dot' + name)
@@ -263,15 +264,26 @@ with tempfile.TemporaryDirectory() as root:
     check('reruns after a kill while the backups were being written', first.returncode == -signal.SIGKILL
           and done.returncode == 0)
 
-    legacy = os.path.join(root, 'out-legacy')
-    os.makedirs(os.path.join(legacy, 'backup'))
-    with open(os.path.join(legacy, 'backup', 'mod.py'), 'w') as f:
-        f.write(MOD)
-    with open(os.path.join(legacy, 'backup', '.clean'), 'w') as f:
-        pass
-    done = subprocess.run([sys.executable, SCRIPT, path, '--out', legacy, '--no-escalate'], capture_output=True, text=True,
-                          stdin=subprocess.DEVNULL)
-    check('reads a clean --out an earlier version left, with its marker inside backup/', done.returncode == 0)
+
+    # A link planted between write_new's unlink and its open, so only O_EXCL and O_NOFOLLOW stop the write.
+    raced = os.path.join(root, 'out-raced')
+    os.makedirs(raced)
+    target = os.path.join(root, 'precious-raced')
+    with open(target, 'w') as f:
+        f.write('precious\n')
+    racer = ('import os, pathlib, runpy, sys\n'
+             'unlink, target = pathlib.Path.unlink, sys.argv[4]\n'
+             'def planted(self, missing_ok=False):\n'
+             '    unlink(self, missing_ok=missing_ok)\n'
+             '    if self.name == "clean":\n'
+             '        os.symlink(target, self)\n'
+             'pathlib.Path.unlink = planted\n'
+             'sys.argv = [sys.argv[1], sys.argv[2], "--out", sys.argv[3], "--no-escalate"]\n'
+             'runpy.run_path(sys.argv[0], run_name="__main__")\n')
+    subprocess.run([sys.executable, '-c', racer, SCRIPT, path, raced, target], capture_output=True,
+                   stdin=subprocess.DEVNULL)
+    with open(target) as f:
+        check('writes nothing through a link planted after write_new unlinks the path', f.read() == 'precious\n')
 
     for name in ('clean', 'backup.writing'):
         planted = os.path.join(root, 'out-planted-' + name)

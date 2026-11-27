@@ -579,8 +579,7 @@ def main() -> int:
     pending = out / "backup.writing"
     # A backup/ without its marker comes from a run that ended with a mutant applied, so it may
     # hold the only copy of a file's original bytes. A rerun must not overwrite it.
-    # backup/.clean is where an earlier version of this runner kept the marker.
-    if backup_dir.exists() and not marker.exists() and not (backup_dir / ".clean").exists():
+    if backup_dir.exists() and not marker.exists():
         held = [p.relative_to(backup_dir).as_posix() for p in sorted(backup_dir.rglob("*")) if p.is_file()]
         differ = [f for f in held if not (root / f).is_file() or (root / f).read_bytes() != (backup_dir / f).read_bytes()]
         if differ:
