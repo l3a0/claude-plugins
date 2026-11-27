@@ -572,8 +572,9 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5, comments=[f'## Review complete\n\nRound 3, of `{A}`, at `{"a" * 7}`, found nothing.\n'])
     code, out = post(f'o/r#5={head5}={A}={final_round}')
     check('a closing comment after a round comment that already closes the review posts nothing and says so',
-          code != 0 and 'which closes the review' in out and 'Report it' in out and len(state(5)['comments']) == 1)
-    seed(5, head=head5, comments=[f'## Review complete\n\nRound 3, of `{A}`, at `{"f" * 7}`, found nothing.\n'])
+          code != 0 and 'which closes the review' in out and 'Report it' in out and f'at the head {head5[:7]}' in out
+          and len(state(5)['comments']) == 1)
+    seed(5, head=head5, comments=[f'## Review complete\n\nRound 3, of `{A}`, at `{"a" * 6 + "f"}`, found nothing.\n'])
     code, out = post(f'o/r#5={head5}={A}={final_round}')
     check('a closing comment posts where the round comment that took the final heading names an older head',
           code == 0 and 'posted' in out and len(state(5)['comments']) == 2)
@@ -688,6 +689,8 @@ with tempfile.TemporaryDirectory() as ROOT:
                        ('a link with no scheme', COST.replace('https://github.com', 'github.com')),
                        ('a link to another host', COST.replace('https://github.com', 'https://evilgithub.com')),
                        ('a link to another host that carries a github.com address', COST.replace('https://github.com', 'https://evil.example/?next=https://github.com')),
+                       ('a Markdown link to the pull request after another link', COST.replace('https://github.com/o/r/pull/5', '[x](https://evil.example/) and [y](https://github.com/o/r/pull/5)')),
+                       ('a Markdown link to the pull request after another address', COST.replace('https://github.com/o/r/pull/5', 'https://evil.example/ [y](https://github.com/o/r/pull/5)')),
                        ('a round line with words before it', COST.replace('\nReview round', '\nDraft: Review round')),
                        ('an empty file', '')):
         seed_issue(40)

@@ -36,7 +36,7 @@ space before or after it or another heading level, because a build board
 counts only that whole line. Where a comment that opens with `## Review complete`
 already names the same round, anchor and head, that comment closes the review,
 so it posts nothing and says so. One naming an older head does not count,
-because a build board reads it only before a later push, so a closing comment
+because a build board counts it only when posted after the head commit, so a closing comment
 at the new head posts.
 
 `cost` posts a round's `## Cost` comment on the issue the main pull request
@@ -74,7 +74,7 @@ FINAL = "## Review complete"
 NEAR_FINAL = re.compile(r"^#{1,6}\s*Review[\W_]*complete\b", re.IGNORECASE)
 COST_HEADING = "## Cost"
 COST_LINE = re.compile(r"^Review round (?P<round>\d+), of `?(?P<anchor>[0-9a-f]{7,40})`?, on (?P<link>.+?)\s*$")
-PULL_LINK = re.compile(r"(?:^|\]\()https://github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/(?P<num>\d+)(?!\d)", re.IGNORECASE)
+PULL_LINK = re.compile(r"^(?:\[[^\]\n]*\]\()?https://github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/(?P<num>\d+)(?!\d)", re.IGNORECASE)
 CLOSING = re.compile(r"^(close[sd]?|fix(es|ed)?|resolve[sd]?|part of)\s+(no issue|([\w.-]+/[\w.-]+)?#\d+)", re.IGNORECASE)
 SECTION = "## Revision"
 
@@ -357,7 +357,7 @@ def cost_key(text):
         return None
     rest = [line for line in lines[1:] if line.strip()]
     m = COST_LINE.match(rest[0]) if rest else None
-    link = PULL_LINK.search(m["link"]) if m else None
+    link = PULL_LINK.match(m["link"]) if m else None
     if not link:
         return None
     return int(m["round"]), m["anchor"][:7], link["repo"].lower(), int(link["num"])
