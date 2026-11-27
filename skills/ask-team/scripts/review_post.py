@@ -24,11 +24,12 @@ so the line in PATH is the line the section holds, and a retry finds it.
 in PATH, and keeps its heading. HEADING is the heading's whole line, such as
 `## Decision`. The section runs from that line to the next heading of the same
 or a higher level, or to the closing lines and footer when none follows.
-Headings inside code fences do not count. Only a line that is wholly a
-closing line, such as `Closes #12` or `Closes #12, part of #9.`, starts the
-closing lines, and it stops on a line that only opens like one, such as
-`Fixes #12 in the parser`, because that may close an issue or belong to the
-section. It finds the
+Headings inside code fences do not count. A line that is wholly a closing
+line, such as `Closes #12`, `Closes: #12` or `Closes #12, part of #9.`, starts
+the closing lines. Any other line that may close an issue, such as a bullet, a
+full issue address, or a sentence that opens with a closing word, stays inside
+the section, and the command refuses an edit that would remove it, because
+its patterns cannot know every form GitHub reads. It finds the
 heading by its whole line, ignoring trailing spaces. It sends nothing on a body
 where that line appears more than once, or, when it appears nowhere, where the
 heading's words appear on no heading or on more than one at any level, or on
@@ -319,10 +320,13 @@ def heading_level(line):
     return (len(m[1]), (m[2] or "").strip().lower()) if m and HEADING.match(line) else None
 
 
-_KEYWORD = r"(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|part of)"
+_KEYWORD = r"(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|part of):?"
 _REF = r"(?:no issue|(?:[\w.-]+/[\w.-]+)?#\d+)"
 # A whole closing line: a keyword and a reference, then more references, each after a comma or "and" and a keyword.
 CLOSING_LINE = re.compile(rf"^{_KEYWORD}\s+{_REF}(?:\s*(?:,|\band\b)\s*(?:{_KEYWORD}\s+)?{_REF})*\.?\s*$", re.IGNORECASE)
+# Any line that may close an issue or name the one it is part of, in whatever form GitHub reads, such as a
+# bullet, a colon after the keyword, or a full issue address. Deleting one of these is refused.
+MAY_CLOSE = re.compile(r"^\W*(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|part of)\b.*?(?:#\d|/issues/\d)", re.IGNORECASE)
 
 
 def section_end_limit(lines):
@@ -337,10 +341,6 @@ def section_end_limit(lines):
         end = trim(end - 1)
     while end and CLOSING_LINE.match(lines[end - 1].strip()):
         end = trim(end - 1)
-    if end and CLOSING.match(lines[end - 1].strip()):
-        # A line that opens like a closing line but is not one may close an issue or belong to the section.
-        sys.exit(f"the line {lines[end - 1].strip()!r} opens like a closing line and is not wholly one, so it is not "
-                 "known whether it closes an issue or belongs to the last section. Edit it by hand")
     return end
 
 
@@ -375,6 +375,14 @@ def replace_section(body, heading, text):
     rest = lines[end:]
     new = lines[:start + 1] + [""] + content + ([""] if rest and rest[0].strip() else []) + rest
     return None if new == lines else "\n".join(new)
+
+
+def removed_closing(old, new, heading):
+    """Return the lines the edit removes from the section that may close an issue, apart from how the edit was built."""
+    a = old.split("\n")
+    start, end = section_bounds(a, heading)
+    kept = new.split("\n")
+    return [line.strip() for line in a[start + 1:end] if MAY_CLOSE.match(line.strip()) and line not in kept]
 
 
 def changed_outside_section(old, new, heading):
@@ -416,6 +424,10 @@ def section(args):
     if new is None:
         print(f"{repo}#{num}: {args.heading} already holds this text, so nothing changed")
         return
+    gone = removed_closing(body, new, args.heading)
+    if gone:
+        sys.exit(f"{repo}#{num}: refusing to send, the edit removes {gone[0]!r}, which may close an issue. Keep it in "
+                 f"{args.file}, or edit by hand. The body as read is at {saved}")
     if changed_outside_section(body, new, args.heading):
         sys.exit(f"{repo}#{num}: refusing to send, a line changed outside {args.heading}. The body as read is at {saved}")
     if replace_section(new, args.heading, text) is not None:

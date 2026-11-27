@@ -1118,8 +1118,25 @@ Closes #109
     check('section refuses the Revision section and names revision', code != 0 and 'Use revision' in out and state(30).get('edits') is None)
     seed(30, SECTIONED.replace('```\n\nCloses #109', '```\n\nFixes #12 in the parser only.\n\nCloses #109'))
     code, out = part('## Scope', 'New.\n')
-    check('section stops on a line that only opens like a closing line, naming it', code != 0
-          and "'Fixes #12 in the parser only.' opens like a closing line" in out and state(30).get('edits') is None)
+    check('section refuses an edit that removes a line which may close an issue, naming it', code != 0
+          and "removes 'Fixes #12 in the parser only.', which may close an issue" in out and state(30).get('edits') is None)
+    seed(30, SECTIONED.replace('```\n\nCloses #109', '```\n\nFixes #12 in the parser only.\n\nCloses #109'))
+    code, out = part('## Decision', 'One fact.\n')
+    check('a line which may close an issue does not stop an edit to another section', code == 0 and 'One fact.' in state(30)['body'])
+    seed(30, SECTIONED.replace('```\n\nCloses #109', '```\n\nFixes #12 in the parser only.\n\nCloses #109'))
+    code, out = part('## Scope', 'New.\n\nFixes #12 in the parser only.\n')
+    check('an edit that keeps a line which may close an issue goes through', code == 0
+          and '## Scope\n\nNew.\n\nFixes #12 in the parser only.\n\nCloses #109' in state(30)['body'])
+    for closing in ('Closes: #12', 'Part of: #108'):
+        seed(30, SECTIONED.replace('Closes #109', closing))
+        code, out = part('## Scope', 'New.\n')
+        check(f'section keeps a closing line with a colon outside the last section: {closing}', code == 0
+              and f'## Scope\n\nNew.\n\n{closing}\n\n🤖' in state(30)['body'])
+    for closing in ('Closes https://github.com/l3a0/other/issues/3', '- Closes #12', 'Fixes #1; fixes #2'):
+        seed(30, SECTIONED.replace('Closes #109', closing))
+        code, out = part('## Scope', 'New.\n')
+        check(f'section refuses to remove a closing line it cannot read: {closing}', code != 0
+              and 'which may close an issue' in out and state(30).get('edits') is None)
     seed(30, SECTIONED.replace('## Scope', '# Top'))
     code, out = part('## Decision', 'One fact.\n')
     check('section ends at a higher heading', code == 0 and '# Top\n\nOut of scope: nothing.' in state(30)['body'])
