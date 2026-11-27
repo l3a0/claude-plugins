@@ -228,33 +228,57 @@ except SystemExit as stop:
     print('exit', stop.code, all(signal.getsignal(s) == signal.SIG_IGN for s in names))
 for s in names:
     signal.signal(s, signal.default_int_handler if s == signal.SIGINT else signal.SIG_DFL)
-done = []
+def defaults():
+    for s in names:
+        signal.signal(s, signal.default_int_handler if s == signal.SIGINT else signal.SIG_DFL)
+defaults()
+seen = []
 def restore():
+    seen.append(all(signal.getsignal(s) == signal.SIG_IGN for s in names))
     for s in names:
         os.kill(os.getpid(), s)
-    done.append(True)
+    seen.append(True)
+mutate.finish(restore)
+print('finish', seen == [True, True])
 marker = lambda signum, frame: None
 for s in names:
     signal.signal(s, marker)
-mutate.finish(restore)
-print('finish', done == [True])
+mutate.finish(lambda: None)
 print('handlers back', all(signal.getsignal(s) is marker for s in names))
+def broken():
+    raise OSError('disk full')
+try:
+    mutate.finish(broken)
+except OSError:
+    print('handlers back after a failed restore', all(signal.getsignal(s) is marker for s in names))
+quiet, done = mutate.quiet_signals, []
 def interrupted():
     raise SystemExit(143)
-mutate.quiet_signals, done = interrupted, []
+mutate.quiet_signals = interrupted
 try:
     mutate.finish(lambda: done.append(True))
 except SystemExit as stop:
     print('race', stop.code, done == [True])
+mutate.quiet_signals, getsignal, done = quiet, signal.getsignal, []
+def landed(sig):
+    signal.getsignal = getsignal
+    raise SystemExit(130)
+signal.getsignal = landed
+try:
+    mutate.finish(lambda: done.append(True))
+except SystemExit as stop:
+    print('save window', stop.code, done == [True])
 '''
 done = subprocess.run([sys.executable, '-c', UNIT, SCRIPT], capture_output=True, text=True)
 lines = done.stdout.splitlines()
 check('Ctrl-C, SIGTERM and SIGHUP are the stop signals', "stops ['SIGHUP', 'SIGINT', 'SIGTERM']" in lines)
 check('quiet_signals ignores every stop signal', 'quiet True' in lines)
 check('a stop signal exits with 128 plus its number and ignores the rest', 'exit 143 True' in lines)
-check('no stop signal during the last restore can cut it short', 'finish True' in lines and 'KeyboardInterrupt' not in done.stderr)
+check('every stop signal is ignored during the last restore', 'finish True' in lines and 'KeyboardInterrupt' not in done.stderr)
 check('the stop signals work again after the last restore', 'handlers back True' in lines)
+check('the stop signals work again after a failed restore', 'handlers back after a failed restore True' in lines)
 check('a signal while the handlers are being switched still reaches the restore', 'race 143 True' in lines)
+check('a signal while the handlers are being saved still reaches the restore', 'save window 130 True' in lines)
 with open(SCRIPT) as f:
     source = f.read()
 check("main's last restore runs through finish", 'finally:\n        finish(restore)\n' in source)

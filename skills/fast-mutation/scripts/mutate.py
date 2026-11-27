@@ -163,12 +163,15 @@ def exit_on_signal(signum, frame) -> None:
 def finish(restore) -> None:
     """The last restore, with every stop signal ignored, so one arriving now cannot cut it short.
 
-    A signal that lands while the handlers are being switched still reaches the restore, through
-    ``finally``. The handlers come back afterwards, so a run blocked writing its results can still
-    be stopped.
+    A signal that lands while the handlers are being saved or switched still reaches the restore,
+    through ``finally``. The handlers come back afterwards, so after a normal run a run blocked
+    writing its results can still be stopped. After a stop signal they were already set to ignore,
+    so they stay ignored until the process exits.
     """
-    saved = {sig: signal.getsignal(sig) for sig in STOP_SIGNALS}
+    saved = {}
     try:
+        for sig in STOP_SIGNALS:
+            saved[sig] = signal.getsignal(sig)
         quiet_signals()
     finally:
         try:
