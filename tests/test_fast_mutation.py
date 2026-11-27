@@ -175,25 +175,73 @@ with tempfile.TemporaryDirectory() as root:
     os.makedirs(os.path.join(repo, 'a'), exist_ok=True)
     with open(os.path.join(repo, 'a', 'b.py'), 'w') as f:
         f.write('B = 1\n')
-    code, out, rows = run(dict(spec, mutants=[{'name': 'flat', 'file': 'a__b.py', 'edits': [['A = 1', 'A = 2']]},
-                                              {'name': 'nested', 'file': 'a/b.py', 'edits': [['B = 1', 'B = 2']]}]))
-    check('refuses two files that would share one backup name', code != 0 and 'share one backup name' in out)
+    both = [{'name': 'flat', 'file': 'a__b.py', 'edits': [['A = 1', 'A = 2']]},
+            {'name': 'nested', 'file': 'a/b.py', 'edits': [['B = 1', 'B = 2']]}]
+    code, out, rows = run(dict(spec, mutants=both), '--no-escalate')
+    backup = os.path.join(root, 'out', 'backup')
+    with open(os.path.join(backup, 'a__b.py')) as f, open(os.path.join(backup, 'a', 'b.py')) as g:
+        check('keeps each backup under its own path', code == 0 and f.read() == 'A = 1\n' and g.read() == 'B = 1\n')
+    check('marks the worktree clean after a normal run', os.path.exists(os.path.join(backup, '.clean')))
 
-    killed = os.path.join(root, 'out-killed')
-    os.makedirs(os.path.join(killed, 'backup'))
-    with open(os.path.join(killed, 'backup', 'mod.py'), 'w') as f:
-        f.write('the original\n')
-    path = os.path.join(root, 'spec-killed.json')
+    with open(os.path.join(repo, 'a', 'b.py'), 'w') as f:
+        f.write('B = 1\nC = 3\n')
+    code, out, rows = run(dict(spec, mutants=[dict(both[1], name='nested again')]), '--no-escalate')
+    with open(os.path.join(backup, 'a', 'b.py')) as f:
+        check('reruns with the same --out after a file was edited on purpose', code == 0 and f.read() == 'B = 1\nC = 3\n')
+
+    path = os.path.join(root, 'spec-kill9.json')
+    hold = {'name': 'held', 'file': 'a/b.py', 'edits': [['B = 1', 'B = 2']], 'select': ['tests/slow.py', '120']}
+    with open(path, 'w') as f:
+        json.dump(dict(spec, mutants=[hold], timeout=300), f)
+    killed = os.path.join(root, 'out-kill9')
+    proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    seen, deadline = False, time.monotonic() + 90
+    while time.monotonic() < deadline and not seen:
+        with open(os.path.join(repo, 'a', 'b.py')) as f:
+            seen = 'B = 2' in f.read()
+        time.sleep(0.05)
+    proc.kill()
+    proc.wait(timeout=60)
+    check('a kill -9 during a mutant leaves no clean marker', seen and not os.path.exists(os.path.join(killed, 'backup', '.clean')))
+    done = subprocess.run([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'], capture_output=True,
+                          text=True, stdin=subprocess.DEVNULL)
+    with open(os.path.join(killed, 'backup', 'a', 'b.py')) as f:
+        check('refuses to overwrite the backup a killed run left', done.returncode != 0
+              and 'ended with a mutant applied' in done.stdout + done.stderr and 'a/b.py' in done.stdout + done.stderr
+              and f.read() == 'B = 1\nC = 3\n')
+    with open(os.path.join(killed, 'backup', 'a', 'b.py')) as f, open(os.path.join(repo, 'a', 'b.py'), 'w') as g:
+        g.write(f.read())
+
+    path = os.path.join(root, 'spec-kill-base.json')
+    with open(path, 'w') as f:
+        json.dump(dict(spec, baseline=['tests/slow.py', '120'], mutants=[both[1]], timeout=300), f)
+    killed = os.path.join(root, 'out-kill-base')
+    proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline and not os.path.exists(os.path.join(killed, 'backup', '.clean')):
+        time.sleep(0.05)
+    time.sleep(0.5)
+    proc.kill()
+    proc.wait(timeout=60)
+    with open(os.path.join(repo, 'a', 'b.py'), 'a') as f:
+        f.write('D = 4\n')
+    with open(path, 'w') as f:
+        json.dump(dict(spec, mutants=[both[1]]), f)
+    done = subprocess.run([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'], capture_output=True,
+                          text=True, stdin=subprocess.DEVNULL)
+    check('reruns after a run killed before its first mutant, once a file was edited', done.returncode == 0)
+
+    path = os.path.join(root, 'spec-default.json')
     with open(path, 'w') as f:
         json.dump(dict(spec, mutants=spec['mutants'][:1]), f)
-    done = subprocess.run([sys.executable, SCRIPT, path, '--out', killed], capture_output=True, text=True,
-                          stdin=subprocess.DEVNULL)
-    with open(os.path.join(killed, 'backup', 'mod.py')) as f:
-        check('refuses to overwrite a backup that holds other bytes', done.returncode != 0
-              and 'holds other bytes' in done.stdout + done.stderr and f.read() == 'the original\n')
-    code, out, rows = run(dict(spec, mutants=spec['mutants'][:1]))
-    code, out, rows = run(dict(spec, mutants=spec['mutants'][:1]))
-    check('reuses an --out whose backup matches the worktree', code == 0 and 'CAUGHT' in out)
+    outs = []
+    for _ in range(2):
+        done = subprocess.run([sys.executable, SCRIPT, path, '--no-escalate'], capture_output=True, text=True,
+                              stdin=subprocess.DEVNULL)
+        outs.append(done.stdout.splitlines()[0])
+    check('without --out a rerun uses the same folder', outs[0] == outs[1] and outs[0].startswith('out '))
 
     stub = os.path.join(root, 'stub-python')
     with open(stub, 'w') as f:

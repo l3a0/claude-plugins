@@ -72,8 +72,11 @@ Workers are not used.
 Every mutated ``file`` must resolve inside ``root`` and have no second hard link, or the run stops
 before it writes anything. SIGINT (Ctrl-C), SIGTERM and SIGHUP restore every file before the runner exits, and any of
 them arriving during that last restore is ignored. SIGKILL cannot be caught, so after one, copy each
-file back from ``backup/`` in --out, where ``a/b.py`` is saved as ``a__b.py``. The runner prints
-the --out path before the baseline runs.
+file back from ``backup/`` in --out, which holds each file under its path, such as
+``backup/a/b.py``. ``backup/.clean`` marks that the worktree matches ``backup/``, so a run that
+finds ``backup/`` without it, holding other bytes than the worktree, refuses to start. Without
+--out the folder is fixed per root, so a rerun finds it. The runner prints the --out path before
+the baseline runs.
 
 Output: one line per mutant on stdout, ``results.jsonl`` and ``results.txt`` in --out, and
 ``cover_map.json`` when escalation was scoped. A red baseline stops the run with exit code 2 and
@@ -83,6 +86,7 @@ writes only ``results.txt``. A map run that is not green exits with code 3.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -145,6 +149,9 @@ def pytest(spec: dict, root: Path, args: list[str], env: dict | None = None,
 STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 _stopped = False
 _restored = False
+# backup/.clean while the worktree matches backup/. Applying a mutant removes it, and a restore
+# writes it again.
+_clean_marker: Path | None = None
 
 
 def quiet_signals() -> None:
@@ -290,6 +297,8 @@ def apply(root: Path, mutant: dict) -> str | None:
         if count != 1:
             return f"{old[:60]!r} occurs {count} times"
         text = text.replace(old, new)
+    if _clean_marker is not None:
+        _clean_marker.unlink(missing_ok=True)
     path.write_text(text)
     return None
 
@@ -425,7 +434,7 @@ def plan_scope(spec: dict, root: Path, out: Path, survivors: list[dict], backups
     warned: set[str] = set()
     for m in survivors:
         target = str((root / m["file"]).resolve())
-        backup = out / "backup" / m["file"].replace("/", "__")
+        backup = out / "backup" / m["file"]
         quals, global_reason = function_of_edits(spec, root, backups[m["file"]], m, backup)
         if target not in cover["targets_seen"]:
             if target not in warned:
@@ -529,7 +538,8 @@ def main() -> int:
 
     spec = json.loads(Path(opts.spec).read_text())
     root = Path(spec["root"]).resolve()
-    out = Path(opts.out or tempfile.mkdtemp(prefix="mutate-")).resolve()
+    default = Path(tempfile.gettempdir()) / f"mutate-{hashlib.sha1(str(root).encode()).hexdigest()[:12]}"
+    out = Path(opts.out or default).resolve()
     out.mkdir(parents=True, exist_ok=True)
     mutants = [m for m in spec["mutants"] if opts.only is None or m["name"] in opts.only]
     opts.workers_n = resolve_workers(spec, root, opts)
@@ -543,28 +553,34 @@ def main() -> int:
     if linked:
         raise SystemExit(f"a mutated file has another hard link, which may sit outside root: {', '.join(linked)}")
     backups = {f: (root / f).read_bytes() for f in files}
-    names = {}
-    for f in files:
-        names.setdefault(f.replace("/", "__"), []).append(f)
-    clash = [" and ".join(group) for group in names.values() if len(group) > 1]
-    if clash:
-        raise SystemExit(f"two mutated files would share one backup name in backup/: {'; '.join(clash)}")
-    # A rerun after a kill -9 must not overwrite the only copy of a file's original bytes.
-    stale = [f for f, data in backups.items()
-             if (out / "backup" / f.replace("/", "__")).exists()
-             and (out / "backup" / f.replace("/", "__")).read_bytes() != data]
-    if stale:
-        raise SystemExit(f"backup/ in {out} holds other bytes for {', '.join(stale)}, so a run may have"
-                         f" left them mutated. Copy them back from backup/, or use a new --out")
-    (out / "backup").mkdir(exist_ok=True)
+    backup_dir = out / "backup"
+    marker = backup_dir / ".clean"
+    # A backup/ without its marker comes from a run that ended with a mutant applied, so it may
+    # hold the only copy of a file's original bytes. A rerun must not overwrite it.
+    if backup_dir.exists() and not marker.exists():
+        held = [p.relative_to(backup_dir).as_posix() for p in sorted(backup_dir.rglob("*"))
+                if p.is_file() and not p.name.startswith(".")]
+        differ = [f for f in held if not (root / f).is_file() or (root / f).read_bytes() != (backup_dir / f).read_bytes()]
+        if differ:
+            raise SystemExit(f"backup/ in {out} is from a run that ended with a mutant applied, and"
+                             f" {', '.join(differ)} differ from it. Compare each with backup/, copy back what"
+                             f" the run changed, then delete {backup_dir} or use a new --out")
     for f, data in backups.items():
-        (out / "backup" / f.replace("/", "__")).write_bytes(data)
+        dest = backup_dir / f
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dest.with_name(f".{dest.name}.tmp")
+        tmp.write_bytes(data)
+        os.replace(tmp, dest)
+    marker.write_text("")
+    global _clean_marker
+    _clean_marker = marker
 
     def restore() -> None:
         for f, data in backups.items():
             (root / f).write_bytes(data)
             assert (root / f).read_bytes() == data, f"restore of {f} did not stick"
         clear_pycache(root)
+        marker.write_text("")
 
     for sig in STOP_SIGNALS:
         signal.signal(sig, exit_on_signal)
