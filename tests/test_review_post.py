@@ -1113,6 +1113,18 @@ with tempfile.TemporaryDirectory() as ROOT:
     code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}')
     check("check refuses an anchor another round's comment shows it read past, as comment does", code != 0
           and 'another round read past this anchor' in out and "round 2's comment names" in out)
+    seed(5, head=head5, comments=[f'## Review, round 3\n\nRound 3, of `{A}`, fixed in `{"a" * 7}`.\n'])
+    code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}')
+    check("check skips the file's own round, whose earlier comment names the anchor and a later commit", code == 0)
+    other = os.path.join(ROOT, 'other-round.md')
+    with open(other, 'w') as f:
+        f.write(f'## Review, round 3\n\nRound 3, of `{"c" * 7}`, then round 4, of `{A}`, at `{head5[:7]}`.\n')
+    code, out = gate(f'o/r#5={head5}={A}={other}')
+    check("check skips no round when the file's own round line names another anchor", code != 0
+          and 'another round read past this anchor' in out)
+    seed(5, head=head5, login='stranger', comments=[f'## Review, round 2\n\nRound 2, of `{A}`, fixed in `{"a" * 7}`.\n'])
+    code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}')
+    check("check reads only the session's own login for a round that read past the anchor", code == 0)
     seed(5, head=head5, elsewhere=('f' * 40,))
     code, out = gate(f'o/r#5={head5}={head5[:7]}={names(head5)}')
     check('check passes an anchor that is the head', code == 0 and 'is the head' in out and 'names them, so it may post' in out)

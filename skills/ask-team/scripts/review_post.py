@@ -81,7 +81,8 @@ OWNER/REPO@BRANCH=ANCHOR=FILE it reads the branch's tip from GitHub, and checks
 that ANCHOR is that tip or an ancestor of it and that FILE names ANCHOR, which
 suits a plan read against `main`. On a pull request it also refuses an anchor
 another round's comment by the same login shows it read past, as `comment`
-does, taking the round from the file's own "round K, of <anchor>". It encodes
+does. It skips the file's own round, read from its first "round K, of
+<anchor>" where that names ANCHOR, and checks every round otherwise. It encodes
 the branch's name in the request
 and refuses an answer for any other branch, so a name holding `#` reads that
 branch. It stops at the first target it cannot parse or whose file is
@@ -623,8 +624,9 @@ def check(args):
             with open(m["file"], encoding="utf-8") as f:
                 own = own_round(f.read())
             bodies = [c["body"] for c in by_login(m, login)]
-            reused += [f"{m['repo']}#{m['num']}: {why}"
-                       for _, why in pushed_after(bodies, own[0] if own else None, m["anchor"], later)]
+            # Skip only the file's own round, and only when its round line names this anchor.
+            mine = own[0] if own and same_commit(own[1], m["anchor"]) else None
+            reused += [f"{m['repo']}#{m['num']}: {why}" for _, why in pushed_after(bodies, mine, m["anchor"], later)]
         if reused:
             sys.exit("post nothing, because another round read past this anchor: " + "; ".join(reused)
                      + ". Check that each anchor is the commit this round's brief anchors at")
