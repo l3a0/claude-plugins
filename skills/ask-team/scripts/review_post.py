@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Post a review round's comments and its cost on the issue, and edit a pull request's Revision section.
+"""Post a review round's comments and its cost on the issue, check a comment posted by hand, and edit a pull request's Revision section.
 
 Usage:
     review_post.py revision OWNER/REPO#N --scratch DIR --file PATH [--replace ITEM] [--dry-run]
     review_post.py comment --round R OWNER/REPO#N=HEAD=ANCHOR=FILE [...] [--dry-run]
+    review_post.py check OWNER/REPO#N=HEAD=ANCHOR | OWNER/REPO@BRANCH=ANCHOR [...]
     review_post.py cost --round R OWNER/REPO#ISSUE --pull OWNER/REPO#N --anchor ANCHOR --file PATH [--dry-run]
 
 `revision` adds the one line in PATH to the body's `## Revision` section as a
@@ -46,6 +47,15 @@ so. One naming an older head does not count, because a build board counts it
 only when posted after the head commit, so a closing comment at the new head
 posts.
 
+`check` runs the head and anchor checks of `comment` and posts nothing, for a
+comment that names an anchor and goes by hand, such as one on an issue. For
+OWNER/REPO#N=HEAD=ANCHOR it checks that the pull request's head is HEAD and
+that ANCHOR is that head or an ancestor of it. For OWNER/REPO@BRANCH=ANCHOR it
+reads the branch's tip from GitHub and checks that ANCHOR is that tip or an
+ancestor of it, which suits a plan read against `main`. It exits non-zero
+naming each target that fails, and reads no comments, because each route keys
+its retry by its own lines.
+
 `cost` posts a round's `## Cost` comment on the issue the main pull request
 tracks. It refuses a file whose first line is not exactly `## Cost`, which is
 the only form the `## Cost total` sweep reads, or whose next non-blank line is
@@ -55,7 +65,11 @@ request that is only part of an issue names it only in its body's text, which
 the script does not parse. It skips the
 post when the issue already carries a comment by the same login with that
 heading and line, stops when one carries them with other text, and counts the
-copies after posting, as `comment` does.
+copies after posting, as `comment` does. It runs no anchor check. The anchor
+there is the retry key, and no build board or `## Cost total` reads it. The
+round's comment, which `comment` checked, names the same anchor. Refusing it
+would leave spend that was made unposted, such as after a force push drops
+the anchor.
 
 A write that fails says the outcome is unknown, since the request may have
 landed. Rerun the same command, which looks before it writes. The tests run
@@ -79,6 +93,8 @@ ITEM = re.compile(r"^(\d+)\. (.*)$")
 LIST_MARK = re.compile(r"^\s*(\d+[.)]|[-*+])(\s|$)")
 FINAL = "## Review complete"
 NEAR_FINAL = re.compile(r"^#{1,6}\s*Review[\W_]*complete\b", re.IGNORECASE)
+CHECK_PULL = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)#(?P<num>\d+)=(?P<head>[0-9a-f]{7,40})=(?P<anchor>[0-9a-f]{7,40})$")
+CHECK_BRANCH = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)@(?P<branch>[^\s=]+)=(?P<anchor>[0-9a-f]{7,40})$")
 COST_HEADING = "## Cost"
 COST_LINE = re.compile(r"^Review round (?P<round>\d+), of `?(?P<anchor>[0-9a-f]{7,40})`?, on (?P<link>.+?)\s*$")
 PULL_LINK = re.compile(r"^(?:\[[^\]\n]*\]\()?https://github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/(?P<num>\d+)(?!\d)", re.IGNORECASE)
@@ -319,6 +335,16 @@ def outside_history(repo, anchor, head):
     return f"the head {head[:7]} is {status} against the anchor {anchor[:7]}, so the anchor is not in its history"
 
 
+def head_check(repo, num, named):
+    """Return the pull request's head on GitHub, and why it is not the head named, or None when it is."""
+    head = view(repo, num, "headRefOid")
+    if head.startswith(named):
+        return head, None
+    # Two heads that share their first seven characters are named in full, so the message tells them apart.
+    width = 7 if head[:7] != named[:7] else len(head)
+    return head, f"{repo}#{num} is at {head[:width]}, not {named[:width]}"
+
+
 def comment(args):
     targets, seen = [], set()
     for spec in args.targets:
@@ -343,14 +369,8 @@ def comment(args):
             sys.exit(f"posting nothing, because {m['repo']}#{m['num']} is named twice")
         seen.add(pull)
         targets.append((m, text, heading))
-    wrong, heads = [], []
-    for m, _, _ in targets:
-        head = view(m["repo"], m["num"], "headRefOid")
-        heads.append(head)
-        if not head.startswith(m["head"]):
-            # Two heads that share their first seven characters are named in full, so the message tells them apart.
-            width = 7 if head[:7] != m["head"][:7] else len(head)
-            wrong.append(f"{m['repo']}#{m['num']} is at {head[:width]}, not {m['head'][:width]}")
+    read = [head_check(m["repo"], m["num"], m["head"]) for m, _, _ in targets]
+    heads, wrong = [head for head, _ in read], [why for _, why in read if why]
     if wrong:
         sys.exit("posting nothing, because a head does not match: " + "; ".join(wrong))
     outside = [f"{m['repo']}#{m['num']}: {why}" for (m, _, _), head in zip(targets, heads)
@@ -387,6 +407,39 @@ def comment(args):
             doubled.append(name)
     if doubled:
         sys.exit(f"{', '.join(doubled)} should hold this comment once and does not. Delete any extra copy, and report it")
+
+
+def check(args):
+    parsed = []
+    for spec in args.targets:
+        m = CHECK_PULL.match(spec) or CHECK_BRANCH.match(spec)
+        if not m:
+            sys.exit(f"not OWNER/REPO#N=HEAD=ANCHOR or OWNER/REPO@BRANCH=ANCHOR: {spec}")
+        parsed.append(m)
+    tips, wrong = [], []
+    for m in parsed:
+        if "num" in m.groupdict():
+            head, why = head_check(m["repo"], m["num"], m["head"])
+            tips.append((f"{m['repo']}#{m['num']}", head))
+            if why:
+                wrong.append(why)
+            continue
+        done = subprocess.run(("gh", "api", f"repos/{m['repo']}/branches/{m['branch']}", "--jq", ".commit.sha"),
+                              capture_output=True, text=True)
+        tip = done.stdout.strip()
+        if done.returncode or not re.fullmatch(r"[0-9a-f]{40}", tip):
+            sys.exit(f"post nothing, because GitHub did not give the tip of {m['branch']} in {m['repo']}: "
+                     f"{done.stderr.strip() or tip!r}")
+        tips.append((f"{m['repo']}@{m['branch']}", tip))
+    if wrong:
+        sys.exit("post nothing, because a head does not match: " + "; ".join(wrong))
+    outside = [f"{name}: {why}" for m, (name, tip) in zip(parsed, tips)
+               if (why := outside_history(m["repo"], m["anchor"], tip))]
+    if outside:
+        sys.exit("post nothing, because an anchor was not shown to be the head or an ancestor of it: " + "; ".join(outside))
+    for m, (name, tip) in zip(parsed, tips):
+        where = "is the head" if tip.startswith(m["anchor"]) else "is an ancestor of the head"
+        print(f"{name}: the anchor {m['anchor'][:7]} {where} {tip[:7]}, so a comment naming them may post")
 
 
 def cost_key(text):
@@ -468,6 +521,10 @@ def main():
     post.add_argument("--round", type=round_number, required=True)
     post.add_argument("--dry-run", action="store_true")
     post.set_defaults(handler=comment)
+
+    gate = commands.add_parser("check")
+    gate.add_argument("targets", nargs="+")
+    gate.set_defaults(handler=check)
 
     price = commands.add_parser("cost")
     price.add_argument("issue")

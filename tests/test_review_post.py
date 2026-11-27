@@ -27,6 +27,14 @@ if args[:2] == ['api', 'user']:
     if args[2:4] != ['--jq', '.login']: fail()
     print(login)
     sys.exit(0)
+if args[0] == 'api' and args[1].startswith('repos/') and '/branches/' in args[1]:
+    # GitHub's branches API, read for a branch's tip. A branch's name can hold a slash.
+    if args[2:] != ['--jq', '.commit.sha']: fail()
+    repo, branch = args[1][len('repos/'):].split('/branches/', 1)
+    tips = json.load(open(os.path.join(state, 'branches.json'))) if os.path.exists(os.path.join(state, 'branches.json')) else {}
+    if branch not in tips.get(repo, {}): sys.exit('gh: Branch not found (HTTP 404)')
+    print(tips[repo][branch])
+    sys.exit(0)
 if args[0] == 'api' and args[1].startswith('repos/') and '/compare/' in args[1]:
     # GitHub's compare API: "ahead" when the head descends from the anchor, 404 for a commit the repository lacks.
     if args[2:] != ['--jq', '.status']: fail()
@@ -820,5 +828,58 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('refuses a cost file that does not exist', code != 0 and 'no comment file' in out)
     code, out = run('cost', 'o/r#41', '--round', '3', '--pull', 'o/r#5', '--anchor', A, '--file', cost_file)
     check('a cost post names the issue it was given', code != 0 and 'unexpected call' in out)
+
+    # The check form runs the comment form's head and anchor checks and posts nothing, for a comment
+    # that goes by hand. A branch's tip is seeded as pull request 90, so the stand-in's compare finds it.
+    def gate(*targets, **env):
+        return run('check', *targets, **env)
+
+    def branches(tips):
+        with open(os.path.join(STATE, 'branches.json'), 'w') as f:
+            json.dump(tips, f)
+
+    seed(5, head=head5, elsewhere=('f' * 40,)), seed(6, head=head6, repo='o-s')
+    code, out = gate(f'o/r#5={head5}={A}', f'o/s#6={head6}={B}')
+    check('check passes a head that matches and an anchor in its history', code == 0
+          and f'o/r#5: the anchor {A} is an ancestor of the head {head5[:7]}' in out and 'o/s#6: the anchor' in out)
+    check('check posts nothing', state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
+    code, out = gate(f'o/r#5={head5}={head5[:7]}')
+    check('check passes an anchor that is the head', code == 0 and 'is the head' in out)
+    code, out = gate(f'o/r#5={head5}={A}', f'o/s#6={"e" * 40}={B}')
+    check('check fails when one head differs, naming it', code != 0 and f'o/s#6 is at {head6[:7]}, not {"e" * 7}' in out
+          and 'post nothing' in out and 'o/r#5: the anchor' not in out)
+    code, out = gate(f'o/r#5={head5}={"f" * 7}')
+    check('check fails an anchor outside the head\'s history', code != 0 and 'is diverged against the anchor' in out and 'post nothing' in out)
+    code, out = gate(f'o/r#5={head5}={"9" * 7}')
+    check('check fails an anchor GitHub does not hold', code != 0 and 'could not compare' in out)
+    seed(5, head=head5, silent=('f' * 40,))
+    code, out = gate(f'o/r#5={head5}={"f" * 7}')
+    check('check fails an answer GitHub does not document', code != 0 and 'none of ahead' in out)
+    seed(5, head=head5)
+    code, out = gate(f'o/r#5={head5}={A}={note}')
+    check('check refuses a target that names a comment file, since it posts nothing', code != 0 and 'not OWNER/REPO#N=HEAD=ANCHOR' in out
+          and state(5)['comments'] == [])
+    code, out = gate('o/r#5')
+    check('check refuses a target with no anchor', code != 0 and 'not OWNER/REPO#N=HEAD=ANCHOR' in out)
+
+    tip = '1' * 40
+    seed(90, head=tip, later=('2' * 40,))
+    branches({'o/r': {'main': tip, 'claude/x-1': tip}})
+    code, out = gate(f'o/r@main={A}')
+    check('check passes an anchor in a branch\'s history', code == 0 and f'o/r@main: the anchor {A} is an ancestor of the head {tip[:7]}' in out)
+    code, out = gate(f'o/r@claude/x-1={tip[:7]}')
+    check('check reads a branch whose name holds a slash, and passes its tip', code == 0 and 'o/r@claude/x-1: the anchor' in out and 'is the head' in out)
+    code, out = gate(f'o/r@main={"2" * 7}')
+    check('check fails an anchor that is ahead of the branch', code != 0 and 'is behind against the anchor' in out)
+    code, out = gate(f'o/r@gone={A}')
+    check('check fails a branch GitHub does not give', code != 0 and 'did not give the tip of gone' in out and 'post nothing' in out)
+    code, out = gate(f'o/r#5={head5}={A}', f'o/r@main={"2" * 7}')
+    check('check fails the whole run when one target fails', code != 0 and 'o/r#5: the anchor' not in out)
+
+    # The cost form runs no anchor check, so an anchor GitHub cannot compare still posts.
+    lost = '9' * 7
+    seed_issue(40)
+    code, out = price(anchor=lost, file=write_cost(COST.replace(A, lost)))
+    check('a cost post runs no anchor check', code == 0 and len(issue(40)) == 1)
 
 sys.exit(1 if failures else 0)
