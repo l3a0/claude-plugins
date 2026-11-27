@@ -419,14 +419,14 @@ with tempfile.TemporaryDirectory() as ROOT:
           module.changed_outside('## Revision\n\n1. a\nCloses #1\n', '## Revision\n\n1. a\nCloses #2\n'))
 
     # outside_history keeps returning only the reason, because a caller tests it with `if (why := ...)`.
-    real_compare = module.compare
+    real_compare = module.compare_range
     try:
-        module.compare = lambda repo, anchor, head: (None, ['c' * 40])
+        module.compare_range = lambda repo, anchor, head: (None, ['c' * 40])
         passed = module.outside_history('o/r', 'b' * 7, 'a' * 40)
-        module.compare = lambda repo, anchor, head: ('the head is diverged', [])
+        module.compare_range = lambda repo, anchor, head: ('the head is diverged', [])
         refused = module.outside_history('o/r', 'b' * 7, 'a' * 40)
     finally:
-        module.compare = real_compare
+        module.compare_range = real_compare
     check('outside_history returns None for an anchor in the history, not a tuple', passed is None)
     check('outside_history returns the reason alone for an anchor outside it', refused == 'the head is diverged')
 
@@ -786,11 +786,19 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('a later commit does not count as the end of a longer hash', code == 0 and len(state(5)['comments']) == 2)
     seed(5, head=head5, comments=[fixed], later_than={A: []})
     code, out = post(MAIN, STUB_AHEAD_BY='1')
-    check('refuses an ahead answer that lists no commits after the anchor', code != 0 and 'ahead by' in out
-          and len(state(5)['comments']) == 1)
+    check('refuses an ahead answer that lists no commits after the anchor', code != 0
+          and 'is ahead by 1 commits of the anchor bbbbbbb and listed 0' in out and len(state(5)['comments']) == 1)
+    seed(5, head=head5, comments=[fixed], later_than={A: []})
+    code, out = post(MAIN, STUB_AHEAD_BY='0')
+    check('refuses an ahead answer whose count of none matches a list without the head', code != 0
+          and 'without the head among them' in out and len(state(5)['comments']) == 1)
+    seed(5, head=head5, comments=[round2], later_than={A: [head5, 'c' * 40]})
+    code, out = post(MAIN, STUB_AHEAD_BY='1')
+    check('refuses an ahead answer that lists more commits than it counts', code != 0
+          and 'is ahead by 1 commits of the anchor bbbbbbb and listed 2' in out and len(state(5)['comments']) == 1)
     seed(5, head=head5, comments=[round2])
     code, out = post(MAIN, STUB_SECOND_STATUS='diverged', STUB_PAGES='2')
-    check('refuses a compare whose pages give different statuses', code != 0 and 'pages' in out
+    check('refuses a compare whose pages give different statuses', code != 0 and 'gave different statuses, ahead, diverged' in out
           and len(state(5)['comments']) == 1)
 
     # A round rerun on the same commit after a lens failed keeps its number. Round 3 posts only after its lenses, so
