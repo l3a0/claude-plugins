@@ -59,7 +59,10 @@ if args[0] == 'api' and args[1].startswith('repos/') and '/compare/' in args[1]:
             # GitHub no longer holds it.
             if push['before'] != head: continue
             if push.get('gone'): sys.exit('gh: Not Found (HTTP 404)')
-            print('ahead' if any(c.startswith(anchor) for c in push.get('ancestors', [])) else 'diverged')
+            if any(c.startswith(anchor) for c in push.get('descendants', [])):
+                print('behind')
+            else:
+                print('ahead' if any(c.startswith(anchor) for c in push.get('ancestors', [])) else 'diverged')
             sys.exit(0)
         if pr['headRefOid'] != head: continue
         if any(c.startswith(anchor) for c in pr.get('ancestors', [])):
@@ -695,6 +698,10 @@ with tempfile.TemporaryDirectory() as ROOT:
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
     check('refuses where the replaced head that held the anchor has no commit on record', code != 0
           and 'no force push GitHub records' in out and state(5)['comments'] == [])
+    seed(5, **dict(pushed, replaced=({'before': G, 'descendants': ['f' * 40]},)))
+    code, out = post(f'o/r#5={head5}={F}={unrelated}')
+    check('refuses an anchor that descends from a replaced head, as from a pull request stacked on it', code != 0
+          and 'no force push GitHub records' in out and state(5)['comments'] == [])
     seed(5, **dict(pushed, replaced=({'before': G, 'gone': True}, {'before': H, 'ancestors': []})))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
     check('refuses and names a replaced head GitHub can no longer compare', code != 0
@@ -740,7 +747,8 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, **dict(pushed, replaced=({'before': 'f' * 40},)))
     code, out = post(f'o/r#5={head5}={"f" * 40}={full}')
     check('refuses a closing comment whose full anchor is the head a force push replaced', code != 0
-          and 'at a head no lens read' in out and "'## Review, round <N>' instead" in out and state(5)['comments'] == [])
+          and 'at a head no lens read' in out and "'## Review, round <N>' instead, and a closing comment posts nothing" in out
+          and state(5)['comments'] == [])
     seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]},))), seed(6, head=head6, repo='o-s')
     clean_closing = os.path.join(ROOT, 'clean-closing.md')
     with open(clean_closing, 'w') as f:

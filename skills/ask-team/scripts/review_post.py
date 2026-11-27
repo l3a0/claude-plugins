@@ -32,8 +32,8 @@ rebase, and the script says so. It cannot tell who pushed. A comment headed
 read a head a force push wrote. It
 posts on none of them if a head differs, an anchor is neither in the head's
 history nor held by a head a recorded force push replaced, GitHub cannot
-answer either question, a closing comment's anchor stands only through a force
-push, or an earlier comment has the same key with other text. The anchor check
+answer either question, a `## Review complete` comment's anchor stands only
+through a force push, or an earlier comment has the same key with other text. The anchor check
 catches an anchor copied from another branch or another pull request, unless a
 head a recorded force push replaced held it. It does not catch an earlier
 round's anchor, which is still an ancestor or held by a replaced head. It skips a pull request that already
@@ -433,8 +433,9 @@ def comment(args):
                  + ". Check that each anchor is the commit this round's brief anchors at, and post nothing by hand")
     if unread:
         sys.exit(f"posting nothing, because a {FINAL!r} comment would close the review at a head no lens read: "
-                 + "; ".join(unread) + ". Post a round's own comment under '## Review, round <N>' instead, and run a "
-                 "round at the new head, whose comment can close the review, as review-round.md's step 6 says")
+                 + "; ".join(unread) + ". A round's own comment posts under '## Review, round <N>' instead, and a "
+                 "closing comment posts nothing. Then run a round at the new head, whose comment can close the "
+                 "review, as review-round.md's step 6 says")
     for note in notes:
         print(note)
     login = run("gh", "api", "user", "--jq", ".login").strip()
