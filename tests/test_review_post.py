@@ -792,6 +792,10 @@ with tempfile.TemporaryDirectory() as ROOT:
     code, out = post(MAIN, STUB_AHEAD_BY='0')
     check('refuses an ahead answer whose count of none matches a list without the head', code != 0
           and 'without the head among them' in out and len(state(5)['comments']) == 1)
+    seed(5, head=head5, comments=[fixed], later_than={A: ['c' * 40]})
+    code, out = post(MAIN, STUB_AHEAD_BY='1')
+    check('refuses an ahead answer whose count matches a list of other commits without the head', code != 0
+          and 'without the head among them' in out and len(state(5)['comments']) == 1)
     seed(5, head=head5, comments=[round2], later_than={A: [head5, 'c' * 40]})
     code, out = post(MAIN, STUB_AHEAD_BY='1')
     check('refuses an ahead answer that lists more commits than it counts', code != 0

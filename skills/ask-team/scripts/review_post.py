@@ -46,9 +46,9 @@ by the next round, and the earlier comment names no later commit, so that post
 goes through. So does a round rerun on the same commit, such as after a lens
 failed, which keeps its round number. The script cannot tell that companion
 from a round followed by a commit that no round's comment names, such as the
-owner's ruling applied after a round that waited, whether or not that round
-pushed a fix. So an anchor copied from such a round, or from the head it
-named, posts, and the session checks by hand. A comment that does not say `round K, of <anchor>` is
+owner's ruling applied after a round that waited. So an anchor copied from
+such a round posts: its anchor where it pushed nothing, or the head its comment
+named where it pushed a fix. The session checks by hand. A comment that does not say `round K, of <anchor>` is
 not read, and a commit of the base that a merge brought in, named in an
 earlier comment, refuses a post it should not. This check reads only the pull
 request it posts on. It skips a pull request that already
