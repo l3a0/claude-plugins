@@ -35,16 +35,22 @@ it by hand. l3a0/claude-plugins#108 decides what a review does after a force
 push drops an anchor. It also posts on none of them where a comment by the
 same login that opens with a heading names the anchor as its own, in its first
 `round K, of <anchor>`, for another round, and also names a commit the head
-holds after the anchor. A round's comment names its head, so that round read
-the anchor before the later commit was pushed. That catches an earlier round's
-anchor copied forward, which is still an ancestor, and it reads only the
-compare it already makes. A pull request that a round left untouched is read
-at the same commit by the next round, and the earlier comment names no later
-commit, so that post goes through. So does a round rerun on the same commit,
-such as after a lens failed, which keeps its round number. A comment that does
-not say `round K, of <anchor>` is not read, and a commit of the base that a
-merge brought in, named in an earlier comment, refuses a post it should not.
-This check reads only the pull request it posts on. It skips a pull request that already
+holds after the anchor, or names a commit the head holds after the anchor as
+its own. A round's comment names its head, so either way that round read past
+the anchor. That catches an anchor copied forward from a round that pushed a
+fix, which is still an ancestor, and a closing comment for a round a later
+round has read past. It reads only the compare it already makes, and refuses
+a compare whose pages disagree or whose list of commits does not match its
+count. A pull request that a round left untouched is read at the same commit
+by the next round, and the earlier comment names no later commit, so that post
+goes through. So does a round rerun on the same commit, such as after a lens
+failed, which keeps its round number. The script cannot tell that companion
+from a round that pushed nothing before a later commit, such as one that
+waited for the owner, so an anchor copied from such a round posts, and the
+session checks by hand. A comment that does not say `round K, of <anchor>` is
+not read, and a commit of the base that a merge brought in, named in an
+earlier comment, refuses a post it should not. This check reads only the pull
+request it posts on. It skips a pull request that already
 carries this comment, so a retry posts only what is missing. GitHub takes no
 key on a comment, so this narrows the window for a double post rather than
 closing it. So it counts the copies after posting, and exits non-zero naming
@@ -327,38 +333,63 @@ def same_commit(a, b):
     return a[:n].lower() == b[:n].lower()
 
 
+def names(body, commit):
+    """True when the body names the commit by its first seven characters, and not as the end of a longer hash."""
+    return re.search(rf"(?<![0-9a-f]){commit[:7]}", body, re.IGNORECASE) is not None
+
+
 def pushed_after(bodies, round_no, anchor, later):
-    """Return (round, commit) for each other round whose comment names this anchor as its own and a later commit.
+    """Return (round, why) for each other round whose comment shows it read past this anchor.
 
     later holds the commits the head holds after the anchor. A round's comment names its head, so one that names
-    a later commit read the anchor before that commit was pushed, and this round should read from there.
+    this anchor as its own and also a later commit read the anchor before that commit was pushed. One whose own
+    anchor is a later commit read past this anchor itself. Either way this round should read from there.
     """
     found = []
     for body in bodies:
         own = own_round(body)
-        if own and own[0] != round_no and same_commit(own[1], anchor):
-            named = [c[:7] for c in later if c[:7] in body]
+        if not own or own[0] == round_no:
+            continue
+        if same_commit(own[1], anchor):
+            named = [c for c in later if names(body, c)]
             if named:
-                found.append((own[0], named[0]))
+                found.append((own[0], f"round {own[0]}'s comment names {anchor[:7]} as its anchor and also "
+                                      f"{named[0][:7]}, which the head holds after it"))
+        elif any(same_commit(own[1], c) for c in later):
+            found.append((own[0], f"round {own[0]}'s comment reads {own[1][:7]} as its anchor, which the head "
+                                  f"holds after {anchor[:7]}"))
     return sorted(found)
 
 
-def outside_history(repo, anchor, head):
+def compare(repo, anchor, head):
     """Return (why the anchor is not the head or an ancestor of it, or None, and the commits the head holds after it)."""
     if head.startswith(anchor):
         return None, []
     # GitHub's compare API says "ahead" when the second commit descends from the first, and answers 404 for a
     # commit the repository does not hold. Unpaged, it lists at most 250 commits, so the call pages through
-    # them 100 at a time, and --jq then prints the status again at the top of each page.
+    # them 100 at a time, and --jq then prints the status and the count again at the top of each page.
     done = subprocess.run(("gh", "api", f"repos/{repo}/compare/{anchor}...{head}?per_page=100", "--paginate",
-                           "--jq", ".status, .commits[].sha"), capture_output=True, text=True)
+                           "--jq", ".status, .ahead_by, .commits[].sha"), capture_output=True, text=True)
     if done.returncode:
         return f"GitHub could not compare {anchor[:7]} with the head {head[:7]}: {done.stderr.strip()}", []
-    lines = done.stdout.split("\n")
-    status = lines[0].strip()
-    later = [line.strip() for line in lines[1:] if re.fullmatch(r"[0-9a-f]{40}", line.strip())]
+    statuses, counts, later = [], [], []
+    for line in (line.strip() for line in done.stdout.split("\n")):
+        if re.fullmatch(r"[0-9a-f]{40}", line):
+            later.append(line)
+        elif line.isdigit():
+            counts.append(int(line))
+        elif line:
+            statuses.append(line)
+    if len(set(statuses)) > 1:
+        return (f"GitHub's pages comparing {anchor[:7]} with the head {head[:7]} gave different statuses, "
+                f"{', '.join(sorted(set(statuses)))}"), []
+    status = statuses[0] if statuses else ""
     # Two commits that differ never compare "identical", so only "ahead" passes.
     if status == "ahead":
+        if set(counts) != {len(set(later))}:
+            return (f"GitHub says the head {head[:7]} is ahead by {', '.join(map(str, sorted(set(counts))))} commits "
+                    f"of the anchor {anchor[:7]} and listed {len(set(later))}, so the commits after it are not "
+                    f"known"), []
         return None, later
     if status == "identical":
         return (f"GitHub answered identical for the anchor {anchor[:7]} and the head {head[:7]}, which it gives only for "
@@ -367,6 +398,11 @@ def outside_history(repo, anchor, head):
         return (f"GitHub compared {anchor[:7]} with the head {head[:7]} and answered {status!r}, which is none of "
                 f"ahead, behind, diverged, identical"), []
     return f"the head {head[:7]} is {status} against the anchor {anchor[:7]}, so the anchor is not in its history", []
+
+
+def outside_history(repo, anchor, head):
+    """Return why the anchor is not the head or an ancestor of it, or None when it is."""
+    return compare(repo, anchor, head)[0]
 
 
 def comment(args):
@@ -407,7 +443,7 @@ def comment(args):
             wrong.append(f"{m['repo']}#{m['num']} is at {head[:width]}, not {m['head'][:width]}")
     if wrong:
         sys.exit("posting nothing, because a head does not match: " + "; ".join(wrong))
-    history = [outside_history(m["repo"], m["anchor"], head) for (m, _, _), head in zip(targets, heads)]
+    history = [compare(m["repo"], m["anchor"], head) for (m, _, _), head in zip(targets, heads)]
     outside = [f"{m['repo']}#{m['num']}: {why}" for (m, _, _), (why, _) in zip(targets, history) if why]
     if outside:
         sys.exit("posting nothing, because an anchor was not shown to be the head or an ancestor of it: " + "; ".join(outside)
@@ -415,15 +451,17 @@ def comment(args):
     login = run("gh", "api", "user", "--jq", ".login").strip()
     read = [by_login(m, login) for m, _, _ in targets]
     # This runs before the checks below, because one of them sends the session to post by hand.
-    reused = [f"{m['repo']}#{m['num']}: round {k}'s comment names {m['anchor'][:7]} as its anchor and also "
-              f"{commit}, which the head holds after it"
+    reused = [f"{m['repo']}#{m['num']}: {why}"
               for (m, _, _), bodies, (_, later) in zip(targets, read, history)
-              for k, commit in pushed_after(bodies, args.round, m["anchor"], later)]
+              for _, why in pushed_after(bodies, args.round, m["anchor"], later)]
     if reused:
-        sys.exit("posting nothing, because another round read this anchor before a later commit was pushed: "
-                 + "; ".join(reused) + ". Every commit pushed after a round gets a round of its own, so check that "
-                 "each anchor is the commit this round's brief anchors at. Where that later commit is not this pull "
-                 "request's own, such as a commit of the base a merge brought in, report it")
+        landed = [f"{m['repo']}#{m['num']}" for (m, _, heading), bodies in zip(targets, read)
+                  if copies(m, heading, args.round, bodies)]
+        sys.exit("posting nothing, because another round read past this anchor: " + "; ".join(reused)
+                 + ". Every commit pushed after a round gets a round of its own, so check that each anchor is the "
+                 "commit this round's brief anchors at. Where that later commit is not this pull request's own, "
+                 "such as a commit of the base a merge brought in, report it"
+                 + (f". This round's comment is already on {', '.join(landed)}" if landed else ""))
     pending, doubled = [], []
     for (m, text, heading), bodies in zip(targets, read):
         name = f"{m['repo']}#{m['num']}"
