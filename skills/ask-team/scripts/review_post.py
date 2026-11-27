@@ -27,12 +27,15 @@ or an ancestor of it on GitHub, and every earlier comment by the same login,
 since anyone can comment on a public pull request. An anchor outside the
 head's history still stands when GitHub's timeline records a force push on
 that same pull request that replaced a head holding the anchor, such as a
-rebase by someone other than the session, and the script says so. It posts on
-none of them if a head differs, an anchor is neither in the head's history nor
-held by a head a recorded force push replaced, GitHub cannot read either, or an
-earlier comment has the same key with other text. The anchor check catches an
-anchor copied from another branch or another pull request. It does not catch
-an earlier round's anchor, which is still an ancestor. It skips a pull request that already
+rebase, and the script says so. It cannot tell who pushed. A closing comment
+whose anchor stands that way must name the replaced head, because no lens read
+the head. It posts on none of them if a head differs, an anchor is neither in
+the head's history nor held by a head a recorded force push replaced, GitHub
+cannot answer either question, a closing comment does not name that replaced
+head, or an earlier comment has the same key with other text. The anchor check
+catches an anchor copied from another branch or another pull request, unless a
+head a recorded force push replaced held it. It does not catch an earlier
+round's anchor, which is still an ancestor or held by a replaced head. It skips a pull request that already
 carries this comment, so a retry posts only what is missing. GitHub takes no
 key on a comment, so this narrows the window for a double post rather than
 closing it. So it counts the copies after posting, and exits non-zero naming
@@ -339,30 +342,41 @@ def replaced_head(repo, num, anchor):
     return None, "; ".join(unread) or None
 
 
-def outside_history(repo, num, anchor, head):
-    """Return why the anchor is not the head, an ancestor of it, or held by a head a force push replaced, and a note."""
+def outside_history(repo, anchor, head, num=None, replaced=None):
+    """Return why the anchor is not the head or an ancestor of it, or None when it is.
+
+    With the pull request's number, an anchor outside the head's history also stands when a head a recorded force
+    push on that pull request replaced is the anchor or holds it. Then it returns None, and puts that head and a note
+    for the session in the dict `replaced`. Without a number, as for a branch, it reads no force push.
+    """
     if head.startswith(anchor):
-        return None, None
+        return None
     status, failed = compare(repo, anchor, head)
     if failed:
-        return f"GitHub could not compare {anchor[:7]} with the head {head[:7]}: {failed}", None
+        return f"GitHub could not compare {anchor[:7]} with the head {head[:7]}: {failed}"
     # Two commits that differ never compare "identical", so only "ahead" passes.
     if status == "ahead":
-        return None, None
+        return None
     if status == "identical":
         return (f"GitHub answered identical for the anchor {anchor[:7]} and the head {head[:7]}, which it gives only for "
-                f"one commit, though the head does not start with the anchor"), None
+                f"one commit, though the head does not start with the anchor")
     if status not in ("behind", "diverged"):
         return (f"GitHub compared {anchor[:7]} with the head {head[:7]} and answered {status!r}, which is none of "
-                f"ahead, behind, diverged, identical"), None
+                f"ahead, behind, diverged, identical")
+    why = f"the head {head[:7]} is {status} against the anchor {anchor[:7]}, so the anchor is not in its history"
+    if num is None:
+        return why
     before, unread = replaced_head(repo, num, anchor)
     if before:
-        return None, (f"the anchor {anchor[:7]} is not in the head {head[:7]}'s history, and GitHub records a force push "
-                      f"on this pull request that replaced the head {before[:7]}, which holds it, so the anchor stands. "
-                      f"The next round reads the whole change, as review-round.md's step 1 says")
-    why = (f"the head {head[:7]} is {status} against the anchor {anchor[:7]}, so the anchor is not in its history, "
-           f"and no force push GitHub records on this pull request replaced a head that holds it")
-    return why + (f" ({unread})" if unread else ""), None
+        if replaced is not None:
+            replaced["before"] = before
+            replaced["note"] = (f"the anchor {anchor[:7]} is not in the head {head[:7]}'s history, and GitHub records a "
+                                f"force push on this pull request that replaced the head {before[:7]}, which holds it, "
+                                f"so the anchor stands. The next round reads the whole change, as review-round.md's "
+                                f"step 1 says")
+        return None
+    why += ", and no force push GitHub records on this pull request replaced a head that holds it"
+    return why + (f" ({unread})" if unread else "")
 
 
 def comment(args):
@@ -399,19 +413,29 @@ def comment(args):
             wrong.append(f"{m['repo']}#{m['num']} is at {head[:width]}, not {m['head'][:width]}")
     if wrong:
         sys.exit("posting nothing, because a head does not match: " + "; ".join(wrong))
-    outside, notes = [], []
-    for (m, _, _), head in zip(targets, heads):
-        why, note = outside_history(m["repo"], m["num"], m["anchor"], head)
+    outside, unnamed, notes = [], [], []
+    for (m, text, heading), head in zip(targets, heads):
+        found = {}
+        why = outside_history(m["repo"], m["anchor"], head, num=m["num"], replaced=found)
         if why:
             outside.append(f"{m['repo']}#{m['num']}: {why}")
-        if note:
-            notes.append(f"{m['repo']}#{m['num']}: {note}")
+        elif found:
+            # A closing comment ends the review, and no lens read a head a force push wrote. Step 6 of
+            # review-round.md asks that comment to say so by naming the head the force push replaced.
+            if heading == FINAL and found["before"][:7] not in text:
+                unnamed.append(f"{m['repo']}#{m['num']}: {m['file']} does not name the replaced head "
+                               f"{found['before'][:7]}")
+            notes.append(f"{m['repo']}#{m['num']}: {found['note']}")
     if outside:
         sys.exit("posting nothing, because an anchor was not shown to be the head or an ancestor of it: " + "; ".join(outside)
                  + ". Check that each anchor is the commit this round's brief anchors at, and post nothing by hand")
+    if unnamed:
+        sys.exit(f"posting nothing, because a {FINAL!r} comment's anchor stands only through a force push, so no lens "
+                 "read the head, and review-round.md's step 6 asks the comment to say so and name the head the force "
+                 "push replaced: " + "; ".join(unnamed))
     for note in notes:
         print(note)
-    login =run("gh", "api", "user", "--jq", ".login").strip()
+    login = run("gh", "api", "user", "--jq", ".login").strip()
     pending, doubled = [], []
     for m, text, heading in targets:
         name = f"{m['repo']}#{m['num']}"

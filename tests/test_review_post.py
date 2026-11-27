@@ -668,7 +668,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('refuses an anchor that comes after the head when no force push is recorded', code != 0
           and 'is behind against the anchor' in out and 'none of ahead' not in out and state(5)['comments'] == [])
 
-    # A force push by someone other than the session, such as a rebase, drops an anchor a round already read.
+    # A force push, such as a rebase, which the script cannot tie to who pushed it, drops an anchor a round already read.
     # GitHub's timeline records the head each force push replaced, so an anchor that head held still stands, and one
     # copied from another pull request does not.
     G, H = '9' * 40, '8' * 40
@@ -716,6 +716,41 @@ with tempfile.TemporaryDirectory() as ROOT:
     code, out = post(COMP, f'o/r#5={head5}={F}={unrelated}')
     check('a force-pushed anchor on one companion posts on both', code == 0 and len(state(5)['comments']) == 1
           and len(state(6, 'o-s')['comments']) == 1 and out.count('the anchor stands') == 1)
+    # A closing comment ends the review, and no lens read a head a force push wrote, so it must name the head the force
+    # push replaced, as review-round.md's step 6 says.
+    closing_pushed = os.path.join(ROOT, 'closing-pushed.md')
+    with open(closing_pushed, 'w') as f:
+        f.write(f'## Review complete\n\nCloses round 3, of `{F}`, at `{"a" * 7}`.\n')
+    seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]},)))
+    code, out = post(f'o/r#5={head5}={F}={closing_pushed}')
+    check('refuses a closing comment whose anchor stands only through a force push and that does not name the '
+          'replaced head', code != 0 and f'does not name the replaced head {G[:7]}' in out
+          and "review-round.md's step 6" in out and state(5)['comments'] == [])
+    code, out = post(f'o/r#5={head5}={F}={closing_pushed}', '--dry-run')
+    check('a dry run refuses that closing comment too', code != 0 and 'does not name the replaced head' in out)
+    with open(closing_pushed, 'w') as f:
+        f.write(f'## Review complete\n\nCloses round 3, of `{F}`, at `{"a" * 7}`. A force push replaced `{G[:7]}`, '
+                'so no lens read this head.\n')
+    code, out = post(f'o/r#5={head5}={F}={closing_pushed}')
+    check('posts a closing comment that names the head the force push replaced', code == 0
+          and len(state(5)['comments']) == 1 and 'the anchor stands' in out)
+    seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]},)))
+    code, out = post(f'o/r#5={head5}={F}={unrelated}')
+    check('a round comment need not name the replaced head', code == 0 and len(state(5)['comments']) == 1)
+
+    # Other callers, such as a check of a branch with no pull request, call the gate with three arguments and test
+    # its answer for truth, so that form keeps its meaning and reads no force push.
+    gate = load()
+    seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]},)))
+    os.environ.update(PATH=BIN + os.pathsep + os.environ['PATH'], STUB_STATE=STATE)
+    check('the three-argument gate returns None for an ancestor', gate.outside_history('o/r', 'b' * 7, head5) is None)
+    why = gate.outside_history('o/r', F, head5)
+    check('the three-argument gate returns the reason as text, and reads no force push, for an anchor outside the '
+          'history', isinstance(why, str) and 'is diverged against the anchor' in why and 'force push' not in why)
+    found = {}
+    check('the gate with a number returns None and the replaced head for a force-pushed anchor',
+          gate.outside_history('o/r', F, head5, num='5', replaced=found) is None and found.get('before') == G)
+
     seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]},))), seed(6, head=head6, repo='o-s', ancestors=())
     code, out = post(f'o/r#5={head5}={F}={unrelated}', COMP)
     check('a force-pushed anchor on one companion does not lift a refusal on the other', code != 0

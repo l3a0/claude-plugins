@@ -28,7 +28,11 @@ case "$*" in
   "api repos/$(cat "$d/last_repo")/compare/${STUB_BASE:-main}...$(cat "$d/last_sha") "*)
     case "$*" in *merge_base_commit*) echo "${STUB_MB:-bbbbbbb2222}";; *) echo "ddddddd3333";; esac;;
   "api repos/$(cat "$d/last_repo")/compare/"*"...$(cat "$d/last_sha") --jq .status"|\
-  "api repos/$(cat "$d/last_repo")/compare/"*"...${STUB_FIX:-none} --jq .status")
+  "api repos/$(cat "$d/last_repo")/compare/"*"...${STUB_FIX:-none} --jq .status"|\
+  "api repos/o/s/compare/"*"...${STUB_FIX_S:-none} --jq .status")
+    # STUB_OLD_STATUS_S answers every compare on o/s, so one companion can move as a fix while the other was
+    # force-pushed.
+    if [ "$(cat "$d/last_repo")" = o/s ] && [ -n "${STUB_OLD_STATUS_S:-}" ]; then echo "$STUB_OLD_STATUS_S"; exit 0; fi
     # The fix against the head answers STUB_FIX_STATUS, and the last round's head against the fix STUB_OLD_STATUS.
     # A status of 404 answers as GitHub does for a commit the repository lacks.
     span="${2#repos/*/compare/}"
@@ -241,6 +245,16 @@ with tempfile.TemporaryDirectory() as BIN:
           and "<This round reads the whole change, `git -C /co diff bbbbbbb eeeeeee`, on o/r PR #5, because a force "
               "push replaced round 1's head aaaaaaa; round 1's fixes, `git -C <checkout> diff 1111111 1111111`, on "
               "o/s PR #6, leaving out what a merge of the base brought, and any passage" in tp)
+    # The other companion moved as a fix, from 1111111 to 3333333, under a merge at 2222222, so its part names its
+    # last head and its fix, and neither its new head nor the merge base.
+    code, out = nxt(r1b, 'two-moved.md', 'o/r#5=eeeeeee5555', 'o/s#6=2222222', '--fix', 'o/s#6=3333333',
+                    STUB_SHA='eeeeeee5555', STUB_LOCAL='eeeeeee5555', STUB_SHA_S='2222222bbbb', STUB_FIX_S='3333333',
+                    STUB_OLD_STATUS='diverged', STUB_OLD_STATUS_S='ahead')
+    tm = read(os.path.join(SCRATCH, 'two-moved.md')) if code == 0 else ''
+    check('--next names the last head and the fix for a companion that moved as a fix beside one a force push '
+          'replaced', code == 0 and "on o/r PR #5, because a force push replaced round 1's head aaaaaaa; round 1's "
+          "fixes, `git -C <checkout> diff 1111111 3333333`, on o/s PR #6," in tm
+          and 'bbbbbbb 2222222' not in tm[tm.find('<This round reads'):])
 
     code, out = nxt(r1b, 'two-bare.md', 'eeeeeee5555')
     check('--next refuses a bare head for two pull requests', code != 0 and 'bare HEAD' in out)
