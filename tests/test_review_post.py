@@ -29,8 +29,9 @@ if args[:2] == ['api', 'user']:
     sys.exit(0)
 if args[0] == 'api' and args[1].startswith('repos/') and '/compare/' in args[1]:
     # GitHub's compare API: "ahead" when the head descends from the anchor, 404 for a commit the repository lacks.
-    if args[2:] != ['--jq', '.status']: fail()
-    repo, span = args[1][len('repos/'):].split('/compare/')
+    # Paged, --jq prints the status again at the top of each page, which STUB_PAGES repeats.
+    if args[2:] != ['--paginate', '--jq', '.status, .commits[].sha'] or not args[1].endswith('?per_page=100'): fail()
+    repo, span = args[1][len('repos/'):-len('?per_page=100')].split('/compare/')
     anchor, head = span.split('...')
     prefix = repo.replace('/', '-') + '-'
     # Several seeded pull requests share a head, so the one seeded last answers.
@@ -39,7 +40,10 @@ if args[0] == 'api' and args[1].startswith('repos/') and '/compare/' in args[1]:
         pr = json.load(open(os.path.join(state, name)))
         if pr['headRefOid'] != head: continue
         if any(c.startswith(anchor) for c in pr.get('ancestors', [])):
-            print('ahead')
+            later = pr.get('later_than', {}).get(anchor, [head])
+            for page in range(int(os.environ.get('STUB_PAGES', '1'))):
+                print('ahead')
+                for c in later[page::int(os.environ.get('STUB_PAGES', '1'))]: print(c)
         elif any(c.startswith(anchor) for c in pr.get('elsewhere', [])):
             print('diverged')
         elif any(c.startswith(anchor) for c in pr.get('later', [])):
@@ -65,7 +69,9 @@ elif args[1] == 'edit' and args[5] == '--body-file' and args[0] == 'pr':
     if os.environ.get('STUB_LOST') == 'edit': sys.exit('stand-in gh: connection lost')
 elif args[1] == 'comment' and args[5] == '--body-file':
     if os.environ.get('STUB_COMMENT_FAIL') == args[2]: sys.exit('stand-in gh: comment refused')
-    pr['comments'].append({'author': {'login': login}, 'body': open(args[6], newline='').read()})
+    # STUB_HIDE answers as if the post landed but keeps nothing, so the next read does not show it.
+    if os.environ.get('STUB_HIDE') != args[2]:
+        pr['comments'].append({'author': {'login': login}, 'body': open(args[6], newline='').read()})
     json.dump(pr, open(path, 'w'))
     if os.environ.get('STUB_DOUBLE') == args[2]:
         pr['comments'].append({'author': {'login': login}, 'body': open(args[6], newline='').read()})
@@ -139,9 +145,11 @@ with tempfile.TemporaryDirectory() as ROOT:
 
     # Every anchor the comment tests name, bbbbbbb and ccccccc, is an ancestor of the head unless a test says otherwise.
     def seed(num, body=BODY, head='a' * 40, comments=(), repo='o-r', login='me', ancestors=('b' * 40, 'c' * 40),
-             elsewhere=(), later=(), silent=(), twins=()):
+             elsewhere=(), later=(), silent=(), twins=(), later_than=None):
+        # later_than maps an anchor to the commits the head holds after it, which is the head alone unless given.
         with open(os.path.join(STATE, f'{repo}-{num}.json'), 'w') as f:
             json.dump({'body': body, 'headRefOid': head, 'ancestors': list(ancestors), 'elsewhere': list(elsewhere), 'later': list(later), 'silent': list(silent), 'twins': list(twins),
+                       'later_than': later_than or {},
                        'comments': [{'author': {'login': login}, 'body': c} for c in comments]}, f)
 
     def state(num, repo='o-r'):
@@ -490,16 +498,15 @@ with tempfile.TemporaryDirectory() as ROOT:
     closing = os.path.join(ROOT, 'closing.md')
     with open(closing, 'w') as f:
         f.write(f'## Review complete\n\nCloses round 3, of `{A}`, at `{"a" * 7}`.\n')
-    # Two rounds that share an anchor need --reread, so these two tests pass it, and they test only the retry key.
     seed(5, head=head5, comments=[f'## Review complete\n\nCloses round 2, of `{A}`.\n'])
-    code, out = post(f'o/r#5={head5}={A}={closing}', '--reread', 'o/r#5')
+    code, out = post(f'o/r#5={head5}={A}={closing}')
     check('a comment on another round does not block the post', len(state(5)['comments']) == 2)
 
     round13 = os.path.join(ROOT, 'round13.md')
     with open(round13, 'w') as f:
         f.write(f'## Review complete\n\nRound 1, of `{A}`, at `{"a" * 7}`.\n')
     seed(5, head=head5, comments=[f'## Review complete\n\nRound 13, of `{A}`.\n'])
-    code, out = post(f'o/r#5={head5}={A}={round13}', '--reread', 'o/r#5', round_no='1')
+    code, out = post(f'o/r#5={head5}={A}={round13}', round_no='1')
     check('round 1 does not match a comment on round 13', code == 0 and len(state(5)['comments']) == 2)
 
     seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 3, of `{A}`.\n'])
@@ -588,6 +595,9 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5)
     code, out = post(MAIN, STUB_DOUBLE='5')
     check('a post that landed twice is reported', code != 0 and 'should hold this comment once' in out and 'posted' in out)
+    seed(5, head=head5)
+    code, out = post(MAIN, STUB_HIDE='5')
+    check('a post the next read does not show is reported', code != 0 and 'should hold this comment once' in out and 'posted' in out)
     seed(5, head=head5, comments=[copy])
     pr5 = state(5)
     pr5['comments'][0]['author'] = None
@@ -657,36 +667,51 @@ with tempfile.TemporaryDirectory() as ROOT:
     code, out = post(f'o/r#5={head5}={F}={unrelated}', '--dry-run')
     check('a dry run checks the anchor too', code != 0 and 'an anchor was not shown to be the head or an ancestor' in out)
 
-    # Two rounds do not share an anchor, unless nothing was pushed on that pull request between them.
+    # Two rounds do not share an anchor, unless nothing was pushed on that pull request between them. A round's comment
+    # names its head, so an earlier round's comment that names the anchor and a commit after it is the mistake.
     E = 'e' * 7
+    fixed = f'## Review, round 2\n\nRound 2, of `{A}`, fixed in `{"a" * 7}`.\n'
     round2 = f'## Review, round 2\n\nRound 2, of `{E}`, fixed in `{A}`.\n'
-    seed(5, head=head5, comments=[round2, f'## Review, round 2\n\nRound 2, of `{A}`, fixed in `{"a" * 7}`.\n'])
+    seed(5, head=head5, comments=[round2, fixed])
     seed(6, head=head6, repo='o-s')
     code, out = post(MAIN, COMP)
-    check("refuses an anchor an earlier round's comment names as its own, and posts on no companion", code != 0
-          and 'another round\'s comment already names this anchor' in out and f'o/r#5: round 2 already named {A}' in out
-          and f'the head is {head5[:7]}' in out and '--reread o/r#5' in out and 'o/s#6:' not in out
+    check("refuses an anchor an earlier round's comment names with a commit after it, and posts on no companion", code != 0
+          and 'another round read this anchor before a later commit was pushed' in out
+          and f"o/r#5: round 2's comment names {A} as its anchor and also {'a' * 7}, which the head holds after it" in out
+          and 'o/s#6:' not in out and 'report it' in out
           and len(state(5)['comments']) == 2 and state(6, 'o-s')['comments'] == [])
     code, out = post(MAIN, '--dry-run')
-    check('a dry run refuses an earlier round\'s anchor too', code != 0 and 'already named' in out and 'would post' not in out)
+    check("a dry run refuses an earlier round's anchor too", code != 0 and 'before a later commit' in out and 'would post' not in out)
+    seed(5, head=head5, comments=[fixed.replace('`aaaaaaa`', f'`{"a" * 40}`')])
+    code, out = post(MAIN)
+    check('reads a later commit the earlier comment names in full', code != 0 and 'before a later commit' in out)
+    F7 = 'f' * 40
+    seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2, of `{A}`, fixed in `{F7[:7]}`, then merged.\n'],
+         later_than={A: [head5, F7]})
+    code, out = post(MAIN, STUB_PAGES='2')
+    check('finds a later commit on the second page of the compare', code != 0 and f'also {F7[:7]}' in out)
     seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2, of `{A + "b" * 33}`, fixed in `{"a" * 7}`.\n'])
     code, out = post(MAIN)
     check('an earlier round that names the anchor in full is refused against seven characters', code != 0
-          and 'already named' in out and len(state(5)['comments']) == 1)
+          and 'before a later commit' in out and len(state(5)['comments']) == 1)
     seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2, of `{A + "c" * 33}`, fixed in `{"a" * 7}`.\n'])
     code, out = post(f'o/r#5={head5}={"b" * 40}={note}')
     check('an earlier anchor that shares only the first seven characters is another commit', code == 0
           and len(state(5)['comments']) == 2)
     seed(5, head=head5, comments=[f'## Review, round 4\n\nRound 4, of `{A}`, fixed in `{"a" * 7}`.\n'])
     code, out = post(MAIN)
-    check('refuses an anchor a later round named too', code != 0 and 'round 4 already named' in out)
-    seed(5, head=head5, comments=[f'## Review, round 1\n\nRound 1, of `{A}`.\n', f'## Review, round 2\n\nRound 2, of `{A}`.\n'])
+    check('refuses an anchor a later round named with a later commit too', code != 0 and "round 4's comment" in out)
+    seed(5, head=head5, comments=[fixed.replace('round 2', 'round 1').replace('Round 2', 'Round 1'), fixed])
     code, out = post(MAIN)
-    check('names every other round that used the anchor', code != 0 and 'round 1, 2 already named' in out)
+    check('names every other round that read the anchor before a later commit', code != 0
+          and "round 1's comment" in out and "round 2's comment" in out)
     seed(5, head=head5, comments=[f'## Review complete\n\nCloses round 2 of `{A}`, at `{"a" * 7}`.\n'])
     code, out = post(MAIN)
     check("reads a closing comment's 'round K of <anchor>' written without the comma", code != 0
-          and 'round 2 already named' in out and len(state(5)['comments']) == 1)
+          and "round 2's comment" in out and len(state(5)['comments']) == 1)
+    seed(5, head=head5, comments=[f'## Review, round 4\n\nTurned around 2, of `{A}`, at `{"a" * 7}`. Round 4, of `{E}`.\n'])
+    code, out = post(MAIN)
+    check("'around K, of' is not a round", code == 0 and len(state(5)['comments']) == 2)
 
     seed(5, head=head5, comments=[round2])
     code, out = post(MAIN)
@@ -695,23 +720,32 @@ with tempfile.TemporaryDirectory() as ROOT:
     code, out = post(MAIN)
     check('a retry of the same round still skips its own comment', code == 0 and 'skipped' in out
           and len(state(5)['comments']) == 2)
+    seed(5, head=head5, comments=[fixed.replace('round 2', 'round 3').replace('Round 2', 'Round 3') + 'Earlier text.\n'])
+    code, out = post(MAIN)
+    check("this round's own comment with other text is not another round's", code != 0 and 'different text' in out
+          and 'before a later commit' not in out)
+    seed(5, head=head5, comments=[fixed, fixed.replace('round 2', 'round 3').replace('Round 2', 'Round 3') + 'Earlier text.\n'])
+    code, out = post(MAIN)
+    check("an earlier round's anchor is reported before the different text that sends the session to post by hand",
+          code != 0 and 'before a later commit' in out and 'different text' not in out)
 
-    seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2, of `{A}`.\n'], login='stranger')
+    seed(5, head=head5, comments=[fixed], login='stranger')
     code, out = post(MAIN)
     check("another login's comment on another round does not stop the post", code == 0 and len(state(5)['comments']) == 2)
-    seed(5, head=head5, comments=[f'Owner ruling, 2026-11-27: round 2, of `{A}`, stands.\n'])
+    seed(5, head=head5, comments=[f'Owner ruling, 2026-11-27: round 2, of `{A}`, fixed in `{"a" * 7}`, stands.\n'])
     code, out = post(MAIN)
     check('a comment that opens without a heading is not read as a round', code == 0 and len(state(5)['comments']) == 2)
-    seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2 read `{A}`.\n'])
+    seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2 read `{A}`, fixed in `{"a" * 7}`.\n'])
     code, out = post(MAIN)
     check("a comment that does not say 'round K, of' is not read", code == 0 and len(state(5)['comments']) == 2)
-
-    # A round rerun on the same commit after a lens failed keeps its number, since round 3 posts only after its lenses.
-    seed(5, head=head5, comments=[round2])
+    seed(5, head=head5, comments=[f'## Review complete\n\nCloses round 2, of `{A}`.\n', fixed.replace(f'`{A}`', f'`{E}`')])
     code, out = post(MAIN)
-    check('a rerun of round 3 on the same commit, with round 3 not yet posted, posts under its number', code == 0
-          and len(state(5)['comments']) == 2)
-    # Once round 3 has posted at a commit that is still the head, reading it again is a round of its own.
+    check('an earlier round on this anchor that names no later commit does not stop the post', code == 0
+          and len(state(5)['comments']) == 3)
+
+    # A round rerun on the same commit after a lens failed keeps its number. Round 3 posts only after its lenses, so
+    # the rerun finds no comment of its own, which the fresh-anchor check above already covers. Once round 3 has
+    # posted at a commit that is still the head, reading it again is a round of its own, and no compare runs.
     read_head = f'## Review, round 3\n\nRound 3, of `{"a" * 7}`, at `{"a" * 7}`, changes nothing.\n'
     again = os.path.join(ROOT, 'again.md')
     with open(again, 'w') as f:
@@ -724,22 +758,8 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5, comments=[round2])
     seed(6, head=head6, repo='o-s', comments=[f'## Review, round 2\n\nRound 2, of `{B}`, at `{B}`, changes nothing here.\n'])
     code, out = post(MAIN, COMP)
-    check('a companion read again at the commit an earlier round read is refused without --reread', code != 0
-          and f'o/s#6: round 2 already named {B}' in out and '--reread o/s#6' in out and 'o/r#5:' not in out
-          and len(state(5)['comments']) == 1 and len(state(6, 'o-s')['comments']) == 1)
-    code, out = post(MAIN, COMP, '--reread', 'o/s#6')
-    check('--reread posts on the companion read at the same commit', code == 0 and len(state(5)['comments']) == 2
-          and len(state(6, 'o-s')['comments']) == 2)
-    seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2, of `{A}`.\n'])
-    seed(6, head=head6, repo='o-s', comments=[f'## Review, round 2\n\nRound 2, of `{B}`.\n'])
-    code, out = post(MAIN, COMP, '--reread', 'O/S#06')
-    check('--reread skips the check for the pull request it names alone', code != 0 and 'o/r#5: round 2' in out
-          and 'o/s#6: round 2' not in out and len(state(5)['comments']) == 1 and len(state(6, 'o-s')['comments']) == 1)
-    code, out = post(MAIN, '--reread', 'o/s#6')
-    check('refuses --reread on a pull request it is not posting on', code != 0 and 'does not name one of the pull requests' in out
-          and len(state(5)['comments']) == 1)
-    code, out = post(MAIN, '--reread', 'o-r-5')
-    check('refuses a malformed --reread', code != 0 and 'OWNER/REPO#N' in out and len(state(5)['comments']) == 1)
+    check('a companion read again at the commit an earlier round read, then fixed, posts', code == 0
+          and len(state(5)['comments']) == 2 and len(state(6, 'o-s')['comments']) == 2)
 
     first = os.path.join(ROOT, 'first.md')
     with open(first, 'w') as f:
@@ -747,6 +767,16 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5)
     code, out = post(f'o/r#5={head5}={A}={first}')
     check("refuses a file whose first 'round K, of' names another round", code != 0
+          and 'a later round could not read which anchor' in out and state(5)['comments'] == [])
+    with open(first, 'w') as f:
+        f.write(f'## Review, round 3\n\nRound 2, of `{A}`, is this round. Round 3 fixed it in `{"a" * 7}`.\n')
+    code, out = post(f'o/r#5={head5}={A}={first}')
+    check("refuses a file whose first 'round K, of' names this anchor under another round", code != 0
+          and 'a later round could not read which anchor' in out and state(5)['comments'] == [])
+    with open(first, 'w') as f:
+        f.write(f'## Review, round 3\n\nRound 3, of `{E}`, read `{A}` again, fixed in `{"a" * 7}`.\n')
+    code, out = post(f'o/r#5={head5}={A}={first}')
+    check("refuses a file whose first 'round K, of' names this round with another anchor", code != 0
           and 'a later round could not read which anchor' in out and state(5)['comments'] == [])
     with open(first, 'w') as f:
         f.write(f'## Review, round 3\n\nThis is round 3 at `{A}`, fixed in `{"a" * 7}`.\n')
