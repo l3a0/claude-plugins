@@ -509,7 +509,8 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5, comments=[f'## Review, round 3\n\nRound 3, of `{A}`, earlier text.\n'])
     seed(6, head=head6, repo='o-s')
     code, out = post(MAIN, COMP)
-    check('a key with other text stops every post', code != 0 and 'different text' in out and len(state(5)['comments']) == 1 and state(6, 'o-s')['comments'] == [])
+    check('a key with other text stops every post', code != 0 and 'different text' in out
+          and 'checks review-round.md\'s step 7 gives for a hand post' in out and len(state(5)['comments']) == 1 and state(6, 'o-s')['comments'] == [])
 
     wrong_head = os.path.join(ROOT, 'wrong.md')
     with open(wrong_head, 'w') as f:
@@ -615,7 +616,8 @@ with tempfile.TemporaryDirectory() as ROOT:
 
     seed(5, head=head5, silent=('f' * 40,))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
-    check('refuses an anchor whose compare prints no status', code != 0 and state(5)['comments'] == [])
+    check('refuses an anchor whose compare prints no status', code != 0 and 'against the anchor' in out
+          and state(5)['comments'] == [])
 
     seed(5, head=head5)
     code, out = post(f'o/r#5={head5}={F}={unrelated}')

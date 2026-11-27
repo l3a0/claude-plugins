@@ -25,8 +25,10 @@ round's head is not FIX or an ancestor of it, it stops when HEAD still holds
 that head, because FIX then names a commit from before the round's fixes. When
 HEAD does not hold it, as after a force push such as a rebase, it says so on
 standard error and writes the brief, because the diff from that head to FIX
-then holds more than the round's fixes. l3a0/claude-plugins#108 decides what a
-round reads then. The run changes four things and keeps every other line.
+then holds more than the round's fixes. l3a0/claude-plugins#108 decides what
+a round reads after a force push. It stops, writing nothing, when GitHub cannot
+compare the two, such as for a head it no longer holds, or gives an answer it
+does not document. The run changes four things and keeps every other line.
 
 1. The round number at the end of the title goes up by one.
 2. Each item's first line is printed again from GitHub, as the first form
@@ -120,6 +122,18 @@ def anchor(repo, num, checkout):
         line += f" **State: {pr['state']}.**"
     line += f" Diff: `git diff {base[:7]} {head[:7]}`."
     return line, head
+
+
+STATUSES = ("ahead", "behind", "diverged", "identical")
+
+
+def status(repo, base, head):
+    """GitHub's compare status of head against base, stopping on a failure or an answer GitHub does not document."""
+    answer = run("gh", "api", f"repos/{repo}/compare/{base}...{head}", "--jq", ".status")
+    if answer not in STATUSES:
+        sys.exit(f"GitHub compared {base[:7]} with {head[:7]} on {repo} and answered {answer!r}, which is none of "
+                 f"{', '.join(STATUSES)}. Writing nothing")
+    return answer
 
 
 def same(a, b):
@@ -238,18 +252,17 @@ def next_brief(previous, out, specs, fix_specs=()):
         if same(head, fix):
             fix = head
         else:
-            status = run("gh", "api", f"repos/{it['repo']}/compare/{fix}...{head}", "--jq", ".status")
-            if status != "ahead":
-                sys.exit(f"{it['repo']} PR #{it['num']}'s head {head[:7]} is {status} against the fix {fix[:7]}, so "
+            answer = status(it["repo"], fix, head)
+            if answer != "ahead":
+                sys.exit(f"{it['repo']} PR #{it['num']}'s head {head[:7]} is {answer} against the fix {fix[:7]}, so "
                          f"the fix is not in the head's history. Name a fixing commit the head holds. Writing nothing")
         if not same(old, fix):
-            status = run("gh", "api", f"repos/{it['repo']}/compare/{old}...{fix}", "--jq", ".status")
-            if status != "ahead":
+            answer = status(it["repo"], old, fix)
+            if answer != "ahead":
                 # The head drops the last head only where it neither is that head nor descends from it.
-                dropped = fix == head or (not same(old, head) and run(
-                    "gh", "api", f"repos/{it['repo']}/compare/{old}...{head}", "--jq", ".status") != "ahead")
+                dropped = fix == head or (not same(old, head) and status(it["repo"], old, head) != "ahead")
                 if not dropped:
-                    sys.exit(f"{it['repo']} PR #{it['num']}'s fix {fix[:7]} is {status} against round {finished}'s "
+                    sys.exit(f"{it['repo']} PR #{it['num']}'s fix {fix[:7]} is {answer} against round {finished}'s "
                              f"head {old}, which the head still holds, so the fix names a commit from before the "
                              f"round's fixes. Name a fixing commit that comes after {old}. Writing nothing")
                 print(f"{it['repo']} PR #{it['num']}: round {finished}'s head {old} is not in the head's history on "

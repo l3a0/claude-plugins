@@ -462,6 +462,19 @@ with tempfile.TemporaryDirectory() as BIN:
                     **dict(merged, STUB_SHA='aaaaaaa1111', STUB_LOCAL='aaaaaaa1111'))
     check('--next stops on a fix from before a last head that is the head itself', code != 0
           and 'from before the round' in out and not os.path.exists(os.path.join(SCRATCH, 'fixture-unchanged-early.md')))
+    for answer in (' ', 'unknown'):
+        code, out = nxt(fixture, 'fixture-odd.md', '--fix', 'eeeeeee5555', 'ccccccc9999', STUB_OLD_STATUS=answer,
+                        **merged)
+        check(f'--next stops on a compare answer GitHub does not document ({answer!r})', code != 0
+              and 'none of ahead' in out
+              and not os.path.exists(os.path.join(SCRATCH, 'fixture-odd.md')))
+    code, out = nxt(fixture, 'fixture-odd-nofix.md', 'ccccccc9999', STUB_OLD_STATUS=' ', **dict(merged, STUB_FIX='none'))
+    check('--next with no --fix stops on an empty compare answer', code != 0 and 'none of ahead' in out
+          and not os.path.exists(os.path.join(SCRATCH, 'fixture-odd-nofix.md')))
+    code, out = nxt(fixture, 'fixture-odd-held.md', '--fix', 'eeeeeee5555', 'ccccccc9999', STUB_OLD_STATUS='diverged',
+                    STUB_OLD_HEAD_STATUS=' ', **merged)
+    check('--next stops on an empty answer for the last head against the head', code != 0 and 'none of ahead' in out
+          and not os.path.exists(os.path.join(SCRATCH, 'fixture-odd-held.md')))
     code, out = nxt(fixture, 'fixture-held-404.md', '--fix', 'eeeeeee5555', 'ccccccc9999', STUB_OLD_STATUS='diverged',
                     STUB_OLD_HEAD_STATUS='404', **merged)
     check('--next stops when GitHub cannot compare the last head with the head', code != 0 and 'Not Found' in out

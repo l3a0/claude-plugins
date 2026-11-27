@@ -316,7 +316,8 @@ def comment(args):
         mine = copies(m, heading, args.round, login)
         if any(body.strip() != text.strip() for body in mine):
             sys.exit(f"posting nothing, because {name} already carries this heading, round and anchor with "
-                     "different text. Report it, and post by hand once it is settled")
+                     "different text. Report it, and once it is settled post by hand after the checks review-round.md's step 7 "
+                     "gives for a hand post")
         if len(mine) > 1:
             doubled.append(name)
         elif mine:
