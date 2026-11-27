@@ -44,6 +44,18 @@ if args[:3] == ['api', 'graphql', '--paginate']:
     for push in json.load(open(path)).get('replaced', []):
         if not push.get('collected'): print(push['before'])
     sys.exit(0)
+if args[0] == 'api' and args[1].startswith('repos/') and '/branches/' in args[1]:
+    # GitHub's branches API, read for a branch's tip. Like the real gh and GitHub, a raw "#" or "?" ends the
+    # path, a percent escape is decoded, and ".." is resolved, so the name answered can differ from the one asked.
+    import posixpath, urllib.parse
+    if args[2:] != ['--jq', '.name, .commit.sha']: fail()
+    repo, branch = args[1][len('repos/'):].split('/branches/', 1)
+    branch = posixpath.normpath(urllib.parse.unquote(branch.split('#')[0].split('?')[0]))
+    tips = json.load(open(os.path.join(state, 'branches.json'))) if os.path.exists(os.path.join(state, 'branches.json')) else {}
+    if branch not in tips.get(repo, {}): sys.exit('gh: Branch not found (HTTP 404)')
+    tip = tips[repo][branch]
+    print(tip['out'] if isinstance(tip, dict) else branch + '\\n' + tip)
+    sys.exit(0)
 if args[0] == 'api' and args[1].startswith('repos/') and '/compare/' in args[1]:
     # GitHub's compare API: "ahead" when the head descends from the anchor, 404 for a commit the repository lacks.
     # Paged, --jq prints the status and the count again at the top of each page, which STUB_PAGES repeats, and
@@ -93,7 +105,14 @@ path = os.path.join(state, ('issue-' if args[0] == 'issue' else '') + args[4].re
 if not os.path.exists(path): fail()
 pr = json.load(open(path))
 if args[1] == 'view' and args[5] == '--json':
-    print(json.dumps({args[6]: pr[args[6]]}))
+    hide = os.path.join(state, 'hide')
+    if args[6] == 'comments' and os.path.exists(hide):
+        # A read that lags behind a write leaves out the comment just posted, once.
+        gone = open(hide).read()
+        os.remove(hide)
+        print(json.dumps({'comments': [c for c in pr['comments'] if c.get('url') != gone]}))
+    else:
+        print(json.dumps({args[6]: pr[args[6]]}))
 elif args[1] == 'edit' and args[5] == '--body-file' and args[0] == 'pr':
     pr['body'] = open(args[6], newline='').read() + os.environ.get('STUB_EDIT_ADDS', '')
     pr['edits'] = pr.get('edits', 0) + 1
@@ -101,15 +120,25 @@ elif args[1] == 'edit' and args[5] == '--body-file' and args[0] == 'pr':
     if os.environ.get('STUB_LOST') == 'edit': sys.exit('stand-in gh: connection lost')
 elif args[1] == 'comment' and args[5] == '--body-file':
     if os.environ.get('STUB_COMMENT_FAIL') == args[2]: sys.exit('stand-in gh: comment refused')
-    # STUB_HIDE answers as if the post landed but keeps nothing, so the next read does not show it.
-    if os.environ.get('STUB_HIDE') != args[2]:
-        pr['comments'].append({'author': {'login': login}, 'body': open(args[6], newline='').read()})
-    json.dump(pr, open(path, 'w'))
-    if os.environ.get('STUB_DOUBLE') == args[2]:
-        pr['comments'].append({'author': {'login': login}, 'body': open(args[6], newline='').read()})
+    # Like GitHub, each comment gets a link whose number rises with every post.
+    counter = os.path.join(state, 'counter')
+    def landed(body):
+        n = int(open(counter).read()) + 1 if os.path.exists(counter) else 1001
+        open(counter, 'w').write(str(n))
+        url = 'https://github.com/' + args[4] + ('/issues/' if args[0] == 'issue' else '/pull/') + args[2] + '#issuecomment-' + str(n)
+        pr['comments'].append({'author': {'login': login}, 'body': body, 'url': url})
         json.dump(pr, open(path, 'w'))
+        return url
+    posted = landed(open(args[6], newline='').read())
+    if os.environ.get('STUB_HIDE') == args[2]:
+        open(os.path.join(state, 'hide'), 'w').write(posted)
+    if os.environ.get('STUB_DOUBLE') == args[2]:
+        landed(open(args[6], newline='').read())
+    if os.environ.get('STUB_RACE') == args[2]:
+        # Another run's comment under the same key lands as this one does, with other text.
+        landed(open(args[6], newline='').read().rstrip('\\n') + ' Another session.\\n')
     if os.environ.get('STUB_LOST') == 'comment': sys.exit('stand-in gh: connection lost')
-    print('https://github.com/' + args[4] + ('/issues/' if args[0] == 'issue' else '/pull/') + args[2] + '#issuecomment-1')
+    print(posted)
 else:
     fail()
 '''
@@ -500,7 +529,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5), seed(6, head=head6, repo='o-s')
     code, out = post(MAIN, COMP)
     check('posts on every pull request', code == 0 and len(state(5)['comments']) == 1 and len(state(6, 'o-s')['comments']) == 1)
-    check('prints where each comment landed', 'issuecomment-1' in out)
+    check('prints where each comment landed', state(5)['comments'][0]['url'] in out and state(6, 'o-s')['comments'][0]['url'] in out)
 
     code, out = post(MAIN, COMP)
     check('a retry across companions on different anchors posts nothing twice', len(state(5)['comments']) == 1 and len(state(6, 'o-s')['comments']) == 1 and out.count('skipped') == 2)
@@ -633,12 +662,35 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5, comments=[copy, copy])
     code, out = post(MAIN)
     check('reports a double post already there', code != 0 and 'should hold this comment once' in out and len(state(5)['comments']) == 2)
+    check('a double post with no comment numbers names no copy to delete', 'Delete nothing' in out and 'Keep ' not in out)
     seed(5, head=head5, comments=[copy, copy]), seed(6, head=head6, repo='o-s')
     code, out = post(MAIN, COMP)
     check('a double post on one companion does not stop the other', code != 0 and 'o/r#5' in out and len(state(6, 'o-s')['comments']) == 1 and len(state(5)['comments']) == 2)
     seed(5, head=head5)
     code, out = post(MAIN, STUB_DOUBLE='5')
     check('a post that landed twice is reported', code != 0 and 'should hold this comment once' in out and 'posted' in out)
+    first, second = (c['url'] for c in state(5)['comments'])
+    check('a post that landed twice names the copy with the lowest comment number to keep', f'Keep {first}' in out and f'delete {second}' in out)
+    seed(5, head=head5)
+    with open(os.path.join(STATE, 'o-r-5.json')) as f:
+        held = json.load(f)
+    body = open(note).read()
+    held['comments'] = [{'author': {'login': 'me'}, 'body': body, 'url': 'https://github.com/o/r/pull/5#issuecomment-1000'},
+                        {'author': {'login': 'me'}, 'body': body, 'url': 'https://github.com/o/r/pull/5#issuecomment-999'}]
+    with open(os.path.join(STATE, 'o-r-5.json'), 'w') as f:
+        json.dump(held, f)
+    code, out = post(MAIN)
+    check('the copy to keep is the lowest comment number, not the first in text order', code != 0
+          and 'Keep https://github.com/o/r/pull/5#issuecomment-999' in out and 'delete https://github.com/o/r/pull/5#issuecomment-1000' in out)
+    seed(5, head=head5)
+    code, out = post(MAIN, STUB_HIDE='5')
+    link = state(5)['comments'][0]['url']
+    check('a post the read after posting does not show says to rerun nothing', code != 0 and 'Rerun nothing' in out
+          and f'the read after posting {link} shows none' in out and len(state(5)['comments']) == 1)
+    seed(5, head=head5)
+    code, out = post(MAIN, STUB_RACE='5')
+    check('a post that lands beside a copy with other text deletes nothing', code != 0 and 'Delete and edit nothing' in out
+          and 'Keep ' not in out and len(state(5)['comments']) == 2)
     seed(5, head=head5)
     code, out = post(MAIN, STUB_HIDE='5')
     check('a post the next read does not show is reported', code != 0 and 'should hold this comment once' in out and 'posted' in out)
@@ -1118,17 +1170,35 @@ with tempfile.TemporaryDirectory() as ROOT:
 
     seed_issue(40)
     code, out = price()
-    check('posts the cost comment on the issue', code == 0 and issue(40) == [{'author': {'login': 'me'}, 'body': COST}] and '/issues/40' in out)
+    check('posts the cost comment on the issue', code == 0 and [(c['author'], c['body']) for c in issue(40)] == [({'login': 'me'}, COST)] and '/issues/40' in out)
     code, out = price()
     check('a retried cost post posts nothing more', code == 0 and len(issue(40)) == 1 and 'skipped' in out)
 
     seed_issue(40, [COST.replace('2.18', '2.19')])
     code, out = price()
     check('a cost comment with other text stops the post', code != 0 and 'different text' in out and len(issue(40)) == 1)
+    check('a cost comment with other text is not to be edited, apart from the build line this session added', "edit nothing, since it may hold another session's spend" in out and "the build's line this session added" in out)
     seed_issue(40, [COST.replace('2.18', '2.19')], login='stranger')
     code, out = price()
     check("another login's cost comment does not stop the post", code == 0 and len(issue(40)) == 2)
-    for label, other in (('round', COST.replace('round 3', 'round 2')), ('anchor', COST.replace(f'`{A}`', f'`{B}`')),
+    seed_issue(40, [COST.replace(f'`{A}`', f'`{B}`')])
+    code, out = price()
+    check('a cost comment for the same round and pull request under another anchor stops the post',
+          code != 0 and f'under the anchor {B}, not {A}' in out and 'count the round twice' in out
+          and 'Delete and edit nothing' in out and len(issue(40)) == 1)
+    for label, other in (('round', COST.replace(f'`{A}`', f'`{B}`').replace('round 3', 'round 2')),
+                         ('pull request', COST.replace(f'`{A}`', f'`{B}`').replace('pull/5', 'pull/6'))):
+        seed_issue(40, [other])
+        code, out = price()
+        check(f'a cost comment for another {label} under another anchor does not stop the post', code == 0 and len(issue(40)) == 2)
+    seed_issue(40)
+    code, out = price(STUB_RACE='40')
+    check('a cost post that lands beside a copy with other text deletes nothing', code != 0
+          and 'Delete and edit nothing' in out and 'Keep ' not in out and len(issue(40)) == 2)
+    seed_issue(40, [COST.replace(f'`{A}`', f'`{B}`')], login='stranger')
+    code, out = price()
+    check("another login's cost comment under another anchor does not stop the post", code == 0 and len(issue(40)) == 2)
+    for label, other in (('round', COST.replace('round 3', 'round 2')),
                          ('pull request number', COST.replace('pull/5', 'pull/55')),
                          ('repository', COST.replace('o/r/pull/5', 'o/s/pull/5')),
                          ('issue link', COST.replace('pull/5', 'issues/5')),
@@ -1196,6 +1266,12 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed_issue(40)
     code, out = price(STUB_DOUBLE='40')
     check('a cost post that landed twice is reported', code != 0 and 'should hold this comment once' in out)
+    first, second = (c['url'] for c in issue(40))
+    check('a cost post that landed twice names the copy with the lowest comment number to keep', f'Keep {first}' in out and f'delete {second}' in out)
+    seed_issue(40)
+    code, out = price(STUB_HIDE='40')
+    check('a cost post the read after posting does not show says to rerun nothing', code != 0 and 'Rerun nothing' in out
+          and f"the read after posting {issue(40)[0]['url']} shows none" in out and len(issue(40)) == 1)
     seed_issue(40)
     code, out = price(STUB_LOST='comment')
     check('a lost reply on a cost post says the outcome is unknown', code != 0 and 'outcome is unknown' in out)
@@ -1214,5 +1290,131 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('refuses a cost file that does not exist', code != 0 and 'no comment file' in out)
     code, out = run('cost', 'o/r#41', '--round', '3', '--pull', 'o/r#5', '--anchor', A, '--file', cost_file)
     check('a cost post names the issue it was given', code != 0 and 'unexpected call' in out)
+
+    # The check form runs the comment form's head and anchor checks and posts nothing, for a comment
+    # that goes by hand, and checks that the comment's file names the anchor, and on a pull request the head.
+    # A branch's tip is seeded as a pull request of its own, so the stand-in's compare finds it.
+    def gate(*targets, **env):
+        return run('check', *targets, **env)
+
+    def branches(tips):
+        with open(os.path.join(STATE, 'branches.json'), 'w') as f:
+            json.dump(tips, f)
+
+    def names(*shas):
+        fd, path = tempfile.mkstemp(prefix='hand-', suffix='.md', dir=ROOT)
+        with os.fdopen(fd, 'w') as f:
+            f.write('## Review, round 3\n\nRound 3, of ' + ', '.join(f'`{x[:7]}`' for x in shas) + '.\n')
+        return path
+
+    seed(5, head=head5, elsewhere=('f' * 40,)), seed(6, head=head6, repo='o-s')
+    code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}', f'o/s#6={head6}={B}={names(B, head6)}')
+    check('check passes a head that matches, an anchor in its history and a file naming both', code == 0
+          and f'o/r#5: the anchor {A} is an ancestor of the head {head5[:7]}' in out and 'o/s#6: the anchor' in out)
+    check('check posts nothing', state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
+    seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2, of `{A}`, fixed in `{"a" * 7}`.\n'])
+    code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}')
+    check("check refuses an anchor another round's comment shows it read past, as comment does", code != 0
+          and 'another round read past this anchor' in out and "round 2's comment names" in out)
+    seed(5, head=head5, comments=[f'## Review, round 3\n\nRound 3, of `{A}`, fixed in `{"a" * 7}`.\n'])
+    code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}')
+    check("check skips the file's own round, whose earlier comment names the anchor and a later commit", code == 0)
+    other = os.path.join(ROOT, 'other-round.md')
+    with open(other, 'w') as f:
+        f.write(f'## Review, round 3\n\nRound 3, of `{"c" * 7}`, then round 4, of `{A}`, at `{head5[:7]}`.\n')
+    code, out = gate(f'o/r#5={head5}={A}={other}')
+    check("check skips no round when the file's own round line names another anchor", code != 0
+          and 'another round read past this anchor' in out)
+    seed(5, head=head5, login='stranger', comments=[f'## Review, round 2\n\nRound 2, of `{A}`, fixed in `{"a" * 7}`.\n'])
+    code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}')
+    check("check reads only the session's own login for a round that read past the anchor", code == 0)
+    # On a pull request, check accepts an anchor that stands only through a force push, as comment does, and refuses
+    # a file headed "## Review complete" whose anchor stands only that way.
+    seed(5, head=head5, elsewhere=('f' * 40,), replaced=({'before': '9' * 40, 'ancestors': ['f' * 40]},))
+    code, out = gate(f'o/r#5={head5}={"f" * 7}={names("f" * 7, head5)}')
+    check('check passes an anchor that stands through a recorded force push on the pull request', code == 0
+          and f'stands through a force push that replaced {"9" * 7}, beside the head {head5[:7]}' in out
+          and state(5)['comments'] == [])
+    pushed_close = os.path.join(ROOT, 'pushed-close.md')
+    with open(pushed_close, 'w') as f:
+        f.write(f'## Review complete\n\nCloses round 3, of `{"f" * 7}`, at `{head5[:7]}`.\n')
+    code, out = gate(f'o/r#5={head5}={"f" * 7}={pushed_close}')
+    check("check refuses a '## Review complete' file whose anchor stands only through a force push", code != 0
+          and 'at a head no lens read' in out and state(5)['comments'] == [])
+    seed(5, head=head5, elsewhere=('f' * 40,))
+    code, out = gate(f'o/r#5={head5}={"f" * 7}={names("f" * 7, head5)}')
+    check('check still refuses an anchor outside the history with no force push recorded', code != 0
+          and 'no force push GitHub records' in out)
+    seed(5, head=head5, elsewhere=('f' * 40,))
+    code, out = gate(f'o/r#5={head5}={head5[:7]}={names(head5)}')
+    check('check passes an anchor that is the head', code == 0 and 'is the head' in out and 'names them, so it may post' in out)
+    code, out = gate(f'o/r#5={head5[:7]}={A}={names(A, head5)}')
+    check('check takes a seven-character head', code == 0)
+    code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}', f'o/s#6={"e" * 40}={B}={names(B, "e" * 40)}')
+    check('check fails when one head differs, naming it', code != 0 and f'o/s#6 is at {head6[:7]}, not {"e" * 7}' in out
+          and 'post nothing' in out and 'o/r#5: the anchor' not in out)
+    code, out = gate(f'o/r#5={head5}={A}={names(head5)}')
+    check('check fails a file that does not name the anchor', code != 0 and f'does not name the anchor {A}' in out)
+    code, out = gate(f'o/r#5={head5}={A}={names(A)}')
+    check('check fails a file that does not name the head', code != 0 and f'does not name the head {head5[:7]}' in out)
+    code, out = gate(f'o/r#5={head5}={A}={names(head5)}', f'o/s#6={"e" * 40}={B}={names(B)}')
+    check('check names every file and head that fails, not only the first', code != 0
+          and f'does not name the anchor {A}' in out and 'o/s#6 is at' in out and 'does not name the head eeeeeee' in out)
+    code, out = gate(f'o/r#5={head5}={A}={os.path.join(ROOT, "missing.md")}')
+    check('check refuses a file that does not exist', code != 0 and 'no comment file' in out)
+    code, out = gate(f'o/r#5={head5}={"f" * 7}={names("f" * 7, head5)}')
+    check('check fails an anchor outside the head\'s history', code != 0 and 'is diverged against the anchor' in out and 'post nothing' in out)
+    code, out = gate(f'o/r#5={head5}={"9" * 7}={names("9" * 7, head5)}')
+    check('check fails an anchor GitHub does not hold', code != 0 and 'could not compare' in out)
+    seed(5, head=head5, silent=('f' * 40,))
+    code, out = gate(f'o/r#5={head5}={"f" * 7}={names("f" * 7, head5)}')
+    check('check fails an answer GitHub does not document', code != 0 and 'none of ahead' in out)
+    seed(5, head=head5)
+    for label, spec in (('a target with no file', f'o/r#5={head5}={A}'), ('a target with no anchor', 'o/r#5'),
+                        ('a six-character head', f'o/r#5={head5[:6]}={A}={note}'),
+                        ('a six-character anchor', f'o/r#5={head5}={A[:6]}={note}'),
+                        ('a six-character anchor on a branch', f'o/r@main={A[:6]}={note}'),
+                        ('a branch target with no file', f'o/r@main={A}')):
+        code, out = gate(spec)
+        check(f'check refuses {label}', code != 0 and 'not OWNER/REPO#N=HEAD=ANCHOR=FILE' in out and state(5)['comments'] == [])
+
+    tip = '1' * 40
+    seed(90, head=tip, later=('2' * 40,))
+    seed(91, head='3' * 40, ancestors=('4' * 40,))
+    branches({'o/r': {'main': tip, 'claude/x-1': tip, 'dev': '3' * 40, 'x#1': '3' * 40, 'x': tip,
+                      'odd': {'out': 'odd\nnot a commit'}, 'framed': {'out': 'framed\nx' + '1' * 40},
+                      'short': {'out': 'short\n' + '1' * 7}, 'one': {'out': tip}, 'old': {'out': 'new\n' + tip}}})
+    code, out = gate(f'o/r@main={A}={names(A)}')
+    check('check passes an anchor in a branch\'s history', code == 0 and f'o/r@main: the anchor {A} is an ancestor of the head {tip[:7]}' in out)
+    code, out = gate(f'o/r@claude/x-1={tip[:7]}={names(tip)}')
+    check('check reads a branch whose name holds a slash, and passes its tip', code == 0 and 'o/r@claude/x-1: the anchor' in out and 'is the head' in out)
+    code, out = gate(f'o/r@dev={"4" * 7}={names("4" * 7)}')
+    check('check compares the anchor with the tip of the branch it names', code == 0 and 'ancestor of the head 3333333' in out)
+    code, out = gate(f'o/r@x#1={"4" * 7}={names("4" * 7)}')
+    check('check reads a branch whose name holds a hash, rather than the branch before the hash', code == 0 and 'ancestor of the head 3333333' in out)
+    code, out = gate(f'o/r@nosuch/../main={A}={names(A)}')
+    check('check fails a branch GitHub answers for under another name', code != 0 and "answered for the branch 'main'" in out)
+    code, out = gate(f'o/r@old={A}={names(A)}')
+    check('check fails a renamed branch that GitHub answers for under its new name', code != 0 and "answered for the branch 'new', not 'old'" in out)
+    code, out = gate(f'o/r@main={A}={names(A)}')
+    check('check says a branch target\'s file names the anchor, not the head', code == 0 and 'names the anchor, so it may post' in out)
+    code, out = gate(f'o/r@main={A}={names("4" * 7)}')
+    check('check fails a file that does not name the anchor on a branch', code != 0 and f'does not name the anchor {A}' in out)
+    for label, branch in (('gives no commit', 'odd'), ('gives a commit inside other text', 'framed'),
+                          ('gives a short commit', 'short'), ('gives one line', 'one')):
+        code, out = gate(f'o/r@{branch}={A}={names(A)}')
+        check(f'check fails a branch read that {label}', code != 0 and f'did not give the tip of {branch}' in out)
+    code, out = gate(f'o/r@main={"2" * 7}={names("2" * 7)}')
+    check('check fails an anchor that is ahead of the branch', code != 0 and 'is behind against the anchor' in out)
+    code, out = gate(f'o/r@gone={A}={names(A)}')
+    check('check fails a branch GitHub does not give', code != 0 and 'did not give the tip of gone' in out and 'post nothing' in out)
+    code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}', f'o/r@main={"2" * 7}={names("2" * 7)}')
+    check('check fails the whole run when one target fails', code != 0 and 'o/r#5: the anchor' not in out)
+
+    # The cost form runs no anchor check, so an anchor GitHub cannot compare still posts.
+    lost = '9' * 7
+    seed_issue(40)
+    code, out = price(anchor=lost, file=write_cost(COST.replace(A, lost)))
+    check('a cost post runs no anchor check', code == 0 and len(issue(40)) == 1)
 
 sys.exit(1 if failures else 0)
