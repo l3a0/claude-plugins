@@ -28,11 +28,11 @@ since anyone can comment on a public pull request. An anchor outside the
 head's history still stands when GitHub's timeline records a force push on
 that same pull request that replaced a head holding the anchor, such as a
 rebase, and the script says so. It cannot tell who pushed. A closing comment
-whose anchor stands that way must name the replaced head, because no lens read
-the head. It posts on none of them if a head differs, an anchor is neither in
-the head's history nor held by a head a recorded force push replaced, GitHub
-cannot answer either question, a closing comment does not name that replaced
-head, or an earlier comment has the same key with other text. The anchor check
+gets no such exception, because no lens read a head a force push wrote. It
+posts on none of them if a head differs, an anchor is neither in the head's
+history nor held by a head a recorded force push replaced, GitHub cannot
+answer either question, a closing comment's anchor stands only through a force
+push, or an earlier comment has the same key with other text. The anchor check
 catches an anchor copied from another branch or another pull request, unless a
 head a recorded force push replaced held it. It does not catch an earlier
 round's anchor, which is still an ancestor or held by a replaced head. It skips a pull request that already
@@ -413,26 +413,27 @@ def comment(args):
             wrong.append(f"{m['repo']}#{m['num']} is at {head[:width]}, not {m['head'][:width]}")
     if wrong:
         sys.exit("posting nothing, because a head does not match: " + "; ".join(wrong))
-    outside, unnamed, notes = [], [], []
+    outside, unread, notes = [], [], []
     for (m, text, heading), head in zip(targets, heads):
         found = {}
         why = outside_history(m["repo"], m["anchor"], head, num=m["num"], replaced=found)
         if why:
             outside.append(f"{m['repo']}#{m['num']}: {why}")
         elif found:
-            # A closing comment ends the review, and no lens read a head a force push wrote. Step 6 of
-            # review-round.md asks that comment to say so by naming the head the force push replaced.
-            if heading == FINAL and found["before"][:7] not in text:
-                unnamed.append(f"{m['repo']}#{m['num']}: {m['file']} does not name the replaced head "
-                               f"{found['before'][:7]}")
-            notes.append(f"{m['repo']}#{m['num']}: {found['note']}")
+            # A closing comment ends the review, and no lens read a head a force push wrote, so the review takes a
+            # round at the new head first, as step 6 of review-round.md says.
+            if heading == FINAL:
+                unread.append(f"{m['repo']}#{m['num']}: the anchor {m['anchor'][:7]} stands only because a force "
+                              f"push replaced {found['before'][:7]}")
+            else:
+                notes.append(f"{m['repo']}#{m['num']}: {found['note']}")
     if outside:
         sys.exit("posting nothing, because an anchor was not shown to be the head or an ancestor of it: " + "; ".join(outside)
                  + ". Check that each anchor is the commit this round's brief anchors at, and post nothing by hand")
-    if unnamed:
-        sys.exit(f"posting nothing, because a {FINAL!r} comment's anchor stands only through a force push, so no lens "
-                 "read the head, and review-round.md's step 6 asks the comment to say so and name the head the force "
-                 "push replaced: " + "; ".join(unnamed))
+    if unread:
+        sys.exit(f"posting nothing, because a {FINAL!r} comment would close the review at a head no lens read: "
+                 + "; ".join(unread) + ". Run a round at the new head first, whose comment can close the review, as "
+                 "review-round.md's step 6 says")
     for note in notes:
         print(note)
     login = run("gh", "api", "user", "--jq", ".login").strip()

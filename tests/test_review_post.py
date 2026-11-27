@@ -716,27 +716,31 @@ with tempfile.TemporaryDirectory() as ROOT:
     code, out = post(COMP, f'o/r#5={head5}={F}={unrelated}')
     check('a force-pushed anchor on one companion posts on both', code == 0 and len(state(5)['comments']) == 1
           and len(state(6, 'o-s')['comments']) == 1 and out.count('the anchor stands') == 1)
-    # A closing comment ends the review, and no lens read a head a force push wrote, so it must name the head the force
-    # push replaced, as review-round.md's step 6 says.
+    # A closing comment ends the review, and no lens read a head a force push wrote, so the script refuses one whose
+    # anchor stands only through a force push, whether the replaced head is the anchor or holds it, and whatever the
+    # text says. The review takes a round at the new head first, as review-round.md's step 6 says.
     closing_pushed = os.path.join(ROOT, 'closing-pushed.md')
-    with open(closing_pushed, 'w') as f:
-        f.write(f'## Review complete\n\nCloses round 3, of `{F}`, at `{"a" * 7}`.\n')
-    seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]},)))
-    code, out = post(f'o/r#5={head5}={F}={closing_pushed}')
-    check('refuses a closing comment whose anchor stands only through a force push and that does not name the '
-          'replaced head', code != 0 and f'does not name the replaced head {G[:7]}' in out
-          and "review-round.md's step 6" in out and state(5)['comments'] == [])
-    code, out = post(f'o/r#5={head5}={F}={closing_pushed}', '--dry-run')
-    check('a dry run refuses that closing comment too', code != 0 and 'does not name the replaced head' in out)
-    with open(closing_pushed, 'w') as f:
-        f.write(f'## Review complete\n\nCloses round 3, of `{F}`, at `{"a" * 7}`. A force push replaced `{G[:7]}`, '
-                'so no lens read this head.\n')
-    code, out = post(f'o/r#5={head5}={F}={closing_pushed}')
-    check('posts a closing comment that names the head the force push replaced', code == 0
-          and len(state(5)['comments']) == 1 and 'the anchor stands' in out)
-    seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]},)))
+    for label, push in (('holds', {'before': G, 'ancestors': ['f' * 40]}), ('is', {'before': 'f' * 40})):
+        replaced_7 = push['before'][:7]
+        with open(closing_pushed, 'w') as f:
+            f.write(f'## Review complete\n\nCloses round 3, of `{F}`, at `{"a" * 7}`. A force push replaced '
+                    f'`{replaced_7}`, so no lens read this head. Every commit was read.\n')
+        seed(5, **dict(pushed, replaced=(push,)))
+        code, out = post(f'o/r#5={head5}={F}={closing_pushed}')
+        check(f'refuses a closing comment whose anchor stands only through a force push, where the replaced head '
+              f'{label} the anchor, even one that names it', code != 0 and 'at a head no lens read' in out
+              and f'replaced {replaced_7}' in out and "review-round.md's step 6" in out
+              and 'the anchor stands' not in out and state(5)['comments'] == [])
+        code, out = post(f'o/r#5={head5}={F}={closing_pushed}', '--dry-run')
+        check(f'a dry run refuses that closing comment too, where the replaced head {label} the anchor', code != 0
+              and 'at a head no lens read' in out and 'would post' not in out)
+    seed(5, **dict(pushed, replaced=({'before': 'f' * 40},)))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
-    check('a round comment need not name the replaced head', code == 0 and len(state(5)['comments']) == 1)
+    check('a round comment whose anchor is the replaced head still posts', code == 0 and len(state(5)['comments']) == 1)
+    seed(5, head=head5)
+    code, out = post(f'o/r#5={head5}={A}={closing}')
+    check('a closing comment whose anchor is in the head\'s history still posts', code == 0
+          and len(state(5)['comments']) == 1)
 
     # Other callers, such as a check of a branch with no pull request, call the gate with three arguments and test
     # its answer for truth, so that form keeps its meaning and reads no force push.
