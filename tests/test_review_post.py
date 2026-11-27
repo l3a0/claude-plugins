@@ -787,35 +787,11 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('refuses and names a replaced head GitHub can no longer compare', code != 0
           and f"compare of the anchor with the replaced head {G[:7]} gave no usable answer" in out and 'Not Found' in out
           and f'replaced head {H[:7]}' not in out and state(5)['comments'] == [])
-    # A replaced head GitHub cannot read leaves the check for a round that read past the anchor incomplete, so the
-    # script refuses even where another replaced head holds the anchor, and even with such a round's comment present.
-    for comments in ((), (f'## Review, round 2\n\nRound 2, of `{F}`, fixed in `{G[:7]}`.\n',)):
-        seed(5, **dict(pushed, replaced=({'before': G, 'gone': True}, {'before': H, 'ancestors': ['f' * 40]}),
-                       comments=list(comments)))
-        code, out = post(f'o/r#5={head5}={F}={unrelated}')
-        check(f'refuses where one replaced head is gone and another holds the anchor, '
-              f'{"with" if comments else "without"} a round that read past it', code != 0
-              and 'cannot finish' in out and f'replaced head {G[:7]} gave no usable answer' in out
-              and 'the anchor stands' not in out and len(state(5)['comments']) == len(comments))
-    # Only the last replaced head that holds the anchor counts. A round that read an older history, which a later
-    # force push replaced while keeping the anchor, did not read past it on the history the last replaced head held.
-    seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]}, {'before': H, 'ancestors': ['f' * 40]}),
-                   comments=[f'## Review, round 2\n\nRound 2, of `{F}`, at `{G[:7]}`.\n']))
+    # Where one replaced head is gone and another holds the anchor, the anchor stands through the one that holds it.
+    seed(5, **dict(pushed, replaced=({'before': G, 'gone': True}, {'before': H, 'ancestors': ['f' * 40]})))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
-    check('posts where a round read past the anchor only on an older replaced history', code == 0
-          and len(state(5)['comments']) == 2 and f'replaced the head {H[:7]}' in out)
-    seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]}, {'before': 'f' * 40}),
-                   comments=[f'## Review, round 2\n\nRound 2, of `{F}`, at `{G[:7]}`.\n']))
-    code, out = post(f'o/r#5={head5}={F}={unrelated}')
-    check('posts where the anchor is itself the last replaced head, after an older one that held it', code == 0
-          and len(state(5)['comments']) == 2 and f'replaced the head {F}' in out)
-    # A head a force push restored and a later one replaced again counts where it last appears.
-    seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]}, {'before': H, 'ancestors': ['f' * 40]},
-                                     {'before': G, 'ancestors': ['f' * 40]}),
-                   comments=[f'## Review, round 2\n\nRound 2, of `{F}`, fixed in `{G[:7]}`.\n']))
-    code, out = post(f'o/r#5={head5}={F}={unrelated}')
-    check('refuses where the last replaced head holding the anchor is one an earlier force push also replaced',
-          code != 0 and 'another round read past this anchor' in out and len(state(5)['comments']) == 1)
+    check('posts where one replaced head is gone and another holds the anchor', code == 0
+          and len(state(5)['comments']) == 1 and f'replaced the head {H[:7]}' in out)
     # The force-push record is read only when GitHub answers behind or diverged. A compare that failed, or gave no
     # answer GitHub documents, still refuses, even where a replaced head holds the anchor.
     for label, extra, reason in (('GitHub cannot compare', dict(elsewhere=()), 'could not compare'),
@@ -830,24 +806,14 @@ with tempfile.TemporaryDirectory() as ROOT:
         why = load().outside_history('o/r', F, head5, num='5', replaced=gate_found)
         check(f'the gate with a number refuses an anchor {label} even where a replaced head holds it',
               isinstance(why, str) and reason in why and gate_found == {})
-    # PR #111's reuse check reads the commits the replaced head held after a force-pushed anchor, so an anchor
-    # copied forward from a round that read past it is refused, as it is without a force push.
+    # PR #111's reuse check reads the commits the head holds after the anchor, and the head holds none after an
+    # anchor that stands only through a force push, so the check refuses no reuse of it. That limit is stated in
+    # review-round.md's step 7, and l3a0/claude-plugins#120 holds the case.
     seed(5, **dict(pushed, replaced=({'before': G, 'ancestors': ['f' * 40]},),
                    comments=[f'## Review, round 2\n\nRound 2, of `{F}`, fixed in `{G[:7]}`.\n']))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
-    check('refuses a force-pushed anchor that an earlier round read past, naming the replaced head', code != 0
-          and 'another round read past this anchor' in out and f"names {F} as its anchor and also {G[:7]}" in out
-          and len(state(5)['comments']) == 1)
-    # Two force pushes each replaced a head that holds the anchor, and round 2 read the second one, so it read past
-    # the anchor too.
-    for first in ({'before': G, 'ancestors': ['f' * 40]}, {'before': 'f' * 40}):
-        seed(5, **dict(pushed, replaced=(first, {'before': H, 'ancestors': ['f' * 40]}),
-                       comments=[f'## Review, round 2\n\nRound 2, of `{H[:7]}`, at `{H[:7]}`.\n']))
-        code, out = post(f'o/r#5={head5}={F}={unrelated}')
-        check(f'refuses a force-pushed anchor a round read past through the second of two replaced heads, the first '
-              f'{"holding" if first["before"] == G else "being"} the anchor', code != 0
-              and 'another round read past this anchor' in out and f'reads {H[:7]} as its anchor' in out
-              and len(state(5)['comments']) == 1)
+    check('posts a force-pushed anchor that an earlier round read past, which the reuse check does not read (#120)',
+          code == 0 and len(state(5)['comments']) == 2 and 'the anchor stands' in out)
     seed(5, **dict(pushed, replaced=({'before': 'f' * 40},),
                    comments=[f'## Review, round 2\n\nRound 2, of `{F}`, at `{"f" * 7}`.\n']))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
