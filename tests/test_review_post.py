@@ -1012,4 +1012,91 @@ with tempfile.TemporaryDirectory() as ROOT:
     code, out = run('cost', 'o/r#41', '--round', '3', '--pull', 'o/r#5', '--anchor', A, '--file', cost_file)
     check('a cost post names the issue it was given', code != 0 and 'unexpected call' in out)
 
+    # The section form replaces one named section of the body and refuses a change anywhere else.
+    # The fixture names its Decision heading inside an earlier sentence, the shape that cut item 4
+    # of PR #110's What list when a hand edit sliced the body at the heading's name.
+    SECTIONED = """## Why
+
+Because.
+
+## What
+
+1. Adds the first thing.
+2. Names the reasoning under `## Decision`.
+3. Adds the third thing.
+
+## Decision
+
+Two facts decide it.
+
+1. The first fact.
+2. The second fact.
+
+## Scope
+
+Out of scope: nothing.
+
+```markdown
+## Decision
+```
+
+Closes #109
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+"""
+
+    def part(heading, text, *extra, num=30, **env):
+        path = os.path.join(ROOT, 'section.md')
+        with open(path, 'w', newline='') as f:
+            f.write(text)
+        return run('section', f'o/r#{num}', '--heading', heading, '--scratch', SCRATCH, '--file', path, *extra, **env)
+
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'One fact decides it.\n')
+    body = state(30)['body']
+    check('section replaces only the named section', code == 0 and 'One fact decides it.' in body and 'Two facts' not in body
+          and '2. Names the reasoning under `## Decision`.\n3. Adds the third thing.' in body and 'read back' in out)
+    check('section keeps the sections around it', body.startswith('## Why\n\nBecause.\n\n## What\n') and '\n\n## Scope\n\nOut of scope' in body
+          and body.endswith('Closes #109\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n'))
+    check('section saves the body as read', SECTIONED in saved_bodies())
+    code, out = part('## Decision', 'One fact decides it.\n')
+    check('a retried section edit changes nothing', code == 0 and state(30).get('edits') == 1 and 'nothing changed' in out)
+
+    seed(30, SECTIONED)
+    code, out = part('## Scope', 'Out of scope: #106 and #108.\n')
+    body = state(30)['body']
+    check('section ends the last section at the closing lines and footer', code == 0
+          and '## Scope\n\nOut of scope: #106 and #108.\n\nCloses #109\n\n🤖' in body and '```markdown' not in body)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'Fact.\n\n### A subheading inside\n\nMore.\n')
+    check('section takes a deeper heading inside its text', code == 0 and '### A subheading inside' in state(30)['body'])
+
+    for label, heading, text, want in (
+            ('a heading the body lacks', '## Missing', 'x\n', 'missing'),
+            ('a heading named at another level', '### Decision', 'x\n', 'not '),
+            ('a file holding a heading of the same level', '## Decision', 'x\n\n## Another\n', 'end the section early'),
+            ('a file holding a higher heading', '## Decision', '# Top\n', 'end the section early'),
+            ('a line that is not a heading', 'Decision', 'x\n', 'not a heading line'),
+            ('an empty heading', '## ', 'x\n', 'not a heading line')):
+        seed(30, SECTIONED)
+        code, out = part(heading, text)
+        check(f'section refuses {label}', code != 0 and want in out and state(30).get('edits') is None and 'Traceback' not in out)
+    seed(30, SECTIONED.replace('## Scope', '### Decision'))
+    code, out = part('## Decision', 'x\n')
+    check('section refuses a body where the heading\'s words name two headings', code != 0 and 'ambiguous' in out and state(30).get('edits') is None)
+    seed(30, SECTIONED.replace('## Decision\n\nTwo', '## decision\n\nTwo'))
+    code, out = part('## Decision', 'x\n')
+    check('section refuses a heading written another way, naming how it is written', code != 0 and "'## decision'" in out and state(30).get('edits') is None)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'One fact.\n', '--dry-run')
+    check('a section dry run sends nothing and prints the new section', code == 0 and state(30).get('edits') is None and '## Decision\n\nOne fact.' in out)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'One fact.\n', STUB_EDIT_ADDS='changed')
+    check('a section edit that reads back differently is reported', code != 0 and 'differs from what was sent' in out)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'One fact.\n', STUB_LOST='edit')
+    check('a lost section edit says the outcome is unknown', code != 0 and 'outcome is unknown' in out)
+    code, out = part('## Decision', 'One fact.\n')
+    check('the retry after a lost section edit sends nothing more', code == 0 and state(30)['edits'] == 1 and 'nothing changed' in out)
+
 sys.exit(1 if failures else 0)

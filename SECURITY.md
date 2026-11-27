@@ -63,7 +63,7 @@ exact access). Reports of particular interest:
   every comment on those pull requests and issues, which anyone can write on
   a public repository. In scope is any path where text in a pull request or an
   issue steers what it posts, or where it writes outside the body's
-  `## Revision` section.
+  `## Revision` section or the one section its `section` command names.
 - `diagram_words.py`, in `ask-team`, writes a local page that draws a
   repository's diagrams, whoever wrote them, with Mermaid loaded from
   `cdn.jsdelivr.net`. A content security policy on the page confines it. In

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Post a review round's comments and its cost on the issue, and edit a pull request's Revision section.
+"""Post a review round's comments and its cost on the issue, and edit a pull request's Revision section or another named section.
 
 Usage:
     review_post.py revision OWNER/REPO#N --scratch DIR --file PATH [--replace ITEM] [--dry-run]
+    review_post.py section OWNER/REPO#N --heading HEADING --scratch DIR --file PATH [--dry-run]
     review_post.py comment --round R OWNER/REPO#N=HEAD=ANCHOR=FILE [...] [--dry-run]
     review_post.py cost --round R OWNER/REPO#ISSUE --pull OWNER/REPO#N --anchor ANCHOR --file PATH [--dry-run]
 
@@ -18,6 +19,18 @@ number, and says to edit by hand. It refuses a line that starts with a list
 number or bullet of its own, such as `1. `, because the script numbers the
 item itself and would write `2. 1. `. It refuses rather than strips the mark,
 so the line in PATH is the line the section holds, and a retry finds it.
+
+`section` replaces the content of one named section of the body with the text
+in PATH, and keeps its heading. HEADING is the heading's whole line, such as
+`## Decision`. The section runs from that line to the next heading of the same
+or a higher level, or to the closing lines and footer when none follows.
+Headings inside code fences do not count. It sends nothing on a body where the
+heading's words appear on no heading or on more than one, at any level, or
+where PATH holds a heading of the section's level or higher, which would end
+the section early. Like `revision`, it saves the body as read, sends only when
+every changed line sits inside the section and a second run would change
+nothing, and reads the body back. So a retry changes nothing. It edits
+`## Revision` too, though `revision` is the command for adding one line there.
 
 `comment` takes each comment's heading from its file's first line. It refuses a
 file that does not start with a heading and name the round, its anchor and the
@@ -289,6 +302,87 @@ def revision(args):
         sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
                  f"As read before the edit: {saved}. As sent: {sent}")
     print(f"{repo}#{num}: {SECTION} updated and read back")
+
+
+def heading_level(line):
+    m = re.match(r"^ {0,3}(#{1,6})(\s+(.*?))?\s*#*\s*$", line.rstrip("\r"))
+    return (len(m[1]), (m[3] or "").strip().lower()) if m and HEADING.match(line) else None
+
+
+def section_bounds(lines, heading):
+    """Return (heading index, end) of the section the heading names, or exit naming why not."""
+    wanted = heading_level(heading)
+    visible = list(outside_fences(lines))
+    named = [i for i, line in visible if (found := heading_level(line)) and found[1] == wanted[1]]
+    if len(named) != 1:
+        sys.exit(f"the body has {len(named)} headings reading {wanted[1]!r}, so the section is "
+                 f"{'missing' if not named else 'ambiguous'}. Edit it by hand")
+    start = named[0]
+    if lines[start].rstrip("\r") != heading:
+        sys.exit(f"the heading is written {lines[start].rstrip()!r}, not {heading!r}. Name it as written")
+    level = wanted[0]
+    end = insertion_point(lines) if start < insertion_point(lines) else len(lines)
+    for i, line in visible:
+        if start < i < end and (found := heading_level(line)) and found[0] <= level:
+            end = i
+            break
+    return start, end
+
+
+def replace_section(body, heading, text):
+    """Return the new body, or None when the section already holds the text."""
+    lines = body.split("\n")
+    start, end = section_bounds(lines, heading)
+    content = text.strip("\n").split("\n")
+    rest = lines[end:]
+    new = lines[:start + 1] + [""] + content + ([""] if rest and rest[0].strip() else []) + rest
+    return None if new == lines else "\n".join(new)
+
+
+def section(args):
+    m = SPEC.match(args.pull)
+    if not m:
+        sys.exit(f"not OWNER/REPO#N: {args.pull}")
+    repo, num = m["repo"], m["num"]
+    if not heading_level(args.heading) or not heading_level(args.heading)[1]:
+        sys.exit(f"not a heading line such as '## Decision': {args.heading!r}")
+    with open(args.file, encoding="utf-8") as f:
+        text = f.read()
+    level = heading_level(args.heading)[0]
+    inner = [line for _, line in outside_fences(text.split("\n")) if (found := heading_level(line)) and found[0] <= level]
+    if inner:
+        sys.exit(f"{args.file} holds the heading {inner[0].strip()!r}, which would end the section early. "
+                 "Remove it, or edit by hand")
+    body = view(repo, num, "body")
+    os.makedirs(args.scratch, exist_ok=True)
+    name = f"body-{repo.replace('/', '-')}-{num}-"
+    saved = keep(name, args.scratch, body)
+    new = replace_section(body, args.heading, text)
+    if new is None:
+        print(f"{repo}#{num}: {args.heading} already holds this text, so nothing changed")
+        return
+    old_lines, new_lines = body.split("\n"), new.split("\n")
+    start, end = section_bounds(old_lines, args.heading)
+    rest = old_lines[end:]
+    if new_lines[:start + 1] != old_lines[:start + 1] or (rest and new_lines[-len(rest):] != rest):
+        sys.exit(f"{repo}#{num}: refusing to send, a line changed outside {args.heading}. The body as read is at {saved}")
+    if replace_section(new, args.heading, text) is not None:
+        sys.exit(f"{repo}#{num}: refusing to send, a second run would change the body again. Edit it by hand. "
+                 f"The body as read is at {saved}")
+    if args.dry_run:
+        print("\n".join(new_lines[start:len(new_lines) - len(rest)]))
+        return
+    sent = keep("sent-" + name, args.scratch, new)
+    write("gh", "pr", "edit", num, "-R", repo, "--body-file", sent, where=f"As read: {saved}. As sent: {sent}. ")
+    try:
+        back = view(repo, num, "body")
+    except SystemExit as failed:
+        sys.exit(f"{failed} The edit may have landed, so the outcome is unknown. Rerun this command, which "
+                 f"looks before it writes. As read: {saved}. As sent: {sent}")
+    if back != new:
+        sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
+                 f"As read before the edit: {saved}. As sent: {sent}")
+    print(f"{repo}#{num}: {args.heading} updated and read back")
 
 
 def first_line(text):
@@ -569,6 +663,14 @@ def main():
     edit.add_argument("--replace", type=int)
     edit.add_argument("--dry-run", action="store_true")
     edit.set_defaults(handler=revision)
+
+    part = commands.add_parser("section")
+    part.add_argument("pull")
+    part.add_argument("--heading", required=True)
+    part.add_argument("--scratch", required=True)
+    part.add_argument("--file", required=True)
+    part.add_argument("--dry-run", action="store_true")
+    part.set_defaults(handler=section)
 
     post = commands.add_parser("comment")
     post.add_argument("targets", nargs="+")
