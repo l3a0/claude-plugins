@@ -457,6 +457,12 @@ with tempfile.TemporaryDirectory() as ROOT:
         f.write(f'## Review, round 3\n\nRound 3, of `{B}`, fixed in `{"e" * 7}`.\n')
     code, out = post(MAIN, f'o/s#6={"e" * 40}={B}={moved}')
     check('posts on no companion when one head differs', code != 0 and state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
+    near = os.path.join(ROOT, 'near.md')
+    with open(near, 'w') as f:
+        f.write(f'## Review, round 3\n\nRound 3, of `{B}`, fixed in `{"d" * 6}e`.\n')
+    code, out = post(MAIN, f'o/s#6={"d" * 6 + "e" * 34}={B}={near}')
+    check('refuses a head that shares only its first characters with the real head', code != 0
+          and 'is at ddddddd' in out and state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
     check('names the head that differs', f'o/s#6 is at {head6[:7]}' in out)
 
     code, out = post(f'o/r#5={head5[:7]}={A}={note}')
@@ -609,6 +615,12 @@ with tempfile.TemporaryDirectory() as ROOT:
           and 'post nothing by hand' in out
           and state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
 
+    twin = 'a' * 7 + 'b' * 33
+    seed(5, head=head5, elsewhere=(twin,))
+    code, out = post(f'o/r#5={head5}={twin}={at_head}')
+    check('refuses an anchor that shares the head\'s first seven characters but is another commit', code != 0
+          and 'diverged' in out and state(5)['comments'] == [])
+
     seed(5, head=head5, later=('f' * 40,))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
     check('refuses an anchor that comes after the head, as after a force push back', code != 0
@@ -616,8 +628,8 @@ with tempfile.TemporaryDirectory() as ROOT:
 
     seed(5, head=head5, silent=('f' * 40,))
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
-    check('refuses an anchor whose compare prints no status', code != 0 and 'against the anchor' in out
-          and state(5)['comments'] == [])
+    check('refuses an anchor whose compare prints no status, and says GitHub gave no documented answer', code != 0
+          and 'none of ahead' in out and state(5)['comments'] == [])
 
     seed(5, head=head5)
     code, out = post(f'o/r#5={head5}={F}={unrelated}')

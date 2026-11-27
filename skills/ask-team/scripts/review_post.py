@@ -272,6 +272,9 @@ def outside_history(repo, anchor, head):
     # Two commits that differ never compare "identical", so only "ahead" passes.
     if status == "ahead":
         return None
+    if status not in ("behind", "diverged", "identical"):
+        return (f"GitHub compared {anchor[:7]} with the head {head[:7]} and answered {status!r}, which is none of "
+                f"ahead, behind, diverged, identical")
     return f"the head {head[:7]} is {status} against the anchor {anchor[:7]}, so the anchor is not in its history"
 
 

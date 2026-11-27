@@ -124,6 +124,8 @@ def anchor(repo, num, checkout):
     return line, head
 
 
+# The four answers GitHub documents. Two different commits never compare "identical", which is listed because GitHub
+# documents it, not because a run reaches it.
 STATUSES = ("ahead", "behind", "diverged", "identical")
 
 

@@ -468,6 +468,10 @@ with tempfile.TemporaryDirectory() as BIN:
         check(f'--next stops on a compare answer GitHub does not document ({answer!r})', code != 0
               and 'none of ahead' in out
               and not os.path.exists(os.path.join(SCRATCH, 'fixture-odd.md')))
+    code, out = nxt(fixture, 'fixture-odd-fix.md', '--fix', 'eeeeeee5555', 'ccccccc9999', STUB_FIX_STATUS='unknown',
+                    **merged)
+    check('--next stops on an undocumented answer for the fix against the head', code != 0 and 'none of ahead' in out
+          and not os.path.exists(os.path.join(SCRATCH, 'fixture-odd-fix.md')))
     code, out = nxt(fixture, 'fixture-odd-nofix.md', 'ccccccc9999', STUB_OLD_STATUS=' ', **dict(merged, STUB_FIX='none'))
     check('--next with no --fix stops on an empty compare answer', code != 0 and 'none of ahead' in out
           and not os.path.exists(os.path.join(SCRATCH, 'fixture-odd-nofix.md')))
