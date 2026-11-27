@@ -7,12 +7,14 @@ On 2026-11-26 a merge resolved a conflict on `.claude-plugin/plugin.json`'s
 version line by writing the version alone, and the `description` line, which
 sat inside the same conflict, was dropped. Every check passed and two pull
 requests carried the loss to main. This test fails on that loss: the manifest
-must carry a description that names each skill under `skills/`, a version, and
-the fields the marketplace reads.
+must carry a description that names each skill under `skills/`, a version in
+the form `scripts/next_version.py` reads, and the author, repository and license
+fields.
 """
 
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -32,7 +34,8 @@ for field in ("name", "description", "version", "author", "repository", "license
     check(f"plugin.json has a non-empty {field}", bool(manifest.get(field)))
 description = manifest.get("description", "")
 for skill in skills:
-    check(f"the description names the {skill} skill", skill in description)
-check("the version reads as three numbers", len(str(manifest.get("version", "")).split(".")) == 3)
+    named = re.search(rf"(?<![\w-]){re.escape(skill)}(?![\w-])", description) is not None
+    check(f"the description names the {skill} skill", named)
+check("the version reads as three numbers", re.fullmatch(r"\d+\.\d+\.\d+", str(manifest.get("version", ""))) is not None)
 
 sys.exit(1 if failures else 0)
