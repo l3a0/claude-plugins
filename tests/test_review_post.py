@@ -44,6 +44,8 @@ if args[0] == 'api' and args[1].startswith('repos/') and '/compare/' in args[1]:
             print('diverged')
         elif any(c.startswith(anchor) for c in pr.get('later', [])):
             print('behind')
+        elif any(c.startswith(anchor) for c in pr.get('silent', [])):
+            print('')
         else:
             sys.exit('gh: Not Found (HTTP 404)')
         sys.exit(0)
@@ -135,9 +137,9 @@ with tempfile.TemporaryDirectory() as ROOT:
 
     # Every anchor the comment tests name, bbbbbbb and ccccccc, is an ancestor of the head unless a test says otherwise.
     def seed(num, body=BODY, head='a' * 40, comments=(), repo='o-r', login='me', ancestors=('b' * 40, 'c' * 40),
-             elsewhere=(), later=()):
+             elsewhere=(), later=(), silent=()):
         with open(os.path.join(STATE, f'{repo}-{num}.json'), 'w') as f:
-            json.dump({'body': body, 'headRefOid': head, 'ancestors': list(ancestors), 'elsewhere': list(elsewhere), 'later': list(later),
+            json.dump({'body': body, 'headRefOid': head, 'ancestors': list(ancestors), 'elsewhere': list(elsewhere), 'later': list(later), 'silent': list(silent),
                        'comments': [{'author': {'login': login}, 'body': c} for c in comments]}, f)
 
     def state(num, repo='o-r'):
@@ -610,6 +612,10 @@ with tempfile.TemporaryDirectory() as ROOT:
     code, out = post(f'o/r#5={head5}={F}={unrelated}')
     check('refuses an anchor that comes after the head, as after a force push back', code != 0
           and 'behind' in out and state(5)['comments'] == [])
+
+    seed(5, head=head5, silent=('f' * 40,))
+    code, out = post(f'o/r#5={head5}={F}={unrelated}')
+    check('refuses an anchor whose compare prints no status', code != 0 and state(5)['comments'] == [])
 
     seed(5, head=head5)
     code, out = post(f'o/r#5={head5}={F}={unrelated}')

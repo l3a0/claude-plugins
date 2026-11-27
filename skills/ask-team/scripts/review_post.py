@@ -18,23 +18,23 @@ number or bullet of its own, such as `1. `, because the script numbers the
 item itself and would write `2. 1. `. It refuses rather than strips the mark,
 so the line in PATH is the line the section holds, and a retry finds it.
 
-`comment` takes each comment's heading from its file's first line. It refuses a
-file that does not start with a heading and name the round, its anchor and the
-head, because a retry could not recognise that post, and a pull request named
-twice. It then checks every pull request's head, that each anchor is the head or
-an ancestor of it on GitHub, and every earlier comment by the same login, since
-anyone can comment on a public pull request. It posts on none of them if a head
-differs, an anchor lies outside the head's history, or an earlier comment has
-the same key with other text. The anchor check catches an anchor copied from
-another branch or another pull request, and one a force push dropped, and it
-cannot tell the two apart, so nothing should post around it by hand.
-`review-round.md`'s step 7 says where a round's findings go when a force push
-dropped its anchor. It does not catch an earlier
-round's anchor, which is still an ancestor. It skips a pull request that
-already carries this comment, so a retry posts only what is missing. GitHub takes no key on a comment, so this narrows
-the window for a double post rather than closing it. So it counts the copies
-after posting, and exits non-zero naming any pull request that does not hold
-exactly one.
+`comment` takes each comment's heading from its file's first line. It refuses
+a file that does not start with a heading and name the round, its anchor and
+the head, because a retry could not recognise that post, and a pull request
+named twice. It then checks every pull request's head, that each anchor is the
+head or an ancestor of it on GitHub, and every earlier comment by the same
+login, since anyone can comment on a public pull request. It posts on none of
+them if a head differs, an anchor lies outside the head's history, or an
+earlier comment has the same key with other text. The anchor check catches an
+anchor copied from another branch or another pull request, and one a force
+push dropped, and it cannot tell the two apart, so nothing should post around
+it by hand. l3a0/claude-plugins#108 decides what a review does after a force
+push drops an anchor. The anchor check does not catch an earlier round's
+anchor, which is still an ancestor. It skips a pull request that already
+carries this comment, so a retry posts only what is missing. GitHub takes no
+key on a comment, so this narrows the window for a double post rather than
+closing it. So it counts the copies after posting, and exits non-zero naming
+any pull request that does not hold exactly one.
 
 A write that fails says the outcome is unknown, since the request may have
 landed. Rerun the same command, which looks before it writes. The tests run
@@ -308,8 +308,7 @@ def comment(args):
                if (why := outside_history(m["repo"], m["anchor"], head))]
     if outside:
         sys.exit("posting nothing, because an anchor is neither the head nor an ancestor of it: " + "; ".join(outside)
-                 + ". Check that each anchor is the commit this round's brief anchors at, and post nothing by hand. "
-                 "Where a force push dropped it, review-round.md's step 7 says where the round's findings go")
+                 + ". Check that each anchor is the commit this round's brief anchors at, and post nothing by hand")
     login = run("gh", "api", "user", "--jq", ".login").strip()
     pending, doubled = [], []
     for m, text, heading in targets:

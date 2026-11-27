@@ -21,10 +21,12 @@ named for every pull request the brief lists, or bare when it lists one. FIX is
 the commit that holds the last round's fixes, where a later commit, such as a
 merge of the base, sits on top of it. It defaults to HEAD, and the run stops on
 a FIX that GitHub does not show as HEAD or an ancestor of it. Where the last
-round's head is not FIX or an ancestor of it, as after a force push such as a
-rebase, or GitHub cannot compare the two, it says so on standard error,
-because the diff from that head to FIX then also holds what the push brought.
-The run changes four things and keeps every other line.
+round's head is not FIX or an ancestor of it, it stops when HEAD still holds
+that head, because FIX then names a commit from before the round's fixes. When
+HEAD does not hold it, as after a force push such as a rebase, it says so on
+standard error and writes the brief, because the diff from that head to FIX
+then holds more than the round's fixes. l3a0/claude-plugins#108 decides what a
+round reads then. The run changes four things and keeps every other line.
 
 1. The round number at the end of the title goes up by one.
 2. Each item's first line is printed again from GitHub, as the first form
@@ -241,17 +243,18 @@ def next_brief(previous, out, specs, fix_specs=()):
                 sys.exit(f"{it['repo']} PR #{it['num']}'s head {head[:7]} is {status} against the fix {fix[:7]}, so "
                          f"the fix is not in the head's history. Name a fixing commit the head holds. Writing nothing")
         if not same(old, fix):
-            done = subprocess.run(("gh", "api", f"repos/{it['repo']}/compare/{old}...{fix}", "--jq", ".status"),
-                                  capture_output=True, text=True)
-            status = done.stdout.strip()
-            if done.returncode or status != "ahead":
-                found = (f"GitHub could not compare round {finished}'s head {old} with the fix {fix[:7]}: "
-                         f"{done.stderr.strip()}" if done.returncode else
-                         f"round {finished}'s head {old} is not in the history of the fix {fix[:7]} on GitHub, which "
-                         f"answers {status}")
-                print(f"{it['repo']} PR #{it['num']}: {found}, as after a force push such as a rebase. "
-                      f"`git diff {old} {fix[:7]}` then also holds what the push brought, so leave that out of the "
-                      f"blank as for a merge of the base", file=sys.stderr)
+            status = run("gh", "api", f"repos/{it['repo']}/compare/{old}...{fix}", "--jq", ".status")
+            if status != "ahead":
+                # The head drops the last head only where it neither is that head nor descends from it.
+                dropped = fix == head or (not same(old, head) and run(
+                    "gh", "api", f"repos/{it['repo']}/compare/{old}...{head}", "--jq", ".status") != "ahead")
+                if not dropped:
+                    sys.exit(f"{it['repo']} PR #{it['num']}'s fix {fix[:7]} is {status} against round {finished}'s "
+                             f"head {old}, which the head still holds, so the fix names a commit from before the "
+                             f"round's fixes. Name a fixing commit that comes after {old}. Writing nothing")
+                print(f"{it['repo']} PR #{it['num']}: round {finished}'s head {old} is not in the head's history on "
+                      f"GitHub, as after a force push such as a rebase, so `git diff {old} {fix[:7]}` holds more than "
+                      f"the round's fixes. l3a0/claude-plugins#108 decides what a round reads then", file=sys.stderr)
         rounds.append((finished, old))
         listed = ", ".join(f"round {r} `{h}`" for r, h in rounds)
         lines[i] = f"{it['n']}. {line} Earlier rounds read {listed}."

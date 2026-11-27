@@ -58,7 +58,7 @@ Round <N>, of `<anchor sha>`, at list prices, with output a lower bound:
 3. Sum: at least <dollars> US dollars, <tokens> tokens.
 <4. Any other loop that served this round, such as reading a source.>
 
-The figures cover <every companion pull request, linked>. <What dominated, if one kind of token did.> <The main thread's checks in step 4 ran in its own context and are not counted.> Earlier rounds' figures are in their own comments and are not repeated here, apart from a round whose anchor a force push dropped, whose findings and cost this comment carries, as `review-round.md`'s step 7 says.
+The figures cover <every companion pull request, linked>. <What dominated, if one kind of token did.> <The main thread's checks in step 4 ran in its own context and are not counted.> Earlier rounds' figures are in their own comments and are not repeated here.
 
 <Where the `l3a0:loop-cost` skill's `## Name what a skill could save` places its outcome here.>
 
