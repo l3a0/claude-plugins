@@ -230,17 +230,16 @@ full reasoning.
 The runner restores every file when it ends, including on Ctrl-C, SIGTERM or SIGHUP, which it
 turns into an ordinary exit. SIGKILL cannot be caught, so a run killed that way leaves the current mutant in
 place. Copy each file back from `backup/` in the `--out` folder, where the runner wrote a byte copy
-of every file under its own path, such as `backup/a/b.py`, before the first mutant. A file
-`backup/.clean` marks that the worktree matches `backup/`: applying a mutant removes it and each
-restore writes it again. So a run that finds `backup/` without it, holding other bytes than the
+of every file under its own path, such as `backup/a/b.py`, before the first mutant, and
+nothing else. A file `clean` beside `backup/` in `--out` marks that the worktree matches
+`backup/`: applying a mutant removes it and each restore writes it again. So a run that finds `backup/` without it, holding other bytes than the
 worktree, comes after one killed with a mutant applied, and it refuses to start rather than
 overwrite the only copy of an original. Compare each file it names with `backup/` before
 copying anything back, since an edit made on purpose differs too. A run that finds the marker
 empties `backup/` and takes fresh backups, so editing a file between runs is fine. Without
 `--out` the folder is `~/.cache/fast-mutation/<hash of root>`, created for the user alone, so a
 rerun finds the earlier backups and no other user can plant one. Each mutated `file` must be a
-plain path relative to `root`, with no `.` or `..` part, because its backup is kept under that
-path. The
+plain path relative to `root`, with no `..` part, because its backup is kept under that path. The
 runner prints the `--out` path before the baseline runs, so a killed run still shows where it is. Any of those
 signals arriving during the last restore is ignored, so it cannot cut the restore short. After
 a normal run they work again once it is done. After a stop signal they stay ignored until the

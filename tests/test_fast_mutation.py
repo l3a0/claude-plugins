@@ -182,7 +182,7 @@ with tempfile.TemporaryDirectory() as root:
     backup = os.path.join(root, 'out', 'backup')
     with open(os.path.join(backup, 'a__b.py')) as f, open(os.path.join(backup, 'a', 'b.py')) as g:
         check('keeps each backup under its own path', code == 0 and f.read() == 'A = 1\n' and g.read() == 'B = 1\n')
-    check('marks the worktree clean after a normal run', os.path.exists(os.path.join(backup, '.clean')))
+    check('marks the worktree clean after a normal run', os.path.exists(os.path.join(root, 'out', 'clean')))
 
     with open(os.path.join(repo, 'a', 'b.py'), 'w') as f:
         f.write('B = 1\nC = 3\n')
@@ -205,7 +205,7 @@ with tempfile.TemporaryDirectory() as root:
     # Killing the whole group stands in for a kill -9 and leaves no test script running.
     os.killpg(proc.pid, signal.SIGKILL)
     proc.wait(timeout=60)
-    check('a kill -9 during a mutant leaves no clean marker', seen and not os.path.exists(os.path.join(killed, 'backup', '.clean')))
+    check('a kill -9 during a mutant leaves no clean marker', seen and not os.path.exists(os.path.join(killed, 'clean')))
     done = subprocess.run([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'], capture_output=True,
                           text=True, stdin=subprocess.DEVNULL)
     with open(os.path.join(killed, 'backup', 'a', 'b.py')) as f:
@@ -221,6 +221,32 @@ with tempfile.TemporaryDirectory() as root:
                           text=True, stdin=subprocess.DEVNULL)
     check('reruns once the worktree matches the backup a killed run left', done.returncode == 0)
 
+    for name in ('.d.py', '.x.tmp'):
+        with open(os.path.join(repo, name), 'w') as f:
+            f.write('V = 1\n')
+        dotted = os.path.join(root, 'out-dot' + name)
+        hidden = {'name': 'hidden', 'file': name, 'edits': [['V = 1', 'V = 2']], 'select': ['tests/slow.py', '120']}
+        path = os.path.join(root, 'spec-dot.json')
+        with open(path, 'w') as f:
+            json.dump(dict(spec, mutants=[hidden], timeout=300), f)
+        proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', dotted, '--no-escalate'], start_new_session=True,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+        seen, deadline = False, time.monotonic() + 90
+        while time.monotonic() < deadline and not seen:
+            with open(os.path.join(repo, name)) as f:
+                seen = 'V = 2' in f.read()
+            time.sleep(0.05)
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait(timeout=60)
+        with open(path, 'w') as f:
+            json.dump(dict(spec, mutants=[dict(hidden, select=['tests/near.py'])]), f)
+        done = subprocess.run([sys.executable, SCRIPT, path, '--out', dotted, '--no-escalate'], capture_output=True,
+                              text=True, stdin=subprocess.DEVNULL)
+        with open(os.path.join(dotted, 'backup', name)) as f:
+            check(f'refuses to overwrite the backup a killed run left of {name}', seen and done.returncode != 0
+                  and 'ended with a mutant applied' in done.stdout + done.stderr and f.read() == 'V = 1\n')
+        os.remove(os.path.join(repo, name))
+
     path = os.path.join(root, 'spec-kill-base.json')
     with open(path, 'w') as f:
         json.dump(dict(spec, baseline=['tests/slow.py', '120'], mutants=[both[1]], timeout=300), f)
@@ -228,10 +254,10 @@ with tempfile.TemporaryDirectory() as root:
     proc = subprocess.Popen([sys.executable, SCRIPT, path, '--out', killed, '--no-escalate'], start_new_session=True,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
     deadline = time.monotonic() + 90
-    while time.monotonic() < deadline and not os.path.exists(os.path.join(killed, 'backup', '.clean')):
+    while time.monotonic() < deadline and not os.path.exists(os.path.join(killed, 'clean')):
         time.sleep(0.05)
     time.sleep(0.5)
-    in_baseline = os.path.exists(os.path.join(killed, 'backup', '.clean')) and proc.poll() is None
+    in_baseline = os.path.exists(os.path.join(killed, 'clean')) and proc.poll() is None
     os.killpg(proc.pid, signal.SIGKILL)
     proc.wait(timeout=60)
     check('the kill lands during the baseline', in_baseline)
@@ -246,17 +272,23 @@ with tempfile.TemporaryDirectory() as root:
     path = os.path.join(root, 'spec-default.json')
     with open(path, 'w') as f:
         json.dump(dict(spec, mutants=spec['mutants'][:1]), f)
+    # HOME points at the scratch folder, so the default folder is made there and not in the real ~/.cache.
+    home = os.path.join(root, 'home')
+    os.makedirs(home)
     outs = []
     for _ in range(2):
         done = subprocess.run([sys.executable, SCRIPT, path, '--no-escalate'], capture_output=True, text=True,
-                              stdin=subprocess.DEVNULL)
+                              stdin=subprocess.DEVNULL, env=dict(os.environ, HOME=home))
         outs.append(done.stdout.splitlines()[0])
     check('without --out a rerun uses the same folder', outs[0] == outs[1] and outs[0].startswith('out '))
     folder = outs[0][len('out '):]
     check('without --out the folder is under the user cache, for the user alone',
-          folder.startswith(os.path.realpath(os.path.expanduser('~/.cache/fast-mutation')) + os.sep)
+          folder.startswith(os.path.realpath(os.path.join(home, '.cache', 'fast-mutation')) + os.sep)
           and stat.S_IMODE(os.stat(folder).st_mode) == 0o700)
-    shutil.rmtree(folder, ignore_errors=True)
+    os.chmod(folder, 0o755)
+    subprocess.run([sys.executable, SCRIPT, path, '--no-escalate'], capture_output=True, stdin=subprocess.DEVNULL,
+                   env=dict(os.environ, HOME=home))
+    check('a default folder found with looser permissions is made private again', stat.S_IMODE(os.stat(folder).st_mode) == 0o700)
 
     code, out, rows = run(dict(spec, mutants=[both[1]]), '--no-escalate')
     code, out, rows = run(dict(spec, mutants=spec['mutants'][:1]), '--no-escalate')

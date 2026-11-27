@@ -69,12 +69,13 @@ reads red, not timeout. The baseline and escalation run the whole suite, so they
 selection, because the coverage map is a pytest plugin.
 Workers are not used.
 
-Every mutated ``file`` must be a plain path relative to ``root``, with no ``.`` or ``..`` part,
+Every mutated ``file`` must be a plain path relative to ``root``, with no ``..`` part,
 that resolves inside ``root`` and has no second hard link, or the run stops before it writes
 anything. SIGINT (Ctrl-C), SIGTERM and SIGHUP restore every file before the runner exits, and any of
 them arriving during that last restore is ignored. SIGKILL cannot be caught, so after one, copy each
 file back from ``backup/`` in --out, which holds each file under its path, such as
-``backup/a/b.py``. ``backup/.clean`` marks that the worktree matches ``backup/``, so a run that
+``backup/a/b.py``, and holds nothing else. ``clean`` in --out marks that the worktree matches
+``backup/``, so a run that
 finds ``backup/`` without it, holding other bytes than the worktree, refuses to start, and one
 that finds it empties ``backup/`` before taking fresh backups. Without --out the folder is
 ``~/.cache/fast-mutation/<hash of root>``, created for the user alone, so a rerun finds it. The runner prints the --out path before
@@ -151,7 +152,7 @@ def pytest(spec: dict, root: Path, args: list[str], env: dict | None = None,
 STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 _stopped = False
 _restored = False
-# backup/.clean while the worktree matches backup/. Applying a mutant removes it, and a restore
+# --out/clean while the worktree matches backup/. Applying a mutant removes it, and a restore
 # writes it again.
 _clean_marker: Path | None = None
 
@@ -552,9 +553,9 @@ def main() -> int:
 
     files = sorted({m["file"] for m in mutants})
     # backup/ keys each copy on this path, so it must not climb out or be absolute.
-    unplain = [f for f in files if Path(f).is_absolute() or any(p in (".", "..") for p in Path(f).parts)]
+    unplain = [f for f in files if Path(f).is_absolute() or ".." in Path(f).parts]
     if unplain:
-        raise SystemExit(f"a mutated file must be a plain path relative to root, with no . or .. part: {', '.join(unplain)}")
+        raise SystemExit(f"a mutated file must be a plain path relative to root, with no .. part: {', '.join(unplain)}")
     outside = [f for f in files if not (root / f).resolve().is_relative_to(root)]
     if outside:
         raise SystemExit(f"every mutated file must sit inside root {root}: {', '.join(outside)}")
@@ -564,13 +565,14 @@ def main() -> int:
         raise SystemExit(f"a mutated file has another hard link, which may sit outside root: {', '.join(linked)}")
     backups = {f: (root / f).read_bytes() for f in files}
     backup_dir = out / "backup"
-    marker = backup_dir / ".clean"
+    # The marker and the write-in-progress file sit beside backup/, so backup/ holds only backups
+    # and the check below reads every file in it.
+    marker = out / "clean"
+    pending = out / "backup.writing"
     # A backup/ without its marker comes from a run that ended with a mutant applied, so it may
     # hold the only copy of a file's original bytes. A rerun must not overwrite it.
     if backup_dir.exists() and not marker.exists():
-        held = [p.relative_to(backup_dir).as_posix() for p in sorted(backup_dir.rglob("*"))
-                if p.is_file() and p != marker
-                and not (p.name.startswith(".") and p.name.endswith(".tmp"))]
+        held = [p.relative_to(backup_dir).as_posix() for p in sorted(backup_dir.rglob("*")) if p.is_file()]
         differ = [f for f in held if not (root / f).is_file() or (root / f).read_bytes() != (backup_dir / f).read_bytes()]
         if differ:
             raise SystemExit(f"backup/ in {out} is from a run that ended with a mutant applied, and"
@@ -585,9 +587,8 @@ def main() -> int:
     for f, data in backups.items():
         dest = backup_dir / f
         dest.parent.mkdir(parents=True, exist_ok=True)
-        tmp = dest.with_name(f".{dest.name}.tmp")
-        tmp.write_bytes(data)
-        os.replace(tmp, dest)
+        pending.write_bytes(data)
+        os.replace(pending, dest)
     marker.write_text("")
     global _clean_marker
     _clean_marker = marker
