@@ -21,11 +21,15 @@ so the line in PATH is the line the section holds, and a retry finds it.
 `comment` takes each comment's heading from its file's first line. It refuses a
 file that does not start with a heading and name the round, its anchor and the
 head, because a retry could not recognise that post, and a pull request named
-twice. It then checks every pull request's head, and every earlier comment by
-the same login, since anyone can comment on a public pull request, and posts on
-none of them if a head differs or an earlier comment has the same key with other
-text. It skips a pull request that already carries this comment, so a retry
-posts only what is missing. GitHub takes no key on a comment, so this narrows
+twice. It then checks every pull request's head, that each anchor is the head or
+an ancestor of it on GitHub, and every earlier comment by the same login, since
+anyone can comment on a public pull request. It posts on none of them if a head
+differs, an anchor lies outside the head's history, or an earlier comment has
+the same key with other text. The anchor check catches an anchor copied from
+another branch or another pull request, or one a force push dropped, after
+which the review starts again at the new head. It does not catch an earlier
+round's anchor, which is still an ancestor. It skips a pull request that
+already carries this comment, so a retry posts only what is missing. GitHub takes no key on a comment, so this narrows
 the window for a double post rather than closing it. So it counts the copies
 after posting, and exits non-zero naming any pull request that does not hold
 exactly one.
@@ -252,6 +256,22 @@ def copies(m, heading, round_no, login):
             if (c.get("author") or {}).get("login") == login and carries(c["body"], heading, round_no, m["anchor"])]
 
 
+def outside_history(repo, anchor, head):
+    """Return why the anchor is not the head or an ancestor of it, or None when it is."""
+    if head.startswith(anchor):
+        return None
+    # GitHub's compare API says "ahead" when the second commit descends from the first, and answers 404 for a
+    # commit the repository does not hold.
+    done = subprocess.run(("gh", "api", f"repos/{repo}/compare/{anchor}...{head}", "--jq", ".status"),
+                          capture_output=True, text=True)
+    if done.returncode:
+        return f"GitHub could not compare {anchor[:7]} with the head {head[:7]}: {done.stderr.strip()}"
+    status = done.stdout.strip()
+    if status in ("ahead", "identical"):
+        return None
+    return f"the head {head[:7]} is {status} against the anchor {anchor[:7]}, so the anchor is not in its history"
+
+
 def comment(args):
     targets, seen = [], set()
     for spec in args.targets:
@@ -273,13 +293,18 @@ def comment(args):
             sys.exit(f"posting nothing, because {m['repo']}#{m['num']} is named twice")
         seen.add(pull)
         targets.append((m, text, heading))
-    wrong = []
+    wrong, heads = [], []
     for m, _, _ in targets:
         head = view(m["repo"], m["num"], "headRefOid")
+        heads.append(head)
         if not head.startswith(m["head"]):
             wrong.append(f"{m['repo']}#{m['num']} is at {head[:7]}, not {m['head'][:7]}")
     if wrong:
         sys.exit("posting nothing, because a head does not match: " + "; ".join(wrong))
+    outside = [f"{m['repo']}#{m['num']}: {why}" for (m, _, _), head in zip(targets, heads)
+               if (why := outside_history(m["repo"], m["anchor"], head))]
+    if outside:
+        sys.exit("posting nothing, because an anchor is neither the head nor an ancestor of it: " + "; ".join(outside))
     login = run("gh", "api", "user", "--jq", ".login").strip()
     pending, doubled = [], []
     for m, text, heading in targets:

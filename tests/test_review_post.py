@@ -27,6 +27,25 @@ if args[:2] == ['api', 'user']:
     if args[2:4] != ['--jq', '.login']: fail()
     print(login)
     sys.exit(0)
+if args[0] == 'api' and args[1].startswith('repos/') and '/compare/' in args[1]:
+    # GitHub's compare API: "ahead" when the head descends from the anchor, 404 for a commit the repository lacks.
+    if args[2:] != ['--jq', '.status']: fail()
+    repo, span = args[1][len('repos/'):].split('/compare/')
+    anchor, head = span.split('...')
+    prefix = repo.replace('/', '-') + '-'
+    # Several seeded pull requests share a head, so the one seeded last answers.
+    names = [n for n in os.listdir(state) if n.startswith(prefix) and n.endswith('.json')]
+    for name in sorted(names, key=lambda n: os.stat(os.path.join(state, n)).st_mtime_ns, reverse=True):
+        pr = json.load(open(os.path.join(state, name)))
+        if pr['headRefOid'] != head: continue
+        if any(c.startswith(anchor) for c in pr.get('ancestors', [])):
+            print('ahead')
+        elif any(c.startswith(anchor) for c in pr.get('elsewhere', [])):
+            print('diverged')
+        else:
+            sys.exit('gh: Not Found (HTTP 404)')
+        sys.exit(0)
+    fail()
 if args[0] != 'pr' or args[3] != '-R': fail()
 path = os.path.join(state, args[4].replace('/', '-') + '-' + args[2] + '.json')
 if not os.path.exists(path): fail()
@@ -112,9 +131,11 @@ with tempfile.TemporaryDirectory() as ROOT:
         f.write(GH)
     os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC)
 
-    def seed(num, body=BODY, head='a' * 40, comments=(), repo='o-r', login='me'):
+    # Every anchor the comment tests name, bbbbbbb and ccccccc, is an ancestor of the head unless a test says otherwise.
+    def seed(num, body=BODY, head='a' * 40, comments=(), repo='o-r', login='me', ancestors=('b' * 40, 'c' * 40),
+             elsewhere=()):
         with open(os.path.join(STATE, f'{repo}-{num}.json'), 'w') as f:
-            json.dump({'body': body, 'headRefOid': head,
+            json.dump({'body': body, 'headRefOid': head, 'ancestors': list(ancestors), 'elsewhere': list(elsewhere),
                        'comments': [{'author': {'login': login}, 'body': c} for c in comments]}, f)
 
     def state(num, repo='o-r'):
@@ -558,6 +579,37 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed(5, head=head5)
     code, out = post(MAIN, STUB_READ_FAIL='pr view')
     check('a failed pull request read stops with the gh call named', code != 0 and 'failed' in out and state(5)['comments'] == [])
+
+    # The anchor must be the head or an ancestor of it. Round 8 of l3a0/ithildin-runtime PR #238 posted with another
+    # round's anchor, which this check would not have caught, because that anchor was an ancestor too.
+    seed(5, head=head5)
+    code, out = post(MAIN)
+    check('posts with an anchor that is an ancestor of the head', code == 0 and len(state(5)['comments']) == 1)
+
+    at_head = os.path.join(ROOT, 'at-head.md')
+    with open(at_head, 'w') as f:
+        f.write(f'## Review, round 3\n\nRound 3, of `{"a" * 7}`, at `{"a" * 7}`.\n')
+    seed(5, head=head5, ancestors=())
+    code, out = post(f'o/r#5={head5}={"a" * 7}={at_head}')
+    check('posts with an anchor that is the head itself', code == 0 and len(state(5)['comments']) == 1)
+
+    F = 'f' * 7
+    unrelated = os.path.join(ROOT, 'unrelated.md')
+    with open(unrelated, 'w') as f:
+        f.write(f'## Review, round 3\n\nRound 3, of `{F}`, fixed in `{"a" * 7}`.\n')
+    seed(5, head=head5, elsewhere=('f' * 40,)), seed(6, head=head6, repo='o-s')
+    code, out = post(COMP, f'o/r#5={head5}={F}={unrelated}')
+    check('refuses an anchor on another branch, and posts on no companion', code != 0
+          and 'neither the head nor an ancestor' in out and 'diverged' in out and f'o/r#5' in out
+          and state(5)['comments'] == [] and state(6, 'o-s')['comments'] == [])
+
+    seed(5, head=head5)
+    code, out = post(f'o/r#5={head5}={F}={unrelated}')
+    check('refuses an anchor the repository does not hold', code != 0 and 'could not compare' in out
+          and 'Not Found' in out and state(5)['comments'] == [])
+
+    code, out = post(f'o/r#5={head5}={F}={unrelated}', '--dry-run')
+    check('a dry run checks the anchor too', code != 0 and 'neither the head nor an ancestor' in out)
 
     code, out = post('not-a-target')
     check('refuses a malformed target', code != 0 and 'OWNER/REPO#N=HEAD=ANCHOR=FILE' in out)

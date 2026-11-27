@@ -5,13 +5,15 @@
 
 The stand-ins answer from environment variables, so the test needs no network and no GitHub login. The stand-in
 `gh` gives the merge base and the base branch's tip different commits, so a script that read the wrong one fails.
-The `--next` cases write a round 1 brief from the script's own items, then write later rounds from it.
+The `--next` cases write a round 1 brief from the script's own items, then write later rounds from it. One also
+starts from `fixtures/review-brief-round-1.md`, a whole brief whose round 1 head had the base merged on top of its fix.
 Each stand-in also checks its arguments and fails on a call to the wrong repository, pull request, commit or
 checkout, so a script that dropped `-R` or `-C` fails too.
 """
 import os, stat, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+FIXTURE = os.path.join(HERE, 'fixtures', 'review-brief-round-1.md')
 SCRIPT = os.path.join(HERE, '..', 'skills', 'ask-team', 'scripts', 'brief_anchors.py')
 
 GH = '''#!/bin/sh
@@ -25,6 +27,8 @@ case "$*" in
       "$sha" "${STUB_HEAD_REF:-feat}" "${STUB_BASE:-main}" "${STUB_STATE:-OPEN}";;
   "api repos/$(cat "$d/last_repo")/compare/${STUB_BASE:-main}...$(cat "$d/last_sha") "*)
     case "$*" in *merge_base_commit*) echo "${STUB_MB:-bbbbbbb2222}";; *) echo "ddddddd3333";; esac;;
+  "api repos/$(cat "$d/last_repo")/compare/${STUB_FIX:-none}...$(cat "$d/last_sha") --jq .status")
+    echo "${STUB_FIX_STATUS:-ahead}";;
   *) echo "stand-in gh: unexpected call: $*" >&2; exit 1;;
 esac
 '''
@@ -367,6 +371,51 @@ with tempfile.TemporaryDirectory() as BIN:
     code, out = nxt(brief('swapped.md', swapped), 'swapped-out.md', 'fffffff6666', STUB_SHA='fffffff6666')
     check('--next stops on earlier anchors out of order', code != 0 and 'earlier rounds 2, 1' in out
           and not os.path.exists(os.path.join(SCRATCH, 'swapped-out.md')))
+
+    # A round whose fix sits under a merge of the base: the next round anchors at the merge, and reads only the fix.
+    with open(FIXTURE) as f:
+        FIX_R1 = f.read()
+    fixture = brief('fixture-r1.md', FIX_R1)
+    merged = dict(STUB_SHA='ccccccc9999', STUB_LOCAL='ccccccc9999', STUB_FIX='eeeeeee5555')
+    code, out = nxt(fixture, 'fixture-r2.md', '--fix', 'eeeeeee5555', 'ccccccc9999', **merged)
+    fr2 = read(os.path.join(SCRATCH, 'fixture-r2.md')) if code == 0 else ''
+    check('--next --fix exits 0 on the fixture brief', code == 0)
+    check('--next --fix moves the subject to the new round and head', fr2.startswith(
+        '# Review brief: settle an order, round 2\n') and '1. **o/r PR #5**, head `ccccccc`' in fr2
+          and 'Earlier rounds read round 1 `aaaaaaa`.\n' in fr2)
+    check('--next --fix names the diff from the last anchor to the fix, not to the new head',
+          "<This round reads round 1's fixes: `git -C /co diff aaaaaaa eeeeeee` on o/r PR #5," in fr2
+          and 'diff aaaaaaa ccccccc' not in fr2)
+    check('--next --fix moves the archive line to the new head, not to the fix', 'archive ccccccc | tar' in fr2)
+    scope = FIX_R1[FIX_R1.index('## Out of scope'):]
+    check('--next --fix carries the out-of-scope list forward unchanged', fr2.endswith(scope)
+          and fr2.count('## Out of scope') == 1)
+
+    code, out = nxt(fixture, 'fixture-named.md', '--fix', 'o/r#5=eeeeeee5555', 'o/r#5=ccccccc9999', **merged)
+    check('--next takes --fix OWNER/REPO#N=FIX', code == 0
+          and 'diff aaaaaaa eeeeeee' in read(os.path.join(SCRATCH, 'fixture-named.md')))
+
+    code, out = nxt(fixture, 'fixture-diverged.md', '--fix', 'eeeeeee5555', 'ccccccc9999', STUB_FIX_STATUS='diverged',
+                    **merged)
+    check('--next stops on a fix outside the head\'s history, and writes nothing', code != 0
+          and 'not in the head\'s history' in out and 'diverged' in out
+          and not os.path.exists(os.path.join(SCRATCH, 'fixture-diverged.md')))
+    code, out = nxt(fixture, 'fixture-unknown.md', '--fix', 'eeeeeee5555', 'ccccccc9999',
+                    **dict(merged, STUB_FIX='1234567'))
+    check('--next stops on a fix GitHub cannot compare', code != 0 and 'failed' in out
+          and not os.path.exists(os.path.join(SCRATCH, 'fixture-unknown.md')))
+    code, out = nxt(fixture, 'fixture-other.md', '--fix', 'o/t#7=eeeeeee5555', 'ccccccc9999', **merged)
+    check('--next refuses a fix for a pull request the brief does not list', code != 0 and 'no such pull request' in out)
+    code, out = nxt(fixture, 'fixture-twice.md', '--fix', 'eeeeeee5555', '--fix', 'o/r#5=eeeeeee5555', 'ccccccc9999',
+                    **merged)
+    check('--next refuses two fixes for one pull request', code != 0)
+    code, out = nxt(fixture, 'fixture-dangling.md', 'ccccccc9999', '--fix', **merged)
+    check('--next refuses a --fix with no commit after it', code != 0 and '--fix' in out)
+    code, out = nxt(fixture, 'fixture-heads.md', 'o/r#5=ccccccc9999', 'o/r#5=ddddddd1234', **merged)
+    check('--next refuses two heads for one pull request', code != 0 and 'named twice' in out)
+    code, out = nxt(fixture, 'fixture-same.md', '--fix', 'ccccccc', 'ccccccc9999', **dict(merged, STUB_FIX='unused'))
+    check('--next takes a fix that is the head itself, with no compare call', code == 0
+          and 'diff aaaaaaa ccccccc' in read(os.path.join(SCRATCH, 'fixture-same.md')))
 
 print('all passed' if not failures else f'{failures} failed')
 sys.exit(1 if failures else 0)

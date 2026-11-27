@@ -3,8 +3,8 @@
 
 Usage:
     brief_anchors.py OWNER/REPO#N[=CHECKOUT] [OWNER/REPO#N[=CHECKOUT] ...]
-    brief_anchors.py --next PREVIOUS_BRIEF --out NEW_BRIEF OWNER/REPO#N=HEAD [OWNER/REPO#N=HEAD ...]
-    brief_anchors.py --next PREVIOUS_BRIEF --out NEW_BRIEF HEAD
+    brief_anchors.py --next PREVIOUS_BRIEF --out NEW_BRIEF [--fix OWNER/REPO#N=FIX ...] OWNER/REPO#N=HEAD [...]
+    brief_anchors.py --next PREVIOUS_BRIEF --out NEW_BRIEF [--fix FIX] HEAD
 
 The first form prints one numbered item per pull request, with its head
 commit, the merge base it is diffed against, its branch, its checkout and its
@@ -17,8 +17,11 @@ session writes by hand.
 
 The `--next` form reads a brief this script's items anchor, and writes the
 next round's brief to NEW_BRIEF. HEAD is the commit the next round anchors at,
-named for every pull request the brief lists, or bare when it lists one. It
-changes four things and keeps every other line.
+named for every pull request the brief lists, or bare when it lists one. FIX is
+the commit that holds the last round's fixes, where a later commit, such as a
+merge of the base, sits on top of it. It defaults to HEAD, and the run stops on
+a FIX that GitHub does not show as HEAD or an ancestor of it. The run changes
+four things and keeps every other line.
 
 1. The round number at the end of the title goes up by one.
 2. Each item's first line is printed again from GitHub, as the first form
@@ -30,7 +33,8 @@ changes four things and keeps every other line.
    one. One that names another commit stops the run.
 4. The paragraph that starts `This round reads`, with any list right under
    it and the indented lines inside that list, is replaced by a blank, in
-   angle brackets, for the session to fill. It reads the Markdown by pattern
+   angle brackets, for the session to fill. The blank names the diff from
+   the last round's head to FIX. It reads the Markdown by pattern
    rather than with a parser, so each line it replaces from the first one that
    starts like a list item on is named on standard error, where a misread
    shows. It never replaces an item line. A
@@ -146,7 +150,28 @@ def block_end(lines, i):
     return i
 
 
-def next_brief(previous, out, specs):
+def resolve(specs, names, what):
+    """Map each spec to the pull request it names, keyed by OWNER/REPO#N in lower case."""
+    found = {}
+    for spec in specs:
+        s = NEXT_SPEC.match(spec)
+        if not s:
+            sys.exit(f"not OWNER/REPO#N={what} or {what}: {spec}")
+        if s["repo"] is None:
+            if len(specs) != 1 or len(names) != 1:
+                sys.exit(f"a bare {what} works only for a brief that lists one pull request")
+            key = names[0].lower()
+        else:
+            key = f"{s['repo']}#{s['num']}".lower()
+        if key not in (n.lower() for n in names):
+            sys.exit(f"{spec}: the brief lists no such pull request")
+        if key in found:
+            sys.exit(f"{spec}: that pull request's {what} is named twice")
+        found[key] = s["head"]
+    return found
+
+
+def next_brief(previous, out, specs, fix_specs=()):
     if os.path.exists(out):
         sys.exit(f"{out} already exists. Writing nothing, so a brief already filled is not overwritten")
     with open(previous, encoding="utf-8") as f:
@@ -166,20 +191,8 @@ def next_brief(previous, out, specs):
     if len(set(n.lower() for n in names)) != len(names):
         sys.exit(f"{previous}: a pull request is listed twice")
 
-    heads = {}
-    for spec in specs:
-        s = NEXT_SPEC.match(spec)
-        if not s:
-            sys.exit(f"not OWNER/REPO#N=HEAD or HEAD: {spec}")
-        if s["repo"] is None:
-            if len(specs) != 1 or len(names) != 1:
-                sys.exit("a bare HEAD works only for a brief that lists one pull request")
-            key = names[0].lower()
-        else:
-            key = f"{s['repo']}#{s['num']}".lower()
-        if key not in (n.lower() for n in names):
-            sys.exit(f"{spec}: the brief lists no such pull request")
-        heads[key] = s["head"]
+    heads = resolve(specs, names, "HEAD")
+    fixes = resolve(fix_specs, names, "FIX")
     missing = [n for n in names if n.lower() not in heads]
     if missing:
         sys.exit(f"name the head for every pull request the brief lists. Missing: {', '.join(missing)}")
@@ -207,13 +220,20 @@ def next_brief(previous, out, specs):
         if not same(head, want):
             sys.exit(f"{it['repo']} PR #{it['num']} is at {head[:7]} on GitHub, not {want[:7]}. Push the fix "
                      f"first, or name the head GitHub shows. Writing nothing")
+        fix = fixes.get(f"{it['repo']}#{it['num']}".lower(), head)
+        if not same(head, fix):
+            # "ahead" means the head descends from the fix, as for the merge base above.
+            status = run("gh", "api", f"repos/{it['repo']}/compare/{fix}...{head}", "--jq", ".status")
+            if status not in ("ahead", "identical"):
+                sys.exit(f"{it['repo']} PR #{it['num']}'s head {head[:7]} is {status} against the fix {fix[:7]}, so "
+                         f"the fix is not in the head's history. Name a fixing commit the head holds. Writing nothing")
         rounds.append((finished, old))
         listed = ", ".join(f"round {r} `{h}`" for r, h in rounds)
         lines[i] = f"{it['n']}. {line} Earlier rounds read {listed}."
-        moves.append((it, old, head[:7], checkout["checkout"] if checkout else "<checkout>"))
+        moves.append((it, old, head[:7], fix[:7], checkout["checkout"] if checkout else "<checkout>"))
 
-    diffs = "; ".join(f"`git -C {where} diff {old} {new}` on {it['repo']} PR #{it['num']}"
-                      for it, old, new, where in moves)
+    diffs = "; ".join(f"`git -C {where} diff {old} {fix}` on {it['repo']} PR #{it['num']}"
+                      for it, old, _, fix, where in moves)
     blank = (f"<This round reads round {finished}'s fixes: {diffs}, leaving out what a merge of the base "
              "brought, and any passage or function that diff touches or that states the same fact. Name those "
              "here, say so where a fix rewrote the subject and the round reads the whole change, and remove the "
@@ -252,7 +272,7 @@ def next_brief(previous, out, specs):
     # The old paragraph is gone by now, so an earlier round's commit it named stops nothing.
     def archived(match):
         sha = match[1]
-        for _, old, new, _ in moves:
+        for _, old, new, _, _ in moves:
             if same(sha, old):
                 return f"archive {new}"
         sys.exit(f"{previous}: an archive line names {sha}, which is no pull request's round {finished} head. "
@@ -265,7 +285,7 @@ def next_brief(previous, out, specs):
     for n, line in enumerate(lines, 1):
         if n - 1 in skip:
             continue
-        for it, old, new, _ in moves:
+        for it, old, new, _, _ in moves:
             if old != new and re.search(rf"\b{old}", line):
                 print(f"line {n} still names round {finished}'s head {old} of {it['repo']} PR #{it['num']}: "
                       f"{line.strip()}", file=sys.stderr)
@@ -283,9 +303,21 @@ def main(argv):
     if argv[0] != "--next":
         print_anchors(argv)
         return
+    usage = "usage: brief_anchors.py --next PREVIOUS_BRIEF --out NEW_BRIEF [--fix OWNER/REPO#N=FIX ...] OWNER/REPO#N=HEAD [...]"
     if len(argv) < 5 or argv[2] != "--out":
-        sys.exit("usage: brief_anchors.py --next PREVIOUS_BRIEF --out NEW_BRIEF OWNER/REPO#N=HEAD [...]")
-    next_brief(argv[1], argv[3], argv[4:])
+        sys.exit(usage)
+    specs, fixes, rest = [], [], argv[4:]
+    while rest:
+        if rest[0] == "--fix":
+            if len(rest) < 2:
+                sys.exit(usage)
+            fixes.append(rest[1])
+            rest = rest[2:]
+        else:
+            specs.append(rest.pop(0))
+    if not specs:
+        sys.exit(usage)
+    next_brief(argv[1], argv[3], specs, fixes)
 
 
 if __name__ == "__main__":
