@@ -234,7 +234,10 @@ of every file before the first mutant, naming `a/b.py` as `a__b.py`. The runner 
 `--out` path before the baseline runs, so a killed run still shows where it is. Any of those
 signals arriving during the last restore is ignored, so it cannot cut the restore short. After
 a normal run they work again once it is done. After a stop signal they stay ignored until the
-runner exits. A restore that hangs can still be stopped with Ctrl-\ or
+runner exits, and a signal that lands just before the last restore starts runs it a second
+time. Python runs a signal handler only between bytecodes, so these steps narrow the window in
+which a signal can skip a restore, and cannot close it. After any exit code other than 0, 2 or
+3, compare the worktree with `backup/`. A restore that hangs can still be stopped with Ctrl-\ or
 `kill -9`, after which `backup/` holds the copy. The runner also refuses a file with
 a second hard link, because the root check cannot see where the other link sits.
 

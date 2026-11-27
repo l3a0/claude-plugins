@@ -143,6 +143,7 @@ def pytest(spec: dict, root: Path, args: list[str], env: dict | None = None,
 
 
 STOP_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+_stopped = False
 
 
 def quiet_signals() -> None:
@@ -156,7 +157,9 @@ def exit_on_signal(signum, frame) -> None:
 
     Later signals are ignored first, so a second Ctrl-C or SIGTERM cannot interrupt that restore.
     """
+    global _stopped
     quiet_signals()
+    _stopped = True
     raise SystemExit(128 + signum)
 
 
@@ -164,9 +167,9 @@ def finish(restore) -> None:
     """The last restore, with every stop signal ignored, so one arriving now cannot cut it short.
 
     A signal that lands while the handlers are being saved or switched still reaches the restore,
-    through ``finally``. The handlers come back afterwards, so after a normal run a run blocked
-    writing its results can still be stopped. After a stop signal they were already set to ignore,
-    so they stay ignored until the process exits.
+    through ``finally``. After a normal run the handlers come back afterwards, so a run blocked
+    writing its results can still be stopped. After a stop signal they stay ignored until the
+    process exits.
     """
     saved = {}
     try:
@@ -177,8 +180,24 @@ def finish(restore) -> None:
         try:
             restore()
         finally:
-            for sig, handler in saved.items():
-                signal.signal(sig, handler)
+            if not _stopped:
+                for sig, handler in saved.items():
+                    signal.signal(sig, handler)
+
+
+def last_restore(restore) -> None:
+    """``finish``, run again when a stop signal lands before ``finish`` has switched the handlers.
+
+    By then ``exit_on_signal`` has set every stop signal to ignore, so the second run cannot be
+    interrupted. Python runs a signal handler only between bytecodes, so this narrows the window
+    in which a signal can skip the restore to the call itself, and ``backup/`` in --out stays the
+    copy to trust after any exit other than 0, 2 or 3.
+    """
+    try:
+        finish(restore)
+    except SystemExit:
+        finish(restore)
+        raise
 
 
 def is_script(spec: dict) -> bool:
@@ -573,7 +592,7 @@ def main() -> int:
             print("the spec has no escalate selection, so the survivors were not escalated.",
                   flush=True)
     finally:
-        finish(restore)
+        last_restore(restore)
 
     with (out / "results.jsonl").open("w") as fh:
         for row in rows:

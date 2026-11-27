@@ -226,6 +226,7 @@ try:
     mutate.exit_on_signal(signal.SIGTERM, None)
 except SystemExit as stop:
     print('exit', stop.code, all(signal.getsignal(s) == signal.SIG_IGN for s in names))
+mutate._stopped = False
 for s in names:
     signal.signal(s, signal.default_int_handler if s == signal.SIGINT else signal.SIG_DFL)
 def defaults():
@@ -268,6 +269,40 @@ try:
     mutate.finish(lambda: done.append(True))
 except SystemExit as stop:
     print('save window', stop.code, done == [True])
+real, calls, done = mutate.finish, [], []
+def entered(restore):
+    calls.append(True)
+    if len(calls) == 1:
+        raise SystemExit(143)
+    real(restore)
+mutate.finish = entered
+try:
+    mutate.last_restore(lambda: done.append(True))
+except SystemExit as stop:
+    print('entry window', stop.code, done == [True], len(calls))
+mutate.finish, mutate._stopped = real, False
+defaults()
+try:
+    mutate.exit_on_signal(signal.SIGTERM, None)
+except SystemExit:
+    pass
+mutate.finish(lambda: None)
+print('stay ignored after a stop', all(signal.getsignal(s) == signal.SIG_IGN for s in names))
+mutate._stopped = False
+for s in names:
+    signal.signal(s, mutate.exit_on_signal)
+count, getsignal = [], signal.getsignal
+def mid_save(sig):
+    count.append(sig)
+    if len(count) == 2:
+        signal.getsignal = getsignal
+        mutate.exit_on_signal(signal.SIGTERM, None)
+    return getsignal(sig)
+signal.getsignal = mid_save
+try:
+    mutate.finish(lambda: None)
+except SystemExit as stop:
+    print('mid save', stop.code, all(signal.getsignal(s) == signal.SIG_IGN for s in names))
 '''
 done = subprocess.run([sys.executable, '-c', UNIT, SCRIPT], capture_output=True, text=True)
 lines = done.stdout.splitlines()
@@ -281,7 +316,10 @@ check('a signal while the handlers are being switched still reaches the restore'
 check('a signal while the handlers are being saved still reaches the restore', 'save window 130 True' in lines)
 with open(SCRIPT) as f:
     source = f.read()
-check("main's last restore runs through finish", 'finally:\n        finish(restore)\n' in source)
+check('a signal as the last restore is entered gets a second restore', 'entry window 143 True 2' in lines)
+check('after a stop signal the stop signals stay ignored', 'stay ignored after a stop True' in lines
+      and 'mid save 143 True' in lines)
+check("main's last restore runs through last_restore", 'finally:\n        last_restore(restore)\n' in source)
 
 print('all passed' if not failures else f'{failures} failed')
 sys.exit(1 if failures else 0)
