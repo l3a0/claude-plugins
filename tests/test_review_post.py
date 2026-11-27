@@ -490,15 +490,16 @@ with tempfile.TemporaryDirectory() as ROOT:
     closing = os.path.join(ROOT, 'closing.md')
     with open(closing, 'w') as f:
         f.write(f'## Review complete\n\nCloses round 3, of `{A}`, at `{"a" * 7}`.\n')
+    # Two rounds that share an anchor need --reread, so these two tests pass it, and they test only the retry key.
     seed(5, head=head5, comments=[f'## Review complete\n\nCloses round 2, of `{A}`.\n'])
-    code, out = post(f'o/r#5={head5}={A}={closing}')
+    code, out = post(f'o/r#5={head5}={A}={closing}', '--reread', 'o/r#5')
     check('a comment on another round does not block the post', len(state(5)['comments']) == 2)
 
     round13 = os.path.join(ROOT, 'round13.md')
     with open(round13, 'w') as f:
         f.write(f'## Review complete\n\nRound 1, of `{A}`, at `{"a" * 7}`.\n')
     seed(5, head=head5, comments=[f'## Review complete\n\nRound 13, of `{A}`.\n'])
-    code, out = post(f'o/r#5={head5}={A}={round13}', round_no='1')
+    code, out = post(f'o/r#5={head5}={A}={round13}', '--reread', 'o/r#5', round_no='1')
     check('round 1 does not match a comment on round 13', code == 0 and len(state(5)['comments']) == 2)
 
     seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 3, of `{A}`.\n'])
@@ -602,7 +603,8 @@ with tempfile.TemporaryDirectory() as ROOT:
     check('a failed pull request read stops with the gh call named', code != 0 and 'failed' in out and state(5)['comments'] == [])
 
     # The anchor must be the head or an ancestor of it. Round 8 of l3a0/ithildin-runtime PR #238 posted with another
-    # round's anchor, which this check would not have caught, because that anchor was an ancestor too.
+    # round's anchor, which this check does not catch, because that anchor was an ancestor too. The tests after these
+    # cover the check that does.
     seed(5, head=head5)
     code, out = post(MAIN)
     check('posts with an anchor that is an ancestor of the head', code == 0 and len(state(5)['comments']) == 1)
@@ -654,6 +656,103 @@ with tempfile.TemporaryDirectory() as ROOT:
 
     code, out = post(f'o/r#5={head5}={F}={unrelated}', '--dry-run')
     check('a dry run checks the anchor too', code != 0 and 'an anchor was not shown to be the head or an ancestor' in out)
+
+    # Two rounds do not share an anchor, unless nothing was pushed on that pull request between them.
+    E = 'e' * 7
+    round2 = f'## Review, round 2\n\nRound 2, of `{E}`, fixed in `{A}`.\n'
+    seed(5, head=head5, comments=[round2, f'## Review, round 2\n\nRound 2, of `{A}`, fixed in `{"a" * 7}`.\n'])
+    seed(6, head=head6, repo='o-s')
+    code, out = post(MAIN, COMP)
+    check("refuses an anchor an earlier round's comment names as its own, and posts on no companion", code != 0
+          and 'another round\'s comment already names this anchor' in out and f'o/r#5: round 2 already named {A}' in out
+          and f'the head is {head5[:7]}' in out and '--reread o/r#5' in out and 'o/s#6:' not in out
+          and len(state(5)['comments']) == 2 and state(6, 'o-s')['comments'] == [])
+    code, out = post(MAIN, '--dry-run')
+    check('a dry run refuses an earlier round\'s anchor too', code != 0 and 'already named' in out and 'would post' not in out)
+    seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2, of `{A + "b" * 33}`, fixed in `{"a" * 7}`.\n'])
+    code, out = post(MAIN)
+    check('an earlier round that names the anchor in full is refused against seven characters', code != 0
+          and 'already named' in out and len(state(5)['comments']) == 1)
+    seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2, of `{A + "c" * 33}`, fixed in `{"a" * 7}`.\n'])
+    code, out = post(f'o/r#5={head5}={"b" * 40}={note}')
+    check('an earlier anchor that shares only the first seven characters is another commit', code == 0
+          and len(state(5)['comments']) == 2)
+    seed(5, head=head5, comments=[f'## Review, round 4\n\nRound 4, of `{A}`, fixed in `{"a" * 7}`.\n'])
+    code, out = post(MAIN)
+    check('refuses an anchor a later round named too', code != 0 and 'round 4 already named' in out)
+    seed(5, head=head5, comments=[f'## Review, round 1\n\nRound 1, of `{A}`.\n', f'## Review, round 2\n\nRound 2, of `{A}`.\n'])
+    code, out = post(MAIN)
+    check('names every other round that used the anchor', code != 0 and 'round 1, 2 already named' in out)
+    seed(5, head=head5, comments=[f'## Review complete\n\nCloses round 2 of `{A}`, at `{"a" * 7}`.\n'])
+    code, out = post(MAIN)
+    check("reads a closing comment's 'round K of <anchor>' written without the comma", code != 0
+          and 'round 2 already named' in out and len(state(5)['comments']) == 1)
+
+    seed(5, head=head5, comments=[round2])
+    code, out = post(MAIN)
+    check("a fresh anchor posts where the earlier round's comment names it only as its fix", code == 0
+          and len(state(5)['comments']) == 2 and 'posted' in out)
+    code, out = post(MAIN)
+    check('a retry of the same round still skips its own comment', code == 0 and 'skipped' in out
+          and len(state(5)['comments']) == 2)
+
+    seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2, of `{A}`.\n'], login='stranger')
+    code, out = post(MAIN)
+    check("another login's comment on another round does not stop the post", code == 0 and len(state(5)['comments']) == 2)
+    seed(5, head=head5, comments=[f'Owner ruling, 2026-11-27: round 2, of `{A}`, stands.\n'])
+    code, out = post(MAIN)
+    check('a comment that opens without a heading is not read as a round', code == 0 and len(state(5)['comments']) == 2)
+    seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2 read `{A}`.\n'])
+    code, out = post(MAIN)
+    check("a comment that does not say 'round K, of' is not read", code == 0 and len(state(5)['comments']) == 2)
+
+    # A round rerun on the same commit after a lens failed keeps its number, since round 3 posts only after its lenses.
+    seed(5, head=head5, comments=[round2])
+    code, out = post(MAIN)
+    check('a rerun of round 3 on the same commit, with round 3 not yet posted, posts under its number', code == 0
+          and len(state(5)['comments']) == 2)
+    # Once round 3 has posted at a commit that is still the head, reading it again is a round of its own.
+    read_head = f'## Review, round 3\n\nRound 3, of `{"a" * 7}`, at `{"a" * 7}`, changes nothing.\n'
+    again = os.path.join(ROOT, 'again.md')
+    with open(again, 'w') as f:
+        f.write(f'## Review, round 4\n\nRound 4, of `{"a" * 7}`, at `{"a" * 7}`, reads it again.\n')
+    seed(5, head=head5, comments=[read_head], ancestors=())
+    code, out = post(f'o/r#5={head5}={"a" * 7}={again}', round_no='4')
+    check('a round that reads the head an earlier round read posts', code == 0 and len(state(5)['comments']) == 2)
+
+    # A companion round 2 left alone is read at the same commit by round 3, whose fixes then move its head.
+    seed(5, head=head5, comments=[round2])
+    seed(6, head=head6, repo='o-s', comments=[f'## Review, round 2\n\nRound 2, of `{B}`, at `{B}`, changes nothing here.\n'])
+    code, out = post(MAIN, COMP)
+    check('a companion read again at the commit an earlier round read is refused without --reread', code != 0
+          and f'o/s#6: round 2 already named {B}' in out and '--reread o/s#6' in out and 'o/r#5:' not in out
+          and len(state(5)['comments']) == 1 and len(state(6, 'o-s')['comments']) == 1)
+    code, out = post(MAIN, COMP, '--reread', 'o/s#6')
+    check('--reread posts on the companion read at the same commit', code == 0 and len(state(5)['comments']) == 2
+          and len(state(6, 'o-s')['comments']) == 2)
+    seed(5, head=head5, comments=[f'## Review, round 2\n\nRound 2, of `{A}`.\n'])
+    seed(6, head=head6, repo='o-s', comments=[f'## Review, round 2\n\nRound 2, of `{B}`.\n'])
+    code, out = post(MAIN, COMP, '--reread', 'O/S#06')
+    check('--reread skips the check for the pull request it names alone', code != 0 and 'o/r#5: round 2' in out
+          and 'o/s#6: round 2' not in out and len(state(5)['comments']) == 1 and len(state(6, 'o-s')['comments']) == 1)
+    code, out = post(MAIN, '--reread', 'o/s#6')
+    check('refuses --reread on a pull request it is not posting on', code != 0 and 'does not name one of the pull requests' in out
+          and len(state(5)['comments']) == 1)
+    code, out = post(MAIN, '--reread', 'o-r-5')
+    check('refuses a malformed --reread', code != 0 and 'OWNER/REPO#N' in out and len(state(5)['comments']) == 1)
+
+    first = os.path.join(ROOT, 'first.md')
+    with open(first, 'w') as f:
+        f.write(f'## Review, round 3\n\nRound 2, of `{E}`, left one finding. Round 3, of `{A}`, fixed in `{"a" * 7}`.\n')
+    seed(5, head=head5)
+    code, out = post(f'o/r#5={head5}={A}={first}')
+    check("refuses a file whose first 'round K, of' names another round", code != 0
+          and 'a later round could not read which anchor' in out and state(5)['comments'] == [])
+    with open(first, 'w') as f:
+        f.write(f'## Review, round 3\n\nThis is round 3 at `{A}`, fixed in `{"a" * 7}`.\n')
+    code, out = post(f'o/r#5={head5}={A}={first}')
+    check("refuses a file that does not say 'round K, of <anchor>'", code != 0
+          and 'a later round could not read which anchor' in out and state(5)['comments'] == [])
 
     code, out = post('not-a-target')
     check('refuses a malformed target', code != 0 and 'OWNER/REPO#N=HEAD=ANCHOR=FILE' in out)
