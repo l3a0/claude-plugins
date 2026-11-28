@@ -104,6 +104,28 @@ if args[0] not in ('pr', 'issue') or args[3] != '-R': fail()
 path = os.path.join(state, ('issue-' if args[0] == 'issue' else '') + args[4].replace('/', '-') + '-' + args[2] + '.json')
 if not os.path.exists(path): fail()
 pr = json.load(open(path))
+if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesReferences':
+    # GitHub's own reading of closing keywords, approximated: a keyword, an optional colon, then #N, outside fences.
+    import re
+    text, fence = [], False
+    for line in pr['body'].split(chr(10)):
+        if line.lstrip().startswith('```'):
+            fence = not fence
+        elif not fence:
+            text.append(re.sub('`[^`]*`', '', line))
+    nums = re.findall('(?i)(?:^|[^A-Za-z0-9_])(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?):?[ ]+#([0-9]+)', chr(10).join(text))
+    # STUB_LOSE stands for a form GitHub reads that the script's patterns miss: closed before the edit, not after.
+    if os.environ.get('STUB_LOSE') and not pr.get('edits'):
+        nums.append(os.environ['STUB_LOSE'])
+    owner, name = args[4].split('/')
+    refs = [{'number': int(n), 'repository': {'name': name, 'owner': {'login': owner}}} for n in dict.fromkeys(nums)]
+    # STUB_LOSE_OTHER names another repository's issue that only the body before the edit closes.
+    if os.environ.get('STUB_LOSE_OTHER') and not pr.get('edits'):
+        o, rest = os.environ['STUB_LOSE_OTHER'].split('/')
+        n_, num_ = rest.split('#')
+        refs.append({'number': int(num_), 'repository': {'name': n_, 'owner': {'login': o}}})
+    print(json.dumps({'closingIssuesReferences': refs}))
+    sys.exit(0)
 if args[1] == 'view' and args[5] == '--json':
     hide = os.path.join(state, 'hide')
     if args[6] == 'comments' and os.path.exists(hide):
@@ -1388,5 +1410,192 @@ with tempfile.TemporaryDirectory() as ROOT:
     seed_issue(40)
     code, out = price(anchor=lost, file=write_cost(COST.replace(A, lost)))
     check('a cost post runs no anchor check', code == 0 and len(issue(40)) == 1)
+
+    # The section form replaces one named section of the body and refuses a change anywhere else.
+    # The fixture names its Decision heading inside an earlier sentence, the shape that cut item 4
+    # of PR #110's What list when a hand edit sliced the body at the heading's name.
+    SECTIONED = """## Why
+
+Because.
+
+## What
+
+1. Adds the first thing.
+2. Names the reasoning under `## Decision`.
+3. Adds the third thing.
+
+## Decision
+
+Two facts decide it.
+
+1. The first fact.
+2. The second fact.
+
+## Scope
+
+Out of scope: nothing.
+
+```markdown
+## Decision
+```
+
+Closes #109
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+"""
+
+    def part(heading, text, *extra, num=30, **env):
+        path = os.path.join(ROOT, 'section.md')
+        with open(path, 'w', newline='') as f:
+            f.write(text)
+        return run('section', f'o/r#{num}', '--heading', heading, '--scratch', SCRATCH, '--file', path, *extra, **env)
+
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'One fact decides it.\n')
+    body = state(30)['body']
+    check('section replaces only the named section', code == 0 and 'One fact decides it.' in body and 'Two facts' not in body
+          and '2. Names the reasoning under `## Decision`.\n3. Adds the third thing.' in body and 'read back' in out)
+    check('section keeps the sections around it', body.startswith('## Why\n\nBecause.\n\n## What\n') and '\n\n## Scope\n\nOut of scope' in body
+          and body.endswith('Closes #109\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n'))
+    check('section saves the body as read', SECTIONED in saved_bodies())
+    code, out = part('## Decision', 'One fact decides it.\n')
+    check('a retried section edit changes nothing', code == 0 and state(30).get('edits') == 1 and 'nothing changed' in out)
+
+    seed(30, SECTIONED)
+    code, out = part('## Scope', 'Out of scope: #106 and #108.\n')
+    body = state(30)['body']
+    check('section ends the last section at the closing lines and footer', code == 0
+          and '## Scope\n\nOut of scope: #106 and #108.\n\nCloses #109\n\n🤖' in body and '```markdown' not in body)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'Fact.\n\n### A subheading inside\n\nMore.\n')
+    check('section takes a deeper heading inside its text', code == 0 and '### A subheading inside' in state(30)['body'])
+
+    for label, heading, text, want in (
+            ('a heading the body lacks', '## Missing', 'x\n', 'missing'),
+            ('a heading named at another level', '### Decision', 'x\n', 'not '),
+            ('a file holding a heading of the same level', '## Decision', 'x\n\n## Another\n', 'end the section early'),
+            ('a file holding a higher heading', '## Decision', '# Top\n', 'end the section early'),
+            ('a line that is not a heading', 'Decision', 'x\n', 'not a heading line'),
+            ('an empty heading', '## ', 'x\n', 'not a heading line')):
+        seed(30, SECTIONED)
+        code, out = part(heading, text)
+        check(f'section refuses {label}', code != 0 and want in out and state(30).get('edits') is None and 'Traceback' not in out)
+    seed(30, SECTIONED.replace('## Scope', '## Decision'))
+    code, out = part('## Decision', 'x\n')
+    check('section refuses a body where the heading\'s line appears twice', code != 0 and 'ambiguous' in out and state(30).get('edits') is None)
+    seed(30, SECTIONED.replace('## Scope', '## Decision ##').replace('## Decision\n\nTwo', '## Decision #\n\nTwo'))
+    code, out = part('## Decisions', 'x\n')
+    check('section names a missing heading as missing', code != 0 and 'missing' in out)
+    notes = SECTIONED.replace('3. Adds the third thing.\n', '3. Adds the third thing.\n\n### Notes\n\nA note.\n').replace('## Scope', '## Notes')
+    seed(30, notes)
+    code, out = part('### Notes', 'Another note.\n')
+    body = state(30)['body']
+    check('section tells apart two headings with the same words by their exact line', code == 0
+          and '### Notes\n\nAnother note.\n\n## Decision' in body and '## Notes\n\nOut of scope' in body)
+    seed(30, SECTIONED.replace('## Decision\n\nTwo', '## Decision  \n\nTwo'))
+    code, out = part('## Decision', 'One fact.\n')
+    check('section finds a heading with trailing spaces', code == 0 and 'One fact.' in state(30)['body'])
+    seed(30, SECTIONED.replace('## Decision', '## Using C#').replace('## Scope', '## Using C'))
+    code, out = part('## Using C#', 'One fact.\n')
+    check('section keeps a trailing # with no space before it as part of the words', code == 0
+          and '## Using C#\n\nOne fact.\n\n## Using C\n' in state(30)['body'])
+    code, out = part('## using c#', 'One fact.\n')
+    check('a trailing # keeps two headings apart by their words too', code != 0 and "written '## Using C#'" in out)
+    seed(30, SECTIONED.replace('3. Adds the third thing.\n', '3. Adds the third thing.\n\n### Revision\n\nA subsection.\n'))
+    code, out = part('### Revision', 'Another subsection.\n')
+    check('section edits a Revision subsection at another level', code == 0 and '### Revision\n\nAnother subsection.' in state(30)['body'])
+    seed(30, SECTIONED.replace('## Decision\n\nTwo', '## Decision ##\n\nTwo'))
+    code, out = part('## Decision', 'x\n')
+    check('section strips a closing run of #s from the words, and names the heading as written', code != 0
+          and "written '## Decision ##'" in out and state(30).get('edits') is None)
+    seed(30, SECTIONED.replace('## Scope', '### Decision'))
+    code, out = part('## decision', 'x\n')
+    check('section calls a heading line it cannot find ambiguous when two headings share its words', code != 0
+          and 'ambiguous' in out and state(30).get('edits') is None)
+    seed(30, SECTIONED + '## Revision\n\n1. `r1` answers round 1.\n')
+    code, out = part('## Revision', '1. only one now\n')
+    check('section refuses the Revision section and names revision', code != 0 and 'Use revision' in out and state(30).get('edits') is None)
+    seed(30, SECTIONED.replace('```\n\nCloses #109', '```\n\nFixes #12 in the parser only.\n\nCloses #109'))
+    code, out = part('## Scope', 'New.\n')
+    check('section refuses an edit that removes a line which may close an issue, naming it', code != 0
+          and "removes 'Fixes #12 in the parser only.', which may close an issue" in out and state(30).get('edits') is None)
+    seed(30, SECTIONED.replace('```\n\nCloses #109', '```\n\nFixes #12 in the parser only.\n\nCloses #109'))
+    code, out = part('## Decision', 'One fact.\n')
+    check('a line which may close an issue does not stop an edit to another section', code == 0 and 'One fact.' in state(30)['body'])
+    seed(30, SECTIONED.replace('```\n\nCloses #109', '```\n\nFixes #12 in the parser only.\n\nCloses #109'))
+    code, out = part('## Scope', 'New.\n\nFixes #12 in the parser only.\n')
+    check('an edit that keeps a line which may close an issue goes through', code == 0
+          and '## Scope\n\nNew.\n\nFixes #12 in the parser only.\n\nCloses #109' in state(30)['body'])
+    for closing in ('Closes: #12', 'Part of: #108'):
+        seed(30, SECTIONED.replace('Closes #109', closing))
+        code, out = part('## Scope', 'New.\n')
+        check(f'section keeps a closing line with a colon outside the last section: {closing}', code == 0
+              and f'## Scope\n\nNew.\n\n{closing}\n\n🤖' in state(30)['body'])
+    for closing in ('Closes https://github.com/l3a0/other/issues/3', '- Closes #12', 'Fixes #1; fixes #2', '1. Closes #12',
+                    'This change fixes #12.'):
+        seed(30, SECTIONED.replace('Closes #109', closing))
+        code, out = part('## Scope', 'New.\n')
+        check(f'section refuses to remove a closing line it cannot read: {closing}', code != 0
+              and 'which may close an issue' in out and state(30).get('edits') is None)
+    seed(30, SECTIONED.replace('## Scope', '# Top'))
+    code, out = part('## Decision', 'One fact.\n')
+    check('section ends at a higher heading', code == 0 and '# Top\n\nOut of scope: nothing.' in state(30)['body'])
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'x\n\n```markdown\n## Decision\n```\n')
+    check('section takes a heading inside a code fence in its text', code == 0 and state(30)['edits'] == 1)
+    for label, heading, text in (('a text whose code fence never closes', '## Decision', '```\ncode\n'),
+                                 ('a last section whose text ends in a closing line', '## Scope', 'S.\n\nCloses #5\n')):
+        seed(30, SECTIONED)
+        code, out = part(heading, text)
+        check(f'section refuses {label}, which a second run would change again', code != 0
+              and 'a second run would change' in out and state(30).get('edits') is None)
+    for closing in ('Closes #118, part of #109.', 'Closes #118 and closes #119', 'Fixes #1, fixes #2'):
+        seed(30, SECTIONED.replace('Closes #109', closing))
+        code, out = part('## Scope', 'New.\n')
+        check(f'section keeps a closing line with several references outside the last section: {closing}', code == 0
+              and f'## Scope\n\nNew.\n\n{closing}\n\n🤖' in state(30)['body'])
+    for label, line, text in (('a reworded mention of a fix in passing', 'Fixed the stale link from #12 in round 3.', 'New.\n'),
+                              ('an example in a code span', '- `Closes #12` now counts as a closing line.', 'New.\n'),
+                              ('a closing line kept with other indentation', '  Fixes #12 in the parser.', 'New.\n\nFixes #12 in the parser.\n')):
+        seed(30, SECTIONED.replace('Out of scope: nothing.', 'Out of scope: nothing.\n\n' + line))
+        code, out = part('## Scope', text)
+        check(f'section takes {label}', code == 0 and state(30)['edits'] == 1)
+    seed(30, SECTIONED.replace('Out of scope: nothing.', 'Out of scope: nothing.\n\nFixes #12 in the parser.'))
+    code, out = part('## Scope', 'New.\n\n```text\nFixes #12 in the parser.\n```\n')
+    check('section refuses to count a closing line moved into a code fence as kept', code != 0 and 'which may close an issue' in out)
+    seed(30, SECTIONED)
+    code, out = part('## Scope', 'New.\n', STUB_LOSE='12')
+    check('section reports an issue GitHub no longer reads as closed after the edit, naming it and the body to restore',
+          code != 0 and 'no longer reads it as closing o/r#12' in out and 'gh pr edit --body-file' in out)
+    seed(30, SECTIONED.replace('Closes #109', 'Closes #3'))
+    code, out = part('## Scope', 'New.\n', STUB_LOSE_OTHER='l3a0/other#3')
+    check('section names a lost issue of another repository that shares a number with one it still closes', code != 0
+          and 'closing l3a0/other#3' in out)
+    module = load()
+    inside = SECTIONED.replace('Two facts decide it.', 'One fact decides it.')
+    check('the guard passes a change inside the section', not module.changed_outside_section(SECTIONED, inside, '## Decision'))
+    for label, changed in (('before the section', SECTIONED.replace('Because.', 'Why not.')),
+                           ('in the heading itself', SECTIONED.replace('\n## Decision\n\nTwo', '\n## Decided\n\nTwo')),
+                           ('after the section', SECTIONED.replace('Out of scope: nothing.', 'Out of scope: all.')),
+                           ('in the closing line', SECTIONED.replace('Closes #109', 'Part of #109'))):
+        check(f'the guard refuses a change {label}', changed != SECTIONED and module.changed_outside_section(SECTIONED, changed, '## Decision'))
+    seed(5, SECTIONED)
+    code, out = part('## Decision', 'One fact.\n', num=5, STUB_READ_FAIL='after edit')
+    check('a failed read after a section edit says the edit may have landed', code != 0 and 'may have landed' in out and 'As sent' in out)
+    seed(30, SECTIONED.replace('## Decision\n\nTwo', '## decision\n\nTwo'))
+    code, out = part('## Decision', 'x\n')
+    check('section refuses a heading written another way, naming how it is written', code != 0 and "'## decision'" in out and state(30).get('edits') is None)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'One fact.\n', '--dry-run')
+    check('a section dry run sends nothing and prints the change as a diff', code == 0 and state(30).get('edits') is None
+          and '+One fact.' in out and '-Two facts decide it.' in out)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'One fact.\n', STUB_EDIT_ADDS='changed')
+    check('a section edit that reads back differently is reported', code != 0 and 'differs from what was sent' in out)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'One fact.\n', STUB_LOST='edit')
+    check('a lost section edit says the outcome is unknown', code != 0 and 'outcome is unknown' in out)
+    code, out = part('## Decision', 'One fact.\n')
+    check('the retry after a lost section edit sends nothing more', code == 0 and state(30)['edits'] == 1 and 'nothing changed' in out)
 
 sys.exit(1 if failures else 0)

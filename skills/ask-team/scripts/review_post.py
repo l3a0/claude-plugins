@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Post a review round's comments and its cost on the issue, check a comment posted by hand, and edit a pull request's Revision section.
+"""Post a review round's comments and its cost on the issue, check a comment posted by hand, and edit a pull request's Revision section or another named section.
 
 Usage:
     review_post.py revision OWNER/REPO#N --scratch DIR --file PATH [--replace ITEM] [--dry-run]
+    review_post.py section OWNER/REPO#N --heading HEADING --scratch DIR --file PATH [--dry-run]
     review_post.py comment --round R OWNER/REPO#N=HEAD=ANCHOR=FILE [...] [--dry-run]
     review_post.py check OWNER/REPO#N=HEAD=ANCHOR=FILE | OWNER/REPO@BRANCH=ANCHOR=FILE [...]
     review_post.py cost --round R OWNER/REPO#ISSUE --pull OWNER/REPO#N --anchor ANCHOR --file PATH [--dry-run]
@@ -19,6 +20,32 @@ number, and says to edit by hand. It refuses a line that starts with a list
 number or bullet of its own, such as `1. `, because the script numbers the
 item itself and would write `2. 1. `. It refuses rather than strips the mark,
 so the line in PATH is the line the section holds, and a retry finds it.
+
+`section` replaces the content of one named section of the body with the text
+in PATH, and keeps its heading. HEADING is the heading's whole line, such as
+`## Decision`. The section runs from that line to the next heading of the same
+or a higher level, or to the closing lines and footer when none follows.
+Headings inside code fences do not count. A line that is wholly a closing
+line, such as `Closes #12`, `Closes: #12` or `Closes #12, part of #9.`, starts
+the closing lines. Any other line that may close an issue, such as a bullet, a
+full issue address, or a sentence that opens with a closing word, stays inside
+the section, and the command refuses an edit that would remove a line holding
+a closing keyword and a reference anywhere outside code. Its patterns cannot
+know every form GitHub reads, so after the read back it also compares the
+issues GitHub says the body closes with those it closed before, each named
+with its repository, and exits non-zero naming any it lost, with the body as
+read to restore. It catches only what GitHub has re-read by then, so a loss
+GitHub is slow to register still reads as success. It finds the
+heading by its whole line, ignoring trailing spaces. It sends nothing on a body
+where that line appears more than once, or, when it appears nowhere, where the
+heading's words appear on no heading or on more than one at any level, or on
+one written another way, which it names. It also refuses a HEADING that is not
+a heading line, `## Revision`, whose numbered lines `revision` keeps, and a
+PATH that holds a heading of the section's level or higher outside a code
+fence, which would end the section early. Like `revision`, it saves the body
+as read, sends only when every changed line sits inside the section, read
+from the body as it was, and a second run would change nothing, and reads the
+body back. So a retry changes nothing.
 
 `comment` takes each comment's heading from its file's first line. It refuses a
 file that does not start with a heading and name the round, its anchor and the
@@ -138,6 +165,7 @@ against a stand-in `gh`, so no test covers what the real one prints.
 """
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -346,6 +374,162 @@ def revision(args):
         sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
                  f"As read before the edit: {saved}. As sent: {sent}")
     print(f"{repo}#{num}: {SECTION} updated and read back")
+
+
+def heading_level(line):
+    # A closing run of #s counts only after a space, so "## Using C#" keeps its words.
+    m = re.match(r"^ {0,3}(#{1,6})(?:\s+(.*?))?(?:\s+#+)?\s*$", line.rstrip("\r"))
+    return (len(m[1]), (m[2] or "").strip().lower()) if m and HEADING.match(line) else None
+
+
+_KEYWORD = r"(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|part of):?"
+_REF = r"(?:no issue|(?:[\w.-]+/[\w.-]+)?#\d+)"
+# A whole closing line: a keyword and a reference, then more references, each after a comma or "and" and a keyword.
+CLOSING_LINE = re.compile(rf"^{_KEYWORD}\s+{_REF}(?:\s*(?:,|\band\b)\s*(?:{_KEYWORD}\s+)?{_REF})*\.?\s*$", re.IGNORECASE)
+# A closing keyword followed by a reference, anywhere in a line, as GitHub reads it in a body: in a bullet, after
+# a colon, mid-sentence, or with a full issue address. Deleting a line that holds one is refused.
+MAY_CLOSE = re.compile(r"\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|part of)\b:?\s+\S*?(?:#\d|/issues/\d)", re.IGNORECASE)
+CODE_SPAN = re.compile(r"(`+).+?\1")
+
+
+def section_end_limit(lines):
+    """Return where the closing lines and footer start, counting only lines that are wholly a closing line."""
+    def trim(end):
+        while end and not lines[end - 1].strip():
+            end -= 1
+        return end
+
+    end = trim(len(lines))
+    if end and lines[end - 1].startswith("🤖"):
+        end = trim(end - 1)
+    while end and CLOSING_LINE.match(lines[end - 1].strip()):
+        end = trim(end - 1)
+    return end
+
+
+def section_bounds(lines, heading):
+    """Return (heading index, end) of the section the heading names, or exit naming why not."""
+    wanted = heading_level(heading)
+    visible = list(outside_fences(lines))
+    exact = [i for i, line in visible if line.rstrip() == heading.rstrip()]
+    if len(exact) != 1:
+        named = [i for i, line in visible if (found := heading_level(line)) and found[1] == wanted[1]]
+        if len(exact) > 1 or len(named) > 1:
+            sys.exit(f"the body has {max(len(exact), len(named))} headings reading {wanted[1]!r}, so the section is "
+                     "ambiguous. Edit it by hand")
+        if not named:
+            sys.exit(f"the body has no heading reading {wanted[1]!r}, so the section is missing. Edit it by hand")
+        sys.exit(f"the heading is written {lines[named[0]].rstrip()!r}, not {heading.rstrip()!r}. Name it as written")
+    start, level = exact[0], wanted[0]
+    limit = section_end_limit(lines)
+    end = limit if start < limit else len(lines)
+    for i, line in visible:
+        if start < i < end and (found := heading_level(line)) and found[0] <= level:
+            end = i
+            break
+    return start, end
+
+
+def replace_section(body, heading, text):
+    """Return the new body, or None when the section already holds the text."""
+    lines = body.split("\n")
+    start, end = section_bounds(lines, heading)
+    content = text.strip("\n").split("\n")
+    rest = lines[end:]
+    new = lines[:start + 1] + [""] + content + ([""] if rest and rest[0].strip() else []) + rest
+    return None if new == lines else "\n".join(new)
+
+
+def removed_closing(old, new, heading):
+    """Return the lines the edit removes from the section that may close an issue, apart from how the edit was built."""
+    a = old.split("\n")
+    start, end = section_bounds(a, heading)
+    # GitHub reads no keyword inside code, so a line counts only outside fences and code spans, on both sides.
+    kept = {line.strip() for _, line in outside_fences(new.split("\n"))}
+    section = [line for i, line in outside_fences(a) if start < i < end]
+    return [line.strip() for line in section if MAY_CLOSE.search(CODE_SPAN.sub("", line)) and line.strip() not in kept]
+
+
+def changed_outside_section(old, new, heading):
+    """True when new differs from old outside the section, with the bounds read from old, apart from replace_section."""
+    a, b = old.split("\n"), new.split("\n")
+    start, end = section_bounds(a, heading)
+    shared = min(len(a), len(b))
+    head = 0
+    while head < shared and a[head] == b[head]:
+        head += 1
+    tail = 0
+    while tail < shared - head and a[-1 - tail] == b[-1 - tail]:
+        tail += 1
+    return head <= start or len(a) - tail > end
+
+
+def closing_numbers(repo, num):
+    """Return each issue GitHub reads the body as closing, as OWNER/REPO#N, since two repositories can share a number."""
+    found = set()
+    for ref in view(repo, num, "closingIssuesReferences"):
+        owner = ((ref.get("repository") or {}).get("owner") or {}).get("login")
+        name = (ref.get("repository") or {}).get("name")
+        found.add(f"{owner}/{name}#{ref['number']}".lower() if owner and name else f"{repo}#{ref['number']}".lower())
+    return found
+
+
+def section(args):
+    m = SPEC.match(args.pull)
+    if not m:
+        sys.exit(f"not OWNER/REPO#N: {args.pull}")
+    repo, num = m["repo"], m["num"]
+    if not heading_level(args.heading) or not heading_level(args.heading)[1]:
+        sys.exit(f"not a heading line such as '## Decision': {args.heading!r}")
+    if args.heading.rstrip() == SECTION:
+        sys.exit(f"{args.heading!r} is the Revision section, whose numbered lines the revision command keeps. "
+                 "Use revision, with --replace for a line already there")
+    with open(args.file, encoding="utf-8") as f:
+        text = f.read()
+    level = heading_level(args.heading)[0]
+    inner = [line for _, line in outside_fences(text.split("\n")) if (found := heading_level(line)) and found[0] <= level]
+    if inner:
+        sys.exit(f"{args.file} holds the heading {inner[0].strip()!r}, which would end the section early. "
+                 "Remove it, or edit by hand")
+    body = view(repo, num, "body")
+    closes = closing_numbers(repo, num)
+    os.makedirs(args.scratch, exist_ok=True)
+    name = f"body-{repo.replace('/', '-')}-{num}-"
+    saved = keep(name, args.scratch, body)
+    new = replace_section(body, args.heading, text)
+    if new is None:
+        print(f"{repo}#{num}: {args.heading} already holds this text, so nothing changed")
+        return
+    gone = removed_closing(body, new, args.heading)
+    if gone:
+        sys.exit(f"{repo}#{num}: refusing to send, the edit removes {gone[0]!r}, which may close an issue. Keep it in "
+                 f"{args.file}, or edit by hand. The body as read is at {saved}")
+    if changed_outside_section(body, new, args.heading):
+        sys.exit(f"{repo}#{num}: refusing to send, a line changed outside {args.heading}. The body as read is at {saved}")
+    if replace_section(new, args.heading, text) is not None:
+        sys.exit(f"{repo}#{num}: refusing to send, a second run would change the body again. Edit it by hand. "
+                 f"The body as read is at {saved}")
+    if args.dry_run:
+        print("\n".join(difflib.unified_diff(body.split("\n"), new.split("\n"), "as read", "as it would be sent",
+                                             lineterm="")))
+        return
+    sent = keep("sent-" + name, args.scratch, new)
+    write("gh", "pr", "edit", num, "-R", repo, "--body-file", sent, where=f"As read: {saved}. As sent: {sent}. ")
+    try:
+        back = view(repo, num, "body")
+    except SystemExit as failed:
+        sys.exit(f"{failed} The edit may have landed, so the outcome is unknown. Rerun this command, which "
+                 f"looks before it writes. As read: {saved}. As sent: {sent}")
+    if back != new:
+        sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
+                 f"As read before the edit: {saved}. As sent: {sent}")
+    # GitHub's own reading of the closing keywords is the check the patterns above can only approach.
+    lost = closes - closing_numbers(repo, num)
+    if lost:
+        sys.exit(f"{repo}#{num}: {args.heading} was updated, and GitHub no longer reads it as closing "
+                 f"{', '.join(sorted(lost))}. Put the closing line back, such as by sending the body as "
+                 f"read with gh pr edit --body-file {saved}, and report it")
+    print(f"{repo}#{num}: {args.heading} updated and read back")
 
 
 def first_line(text):
@@ -851,6 +1035,14 @@ def main():
     edit.add_argument("--replace", type=int)
     edit.add_argument("--dry-run", action="store_true")
     edit.set_defaults(handler=revision)
+
+    part = commands.add_parser("section")
+    part.add_argument("pull")
+    part.add_argument("--heading", required=True)
+    part.add_argument("--scratch", required=True)
+    part.add_argument("--file", required=True)
+    part.add_argument("--dry-run", action="store_true")
+    part.set_defaults(handler=section)
 
     post = commands.add_parser("comment")
     post.add_argument("targets", nargs="+")
