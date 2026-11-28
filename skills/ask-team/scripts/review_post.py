@@ -53,10 +53,11 @@ fence, which would end the section early. Like `revision`, it saves the body
 as read, sends only when every changed line sits inside the section, read
 from the body as it was, and a second run would change nothing, and reads the
 body back. So a retry changes nothing. A rerun of `section` or `revision` that
-finds its edit already made compares the body with the one the earlier run
-saved in DIR, and exits non-zero on a line that may close an issue and that the
-earlier body did not hold. Without such a saved body it says no closing check
-ran.
+finds its edit already made prints what GitHub reads the body as closing, since
+the earlier run's own check may have been lost with its reply. The checks for
+an added closing line, and `reword`'s check against REFS, read only the
+keywords GitHub closes on, and leave out `part of`, which `section` still keeps
+from being removed.
 
 `reword` replaces the one passage of the body that the file at --old holds
 with the text the file at --new holds, and then checks which issues GitHub
@@ -397,7 +398,7 @@ def revision(args):
     saved = keep(name, args.scratch, body)
     new = splice(body, text, args.replace)
     if new is None:
-        unchanged_rerun(repo, num, SECTION, args.scratch, name, saved, body)
+        unchanged_rerun(repo, num, SECTION)
         return
     if changed_outside(body, new):
         sys.exit(f"{repo}#{num}: refusing to send, a line changed outside {SECTION}. The body as read is at {saved}")
@@ -440,6 +441,9 @@ CLOSING_LINE = re.compile(rf"^{_KEYWORD}\s+{_REF}(?:\s*(?:,|\band\b)\s*(?:{_KEYW
 # a colon, mid-sentence, or with a full issue address. Deleting a line that holds one is refused.
 MAY_CLOSE = re.compile(r"\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|part of)\b:?\s+\S*?(?:#\d|/issues/\d)", re.IGNORECASE)
 CODE_SPAN = re.compile(r"(`+).+?\1")
+# The keywords GitHub closes an issue on. MAY_CLOSE also reads "part of", so that no edit drops such a line unseen,
+# but GitHub closes nothing on it, so a check of what an edit adds or what --closes names leaves it out.
+CLOSES = re.compile(r"\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)\b:?\s+\S*?(?:#\d|/issues/\d)", re.IGNORECASE)
 
 
 def section_end_limit(lines):
@@ -528,7 +532,7 @@ def closing_refs(text, repo):
     found = set()
     for _, line in outside_fences(text.split("\n")):
         plain = CODE_SPAN.sub("", line)
-        for m in MAY_CLOSE.finditer(plain):
+        for m in CLOSES.finditer(plain):
             ref = CLOSED_REF.search(plain, m.start())
             if ref:
                 found.add(f"{ref[1] or repo}#{ref[2]}".lower())
@@ -539,32 +543,17 @@ def added_closing(old, new):
     """Return the lines new holds, outside fences and code spans, that may close an issue and old does not hold."""
     kept = {line.strip() for _, line in outside_fences(old.split("\n"))}
     return [line.strip() for _, line in outside_fences(new.split("\n"))
-            if MAY_CLOSE.search(CODE_SPAN.sub("", line)) and line.strip() not in kept]
+            if CLOSES.search(CODE_SPAN.sub("", line)) and line.strip() not in kept]
 
 
-def earlier_body(scratch, name, saved):
-    """Return the newest body an earlier run saved for this pull request, or None."""
-    runs = [os.path.join(scratch, f) for f in os.listdir(scratch)
-            if f.startswith(name) and os.path.join(scratch, f) != saved]
-    if not runs:
-        return None
-    with open(max(runs, key=os.path.getmtime), encoding="utf-8", newline="") as f:
-        return f.read()
-
-
-def unchanged_rerun(repo, num, what, scratch, name, saved, body):
-    """On a rerun that finds its edit already made, check the body against the body the earlier run read."""
-    earlier = earlier_body(scratch, name, saved)
-    if earlier is None:
-        print(f"{repo}#{num}: {what} already holds this text, so nothing changed. No earlier body is saved in "
-              f"{scratch}, so no closing check ran")
-        return
-    added = added_closing(earlier, body)
-    if added:
-        sys.exit(f"{repo}#{num}: {what} already holds this text, and the body now holds {added[0]!r}, which may "
-                 f"close an issue and which the body an earlier run read did not hold. Remove it, or change it "
-                 f"with reword. That earlier body is the newest {name}* file in {scratch}")
-    print(f"{repo}#{num}: {what} already holds this text, so nothing changed")
+def unchanged_rerun(repo, num, what):
+    """On a rerun that finds its edit already made, say what GitHub reads the body as closing."""
+    # The first run refused before sending a line that may close an issue, so only a form the patterns miss, or another
+    # edit, can have changed what the body closes. That run's own read after sending may have been lost, so say what
+    # GitHub reads now rather than report nothing.
+    now = closing_numbers(repo, num)
+    print(f"{repo}#{num}: {what} already holds this text, so nothing changed. GitHub reads the body as closing "
+          f"{', '.join(sorted(now)) or 'nothing'}, so compare that with what it should close")
 
 
 def closing_changed(repo, num, before, what, saved, remedy):
@@ -604,7 +593,7 @@ def section(args):
     saved = keep(name, args.scratch, body)
     new = replace_section(body, args.heading, text)
     if new is None:
-        unchanged_rerun(repo, num, args.heading, args.scratch, name, saved, body)
+        unchanged_rerun(repo, num, args.heading)
         return
     gone = removed_closing(body, new, args.heading)
     if gone:
@@ -784,7 +773,7 @@ def structure(body):
     """Return the body's headings and code fence lines, outside and at fences, which reword must leave alone."""
     lines = body.split("\n")
     heads = [(i, line.rstrip()) for i, line in outside_fences(lines) if heading_level(line)]
-    fences = [line.strip() for line in lines if FENCE.match(line.rstrip("\r"))]
+    fences = [line.strip() for line in lines if (m := FENCE.match(line.rstrip("\r"))) and not (m[1][0] == "`" and "`" in m[2])]
     return [line for _, line in heads], fences
 
 

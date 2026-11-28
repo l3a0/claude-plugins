@@ -1610,13 +1610,19 @@ Closes #109
     pr['body'] = pr['body'].replace('Out of scope: nothing.', 'Out of scope: nothing. This closes #55.')
     json.dump(pr, open(os.path.join(STATE, 'o-r-32.json'), 'w'))
     code, out = part('## Decision', 'One fact.\n', num=32)
-    check('a section rerun refuses a body that holds a closing line the earlier run did not read', code != 0
-          and 'This closes #55.' in out and 'earlier run' in out)
+    check('a section rerun says what GitHub reads the body as closing', code == 0
+          and 'already holds this text' in out and 'closing o/r#109, o/r#55' in out)
     seed(33)
     revise('--line', '`ccccccc` answers round 3.', pull='o/r#33', STUB_LOST='edit')
     code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#33')
-    check('a revision rerun after a lost edit checks the body against the one the earlier run read', code == 0
-          and 'already holds this text' in out and 'no closing check ran' not in out)
+    check('a revision rerun after a lost edit says what GitHub reads the body as closing', code == 0
+          and 'already holds this text' in out and 'GitHub reads the body as closing' in out)
+    seed(31)
+    code, out = revise('--line', '`ccccccc` answers round 3, part of #117.', pull='o/r#31')
+    check('revision accepts a line that is part of an issue, which closes nothing', code == 0 and state(31)['edits'] == 1)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'The rest is part of #117.\n')
+    check('section accepts an added line that is part of an issue', code == 0 and state(30)['edits'] == 1)
     seed(31)
     code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#31', STUB_GAIN='78')
     check('revision reports an issue GitHub reads as closed after its edit, naming revision --replace',
@@ -1762,6 +1768,12 @@ Closes #109
     seed(40, WORDED)
     code, out = reword('Adds the first thing.', '## Adds the first thing.', 'none')
     check('reword refuses a new passage that holds a heading', code != 0 and 'heading' in out and state(40).get('edits') is None)
+    seed(40, WORDED)
+    code, out = reword('which closes #247,', 'which closes #247, part of #14,', '#247')
+    check('reword accepts a new passage that is part of an issue --closes does not name', code == 0 and 'as --closes asks' in out)
+    seed(40, WORDED.replace('stalled.', 'stalled.\n\n```x``` is the command to run.'))
+    code, out = reword('is the command to run.', 'is the command to use.', 'o/r#247')
+    check('reword accepts an edit beside a line of inline triple backticks', code == 0 and 'as --closes asks' in out)
     seed(40, WORDED)
     code, out = reword('Adds the', 'Brings the', 'none')
     check('reword refuses a passage the body holds more than once', code != 0 and '3 times' in out and state(40).get('edits') is None)
