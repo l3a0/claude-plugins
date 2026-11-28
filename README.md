@@ -207,6 +207,10 @@ Works out how much cash in a linked brokerage account is free to spend without m
 
 Runs a batch of hand-written mutants in one call, so a mutation review costs about as long as its tests take rather than four tool calls per mutant. `skills/fast-mutation/scripts/mutate.py` takes a JSON spec of exact string edits. For each one it applies the edit, runs the tests that reach it, restores the file from a byte copy and records whether the tests noticed. It drives pytest, where it scopes each survivor's wider run to the tests that start the mutated function, or a suite of plain test scripts such as this repository's own.
 
+### rewrite-calls
+
+Rewrites every call of one Python function in one pass, for a signature change that forces dozens of call sites to change the same way. `skills/rewrite-calls/scripts/rewrite_calls.py` finds each call with `ast` and replaces it with a template filled from the call's own argument text, or with a per-call template from a JSON spec. After `ruff format`, `reflow_strings.py` splits the string lines a formatter leaves too long and rewraps ragged ones, keeping a change only when the parse tree stays the same. `check_strings.py` then compares every string with git's copy, so a message whose text changed fails the check.
+
 ## License
 
 [MIT](LICENSE)

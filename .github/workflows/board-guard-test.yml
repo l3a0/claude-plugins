@@ -45,3 +45,5 @@ jobs:
         run: python3 tests/test_free_cash.py
       - name: fast-mutation script runner tests
         run: python3 tests/test_fast_mutation.py
+      - name: rewrite-calls script tests
+        run: python3 tests/test_rewrite_calls.py
