@@ -167,6 +167,14 @@ with tempfile.TemporaryDirectory() as root:
 
     old, new, done = reflow('''
     f(
+        f"{x} with several more words of text }} end"
+    )
+    ''')
+    check('a piece with only an escaped closing brace becomes a plain string with one brace',
+          new == 'f(\n    f"{x} with several more words of "\n    "text } end"\n)\n' and same_program(old, new))
+
+    old, new, done = reflow('''
+    f(
         "short "
         "pieces "
         "that "
