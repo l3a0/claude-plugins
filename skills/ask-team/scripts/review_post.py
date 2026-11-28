@@ -32,8 +32,10 @@ full issue address, or a sentence that opens with a closing word, stays inside
 the section, and the command refuses an edit that would remove a line holding
 a closing keyword and a reference anywhere outside code. Its patterns cannot
 know every form GitHub reads, so after the read back it also compares the
-issues GitHub says the body closes with those it closed before, and exits
-non-zero naming any it lost, with the body as read to restore. It finds the
+issues GitHub says the body closes with those it closed before, each named
+with its repository, and exits non-zero naming any it lost, with the body as
+read to restore. It catches only what GitHub has re-read by then, so a loss
+GitHub is slow to register still reads as success. It finds the
 heading by its whole line, ignoring trailing spaces. It sends nothing on a body
 where that line appears more than once, or, when it appears nowhere, where the
 heading's words appear on no heading or on more than one at any level, or on
@@ -452,7 +454,13 @@ def changed_outside_section(old, new, heading):
 
 
 def closing_numbers(repo, num):
-    return {ref["number"] for ref in view(repo, num, "closingIssuesReferences")}
+    """Return each issue GitHub reads the body as closing, as OWNER/REPO#N, since two repositories can share a number."""
+    found = set()
+    for ref in view(repo, num, "closingIssuesReferences"):
+        owner = ((ref.get("repository") or {}).get("owner") or {}).get("login")
+        name = (ref.get("repository") or {}).get("name")
+        found.add(f"{owner}/{name}#{ref['number']}".lower() if owner and name else f"{repo}#{ref['number']}".lower())
+    return found
 
 
 def section(args):
@@ -508,7 +516,7 @@ def section(args):
     lost = closes - closing_numbers(repo, num)
     if lost:
         sys.exit(f"{repo}#{num}: {args.heading} was updated, and GitHub no longer reads it as closing "
-                 f"{', '.join(f'#{n}' for n in sorted(lost))}. Put the closing line back, such as by sending the body as "
+                 f"{', '.join(sorted(lost))}. Put the closing line back, such as by sending the body as "
                  f"read with gh pr edit --body-file {saved}, and report it")
     print(f"{repo}#{num}: {args.heading} updated and read back")
 

@@ -88,7 +88,14 @@ if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesRefere
     # STUB_LOSE stands for a form GitHub reads that the script's patterns miss: closed before the edit, not after.
     if os.environ.get('STUB_LOSE') and not pr.get('edits'):
         nums.append(os.environ['STUB_LOSE'])
-    print(json.dumps({'closingIssuesReferences': [{'number': int(n)} for n in dict.fromkeys(nums)]}))
+    owner, name = args[4].split('/')
+    refs = [{'number': int(n), 'repository': {'name': name, 'owner': {'login': owner}}} for n in dict.fromkeys(nums)]
+    # STUB_LOSE_OTHER names another repository's issue that only the body before the edit closes.
+    if os.environ.get('STUB_LOSE_OTHER') and not pr.get('edits'):
+        o, rest = os.environ['STUB_LOSE_OTHER'].split('/')
+        n_, num_ = rest.split('#')
+        refs.append({'number': int(num_), 'repository': {'name': n_, 'owner': {'login': o}}})
+    print(json.dumps({'closingIssuesReferences': refs}))
     sys.exit(0)
 if args[1] == 'view' and args[5] == '--json':
     hide = os.path.join(state, 'hide')
@@ -1367,7 +1374,11 @@ Closes #109
     seed(30, SECTIONED)
     code, out = part('## Scope', 'New.\n', STUB_LOSE='12')
     check('section reports an issue GitHub no longer reads as closed after the edit, naming it and the body to restore',
-          code != 0 and 'no longer reads it as closing #12' in out and 'gh pr edit --body-file' in out)
+          code != 0 and 'no longer reads it as closing o/r#12' in out and 'gh pr edit --body-file' in out)
+    seed(30, SECTIONED.replace('Closes #109', 'Closes #3'))
+    code, out = part('## Scope', 'New.\n', STUB_LOSE_OTHER='l3a0/other#3')
+    check('section names a lost issue of another repository that shares a number with one it still closes', code != 0
+          and 'closing l3a0/other#3' in out)
     module = load()
     inside = SECTIONED.replace('Two facts decide it.', 'One fact decides it.')
     check('the guard passes a change inside the section', not module.changed_outside_section(SECTIONED, inside, '## Decision'))
