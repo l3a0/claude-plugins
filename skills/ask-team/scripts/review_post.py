@@ -97,7 +97,8 @@ branch. It stops at the first target it cannot parse or whose file is
 missing. Otherwise it exits non-zero naming each file that does not name its
 anchor or head, each head and each branch that fails, and when those all
 pass, each anchor that fails, then a `## Review complete` file whose anchor
-stands only through a force push. It reads no comments, because
+stands only through a force push, and on a pull request an anchor another round
+read past. It reads comments only for that last check, because
 each route keys its retry by its own lines. It cannot show that the file it
 read is the file then posted, and like `comment` it reads the file for the
 anchor and head by substring.
@@ -117,8 +118,10 @@ another anchor, because a `## Cost total` would count the round twice. It
 runs no check that the anchor is in the pull request's history, because only
 `cost` reads that anchor, to recognise a retry. In the usual order the round's
 comment posts first, through `comment`, which checks it. That holds after a
-force push dropped the anchor too, because `comment` accepts an anchor a
-recorded force push replaced, so the round's figures follow in the usual order.
+force push dropped the anchor too, where GitHub still records a replaced head
+that is or holds the anchor, because `comment` then accepts it. Where `comment`
+refuses such an anchor, what the round's figures do waits on
+l3a0/claude-plugins#120.
 
 A write that fails says the outcome is unknown, since the request may have
 landed. Rerun the same command, which looks before it writes. A read can lag
