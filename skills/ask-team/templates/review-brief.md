@@ -6,7 +6,7 @@
 
 <Paste the output of `scripts/brief_anchors.py`, then replace each `<What it changes.>` with one or two sentences naming the files and sections the pull request touches. Keep each item's first line as the script printed it, and the description in the indented paragraph under it, because `brief_anchors.py --next` reprints that line in the next round's brief.>
 
-<From round 2 on, `brief_anchors.py --next` writes this paragraph as a blank. Fill it with what this round reads: `git diff <last round's anchor> <fixing commit>` without what a merge of the base brought, and any passage or function that diff touches or that states the same fact. Where the line below names a path, the risk engineer also reads it from its entry to the action. Where a fix rewrites the subject, the round reads the whole change. Keep the paragraph's first words, `This round reads`, so the next round's run finds it. Delete this line in round 1.>
+<From round 2 on, `brief_anchors.py --next` writes this paragraph as a blank. Fill it with what this round reads: `git diff <last round's anchor> <fixing commit>` without what a merge of the base brought, and any passage or function that diff touches or that states the same fact. Where the line below names a path, the risk engineer also reads it from its entry to the action. Where a fix rewrites the subject, or a force push replaced the last head, the round reads the whole change. Keep the paragraph's first words, `This round reads`, so the next round's run finds it. Delete this line in round 1.>
 
 Review the head commit named here, not the branch tip, which may move while the round runs.
 

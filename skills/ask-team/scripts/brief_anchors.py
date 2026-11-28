@@ -25,8 +25,9 @@ round's head is not FIX or an ancestor of it, it stops when HEAD still holds
 that head, because FIX then names a commit from before the round's fixes. When
 HEAD does not hold it, as after a force push such as a rebase, it says so on
 standard error and writes the brief, because the diff from that head to FIX
-then holds more than the round's fixes. l3a0/claude-plugins#108 decides what
-a round reads after a force push. It stops, writing nothing, when GitHub cannot
+then holds the whole rebase rather than the round's fixes. That pull request's
+part of the blank then names the whole change, from the merge base to HEAD,
+as review-round.md's step 1 says. It stops, writing nothing, when GitHub cannot
 compare the two, such as for a head it no longer holds, or gives an answer it
 does not document. The run changes four things and keeps every other line.
 
@@ -41,7 +42,8 @@ does not document. The run changes four things and keeps every other line.
 4. The paragraph that starts `This round reads`, with any list right under
    it and the indented lines inside that list, is replaced by a blank, in
    angle brackets, for the session to fill. The blank names the diff from
-   the last round's head to FIX. It reads the Markdown by pattern
+   the last round's head to FIX, or the whole change for a pull request a
+   force push replaced. It reads the Markdown by pattern
    rather than with a parser, so each line it replaces from the first one that
    starts like a list item on is named on standard error, where a misread
    shows. It never replaces an item line. A
@@ -103,7 +105,7 @@ def run(*args):
 
 
 def anchor(repo, num, checkout):
-    """Return the item's first line, without its number, and the pull request's full head."""
+    """Return the item's first line, without its number, the pull request's full head and its merge base."""
     pr = json.loads(run("gh", "pr", "view", num, "-R", repo,
                         "--json", "headRefOid,headRefName,baseRefName,state"))
     head = pr["headRefOid"]
@@ -121,7 +123,7 @@ def anchor(repo, num, checkout):
     if pr["state"] != "OPEN":
         line += f" **State: {pr['state']}.**"
     line += f" Diff: `git diff {base[:7]} {head[:7]}`."
-    return line, head
+    return line, head, base
 
 
 # The four answers GitHub documents. Two different commits never compare "identical", which is listed because GitHub
@@ -158,7 +160,7 @@ def print_anchors(specs):
         seen.add(key)
         matches.append(m)
     for i, m in enumerate(matches, 1):
-        line, _ = anchor(m["repo"], m["num"], m["checkout"])
+        line, _, _ = anchor(m["repo"], m["num"], m["checkout"])
         if i > 1:
             print()
         print(f"{i}. {line}\n\n{placeholder(i)}")
@@ -231,7 +233,7 @@ def next_brief(previous, out, specs, fix_specs=()):
                      f"on {it['repo']} PR #{it['num']}'s first line, which a reprint would drop. Move that text to an "
                      f"indented paragraph under the item, then rerun. Writing nothing")
 
-    moves = []
+    moves, rewritten = [], []
     for i, it in items:
         old = it["head"]
         earlier = EARLIER.search(lines[i])
@@ -243,7 +245,7 @@ def next_brief(previous, out, specs, fix_specs=()):
                      f"round {finished}, so its anchors are not all known. Fix that line's 'Earlier rounds read' "
                      f"list by hand first")
         checkout = CHECKOUT.search(lines[i])
-        line, head = anchor(it["repo"], it["num"], checkout["checkout"] if checkout else None)
+        line, head, base = anchor(it["repo"], it["num"], checkout["checkout"] if checkout else None)
         want = heads[f"{it['repo']}#{int(it['num'])}".lower()]
         if not same(head, want):
             sys.exit(f"{it['repo']} PR #{it['num']} is at {head[:7]} on GitHub, not {want[:7]}. Push the fix "
@@ -258,6 +260,7 @@ def next_brief(previous, out, specs, fix_specs=()):
             if answer != "ahead":
                 sys.exit(f"{it['repo']} PR #{it['num']}'s head {head[:7]} is {answer} against the fix {fix[:7]}, so "
                          f"the fix is not in the head's history. Name a fixing commit the head holds. Writing nothing")
+        dropped = False
         if not same(old, fix):
             answer = status(it["repo"], old, fix)
             if answer != "ahead":
@@ -269,11 +272,14 @@ def next_brief(previous, out, specs, fix_specs=()):
                              f"round's fixes. Name a fixing commit that comes after {old}. Writing nothing")
                 print(f"{it['repo']} PR #{it['num']}: round {finished}'s head {old} is not in the head's history on "
                       f"GitHub, as after a force push such as a rebase, so `git diff {old} {fix[:7]}` holds more than "
-                      f"the round's fixes. l3a0/claude-plugins#108 decides what a round reads then", file=sys.stderr)
+                      f"the round's fixes. The blank names the whole change from the merge base {base[:7]} instead, "
+                      f"as review-round.md's step 1 says", file=sys.stderr)
         rounds.append((finished, old))
         listed = ", ".join(f"round {r} `{h}`" for r, h in rounds)
         lines[i] = f"{it['n']}. {line} Earlier rounds read {listed}."
         moves.append((it, old, head[:7], fix[:7], checkout["checkout"] if checkout else "<checkout>"))
+        if dropped:
+            rewritten.append((it, base[:7], head[:7]))
 
     diffs = "; ".join(f"`git -C {where} diff {old} {fix}` on {it['repo']} PR #{it['num']}"
                       for it, old, _, fix, where in moves)
@@ -281,6 +287,20 @@ def next_brief(previous, out, specs, fix_specs=()):
              "brought, and any passage or function that diff touches or that states the same fact. Name those "
              "here, say so where a fix rewrote the subject and the round reads the whole change, and remove the "
              "angle brackets.>")
+    if rewritten:
+        # A force push replaced a head the last round read, so the diff from it holds the whole rebase, and the
+        # conflict edits a rebase made sit inside its commits, where no diff of the fixes shows them.
+        parts = []
+        for it, old, new, fix, where in moves:
+            whole = next((base for done, base, _ in rewritten if done is it), None)
+            if whole:
+                parts.append(f"the whole change, `git -C {where} diff {whole} {new}`, on {it['repo']} PR #{it['num']}, "
+                             f"because a force push replaced round {finished}'s head {old}")
+            else:
+                parts.append(f"round {finished}'s fixes, `git -C {where} diff {old} {fix}`, on {it['repo']} "
+                             f"PR #{it['num']}, leaving out what a merge of the base brought")
+        blank = (f"<This round reads {'; '.join(parts)}, and any passage or function a diff of fixes touches or "
+                 "that states the same fact. Name those here, and remove the angle brackets.>")
     start = next((i for i, line in enumerate(lines) if line.startswith(READS)), None)
     if start is not None:
         end = block_end(lines, start)
