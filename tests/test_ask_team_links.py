@@ -153,8 +153,9 @@ check("every mutating role or lens is told never to escalate, by the flag fast-m
       "every role or lens that may mutate code" in step3
       and "never in a mode that re-runs a survivor against the whole suite" in step3
       and "it passes `--no-escalate`." in step3 and '"--no-escalate"' in mutate)
-check("the one escalated run names the runner's flag for a single mutant",
-      "`mutate.py <spec> --only <name>`" in step3 and '"--only"' in mutate)
+check("a verifier passes the flag too", "A verifier's prompt passes `--no-escalate` like a lens's" in step3)
+check("a finding on a scoped survivor keeps the line and names its price",
+      "the lens's line that the whole-suite run was not made" in step3 and "a test the suite did not need" in step3)
 check("a lens reports a scoped survivor as a survivor whose whole-suite run was not made",
       "reports a survivor of the scoped run as a survivor" in step3 and "its run against the whole suite was not made" in step3)
 
