@@ -21,6 +21,8 @@ number, and says to edit by hand. It refuses a line that starts with a list
 number or bullet of its own, such as `1. `, because the script numbers the
 item itself and would write `2. 1. `. It refuses rather than strips the mark,
 so the line in PATH is the line the section holds, and a retry finds it.
+After the read back it compares the issues GitHub reads the body as closing
+with those before, as `section` does, and exits non-zero naming any change.
 
 `section` replaces the content of one named section of the body with the text
 in PATH, and keeps its heading. HEADING is the heading's whole line, such as
@@ -34,9 +36,10 @@ the section, and the command refuses an edit that would remove a line holding
 a closing keyword and a reference anywhere outside code. Its patterns cannot
 know every form GitHub reads, so after the read back it also compares the
 issues GitHub says the body closes with those it closed before, each named
-with its repository, and exits non-zero naming any it lost, with the body as
-read to restore. It catches only what GitHub has re-read by then, so a loss
-GitHub is slow to register still reads as success. It finds the
+with its repository, and exits non-zero naming any it lost or gained, with the
+body as read to restore. It catches only what GitHub has re-read by then, so a
+change GitHub is slow to register still reads as success, which `reword`'s wait
+avoids. It finds the
 heading by its whole line, ignoring trailing spaces. It sends nothing on a body
 where that line appears more than once, or, when it appears nowhere, where the
 heading's words appear on no heading or on more than one at any level, or on
@@ -370,6 +373,7 @@ def revision(args):
         sys.exit(f"the line starts with its own list marker {mark[1]!r}, and the script numbers the item itself, "
                  f"and the item would start '<n>. {mark[1]}'. Remove the marker from {args.file} and rerun")
     body = view(repo, num, "body")
+    closes = closing_numbers(repo, num)
     os.makedirs(args.scratch, exist_ok=True)
     name = f"body-{repo.replace('/', '-')}-{num}-"
     saved = keep(name, args.scratch, body)
@@ -396,6 +400,7 @@ def revision(args):
     if back != new:
         sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
                  f"As read before the edit: {saved}. As sent: {sent}")
+    closing_changed(repo, num, closes, SECTION, saved)
     print(f"{repo}#{num}: {SECTION} updated and read back")
 
 
@@ -493,6 +498,18 @@ def closing_numbers(repo, num):
     return found
 
 
+def closing_changed(repo, num, before, what, saved):
+    """Exit naming each issue GitHub now reads the body as closing, or no longer reads it as closing, after an edit."""
+    after = closing_numbers(repo, num)
+    lost, gained = sorted(before - after), sorted(after - before)
+    if not (lost or gained):
+        return
+    changes = ([f"no longer reads it as closing {', '.join(lost)}"] if lost else []) + \
+              ([f"now reads it as closing {', '.join(gained)}"] if gained else [])
+    sys.exit(f"{repo}#{num}: {what} was updated, and GitHub {' and '.join(changes)}. Change the closing words "
+             f"with reword, or restore the body as read with gh pr edit --body-file {saved}, and report it")
+
+
 def section(args):
     m = SPEC.match(args.pull)
     if not m:
@@ -544,11 +561,7 @@ def section(args):
         sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
                  f"As read before the edit: {saved}. As sent: {sent}")
     # GitHub's own reading of the closing keywords is the check the patterns above can only approach.
-    lost = closes - closing_numbers(repo, num)
-    if lost:
-        sys.exit(f"{repo}#{num}: {args.heading} was updated, and GitHub no longer reads it as closing "
-                 f"{', '.join(sorted(lost))}. Put the closing line back, such as by sending the body as "
-                 f"read with gh pr edit --body-file {saved}, and report it")
+    closing_changed(repo, num, closes, args.heading, saved)
     print(f"{repo}#{num}: {args.heading} updated and read back")
 
 

@@ -65,8 +65,8 @@ exact access). Reports of particular interest:
   a public repository. In scope is any path where text in a pull request or an
   issue steers what it posts, or where it writes outside the body's
   `## Revision` section, the one section its `section` command names or the
-  one passage its `reword` command names, or where `reword` reports success
-  while GitHub reads the body as closing other issues than `--closes` names.
+  one passage its `reword` command names, or where an edit changes which issues
+  GitHub reads the body as closing and the script reports success.
 - `diagram_words.py`, in `ask-team`, writes a local page that draws a
   repository's diagrams, whoever wrote them, with Mermaid loaded from
   `cdn.jsdelivr.net`. A content security policy on the page confines it. In

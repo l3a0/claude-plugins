@@ -1583,6 +1583,16 @@ Closes #109
     code, out = part('## Scope', 'New.\n', STUB_LOSE_OTHER='l3a0/other#3')
     check('section names a lost issue of another repository that shares a number with one it still closes', code != 0
           and 'closing l3a0/other#3' in out)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'This change closes #77 as well.\n')
+    check('section reports an issue the edit makes GitHub read as closed, naming it and the body to restore',
+          code != 0 and 'now reads it as closing o/r#77' in out and 'gh pr edit --body-file' in out and 'reword' in out)
+    seed(31)
+    code, out = revise('--line', '`ccccccc` answers round 3, which closes #78.', pull='o/r#31')
+    check('revision reports an issue its line makes GitHub read as closed', code != 0 and 'now reads it as closing o/r#78' in out)
+    seed(31)
+    code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#31', STUB_LOSE='12')
+    check('revision reports an issue GitHub no longer reads as closed after its edit', code != 0 and 'no longer reads it as closing o/r#12' in out)
     module = load()
     inside = SECTIONED.replace('Two facts decide it.', 'One fact decides it.')
     check('the guard passes a change inside the section', not module.changed_outside_section(SECTIONED, inside, '## Decision'))
