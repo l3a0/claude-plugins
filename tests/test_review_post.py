@@ -1372,6 +1372,12 @@ with tempfile.TemporaryDirectory() as ROOT:
         check(f'check fails a branch read that {label}', code != 0 and f'did not give the tip of {branch}' in out)
     code, out = gate(f'o/r@main={"2" * 7}={names("2" * 7)}')
     check('check fails an anchor that is ahead of the branch', code != 0 and 'is behind against the anchor' in out)
+    # A branch has no pull request, so check reads no force push for it, even where one on a pull request would hold
+    # the anchor.
+    seed(1, head='5' * 40, replaced=({'before': '6' * 40, 'ancestors': ['2' * 40]},))
+    code, out = gate(f'o/r@main={"2" * 7}={names("2" * 7)}')
+    check('check reads no force push for a branch target', code != 0 and 'is behind against the anchor' in out
+          and 'force push' not in out)
     code, out = gate(f'o/r@gone={A}={names(A)}')
     check('check fails a branch GitHub does not give', code != 0 and 'did not give the tip of gone' in out and 'post nothing' in out)
     code, out = gate(f'o/r#5={head5}={A}={names(A, head5)}', f'o/r@main={"2" * 7}={names("2" * 7)}')

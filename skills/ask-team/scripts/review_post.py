@@ -83,7 +83,8 @@ posts.
 `check` runs the head and anchor checks of `comment` and posts nothing, for a
 comment that names an anchor and goes by hand, such as one on an issue. For
 OWNER/REPO#N=HEAD=ANCHOR=FILE it checks that the pull request's head is HEAD,
-that ANCHOR is that head or an ancestor of it, and that FILE names both. For
+that ANCHOR is that head or an ancestor of it, or stands only through a
+recorded force push as for `comment`, and that FILE names both. For
 OWNER/REPO@BRANCH=ANCHOR=FILE it reads the branch's tip from GitHub, and checks
 that ANCHOR is that tip or an ancestor of it and that FILE names ANCHOR, which
 suits a plan read against `main`. On a pull request it also refuses an anchor
@@ -95,7 +96,8 @@ and refuses an answer for any other branch, so a name holding `#` reads that
 branch. It stops at the first target it cannot parse or whose file is
 missing. Otherwise it exits non-zero naming each file that does not name its
 anchor or head, each head and each branch that fails, and when those all
-pass, each anchor that fails. It reads no comments, because
+pass, each anchor that fails, then a `## Review complete` file whose anchor
+stands only through a force push. It reads no comments, because
 each route keys its retry by its own lines. It cannot show that the file it
 read is the file then posted, and like `comment` it reads the file for the
 anchor and head by substring.
@@ -114,10 +116,9 @@ a `## Cost` comment by the same login for this round and pull request under
 another anchor, because a `## Cost total` would count the round twice. It
 runs no check that the anchor is in the pull request's history, because only
 `cost` reads that anchor, to recognise a retry. In the usual order the round's
-comment posts first, through `comment`, which checks it. Where the round's
-comment did not post, such as after a force push dropped the anchor, whether
-its figures post and which `## Cost` comment carries them waits on
-l3a0/claude-plugins#108.
+comment posts first, through `comment`, which checks it. That holds after a
+force push dropped the anchor too, because `comment` accepts an anchor a
+recorded force push replaced, so the round's figures follow in the usual order.
 
 A write that fails says the outcome is unknown, since the request may have
 landed. Rerun the same command, which looks before it writes. A read can lag
@@ -482,9 +483,7 @@ def replaced_head(repo, num, anchor):
     if done.returncode:
         return None, f"GitHub's record of force pushes on {repo}#{num} could not be read: {done.stderr.strip()}"
     befores = list(dict.fromkeys(line.strip() for line in done.stdout.split("\n") if line.strip()))
-    for before in befores:
-        if before.startswith(anchor):
-            return before, None
+    # compare_status answers None for an anchor that is the replaced head itself, so one loop covers both.
     unread = []
     for before in befores:
         why, _, status = compare_status(repo, anchor, before)
