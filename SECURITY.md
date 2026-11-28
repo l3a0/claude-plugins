@@ -109,3 +109,10 @@ exact access). Reports of particular interest:
   interpreter. In scope is any way it leaves a file mutated after an exit it
   could catch, writes outside that worktree and its `--out` folder, or runs a
   program other than the spec's interpreter.
+- `rewrite-calls` rewrites Python files in place. `rewrite_calls.py` and
+  `reflow_strings.py` write only the files named on their command line, and
+  `reflow_strings.py` and `check_strings.py` run only `git diff`, `git
+  rev-parse`, `git cat-file` and `git show`. None of them makes a network call.
+  In scope is any way a script writes outside the files it is given, runs a
+  program other than git, or reports a rewrite as unchanged when it changed
+  the program or a string.
