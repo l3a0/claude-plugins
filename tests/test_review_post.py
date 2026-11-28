@@ -110,10 +110,10 @@ if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesRefere
     # GitHub's own reading of closing keywords, approximated: a keyword, an optional colon, then #N, outside fences.
     import re
     text, fence = [], False
-    source = pr['body']
+    source, lagged = pr['body'], False
     # STUB_LAG stands for GitHub re-reading a body some time after an edit: that many reads still see the body before it.
     if os.environ.get('STUB_LAG') and pr.get('edits') and pr.get('lag_reads', 0) < int(os.environ['STUB_LAG']):
-        source = pr['prev_body']
+        source, lagged = pr['prev_body'], True
         pr['lag_reads'] = pr.get('lag_reads', 0) + 1
         json.dump(pr, open(path, 'w'))
     for line in source.split(chr(10)):
@@ -128,7 +128,7 @@ if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesRefere
     if os.environ.get('STUB_LOSE') and not pr.get('edits'):
         nums.append(os.environ['STUB_LOSE'])
     # STUB_GAIN stands for a form GitHub reads that the script's patterns miss: closed after the edit, not before.
-    if os.environ.get('STUB_GAIN') and pr.get('edits'):
+    if os.environ.get('STUB_GAIN') and pr.get('edits') and not lagged:
         nums.append(os.environ['STUB_GAIN'])
     owner, name = args[4].split('/')
     refs = [{'number': int(n), 'repository': {'name': name, 'owner': {'login': owner}}} for n in dict.fromkeys(nums)]
@@ -1709,8 +1709,8 @@ Closes #109
     check('reword refuses before sending a new text that closes an issue --closes does not name', code != 0
           and 'names o/r#99' in out and state(40).get('edits') is None)
     seed(40, WORDED)
-    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_LAG='1000', STUB_GAIN='99')
-    check('reword keeps reading for the whole wait when --closes asks for the set the body already closed',
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_LAG='2', STUB_GAIN='99')
+    check('reword keeps reading after a stale read that matches, when --closes asks for the set the body already closed',
           code != 0 and 'still closes o/r#99' in out)
     seed(40, WORDED)
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_LAG='2')
