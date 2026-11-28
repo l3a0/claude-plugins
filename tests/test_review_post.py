@@ -9,7 +9,7 @@ so these tests say nothing about what the real `gh` prints. The fixture's `## Wh
 the `## Revision` list and the body ends in a closing line and the footer, which is the shape that lost two
 `## What` items on l3a0/ithildin-runtime PR #28.
 """
-import argparse, contextlib, importlib.util, io, json, os, stat, subprocess, sys, tempfile
+import argparse, contextlib, importlib.util, io, json, os, signal, stat, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.join(HERE, '..', 'skills', 'ask-team', 'scripts', 'review_post.py')
@@ -165,6 +165,12 @@ if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesRefere
         refs.append({'number': int(num_), 'repository': {'name': n_, 'owner': {'login': o}}})
     print(json.dumps({'closingIssuesReferences': refs}))
     sys.exit(0)
+if args[1] == 'view' and args[5] == '--json' and args[6] == 'body' and os.path.exists(os.path.join(state, 'interrupt-body')):
+    # A person presses Ctrl-C while the script reads the body back after its edit.
+    import signal, time
+    os.remove(os.path.join(state, 'interrupt-body'))
+    os.kill(os.getppid(), signal.SIGINT)
+    time.sleep(2)
 if args[1] == 'view' and args[5] == '--json':
     hide = os.path.join(state, 'hide')
     if args[6] == 'comments' and os.path.exists(hide):
@@ -186,6 +192,8 @@ elif args[1] == 'edit' and args[5] == '--body-file' and args[0] == 'pr':
     pr['edits'] = pr.get('edits', 0) + 1
     json.dump(pr, open(path, 'w'))
     if os.environ.get('STUB_LOST') == 'edit': sys.exit('stand-in gh: connection lost')
+    if os.environ.get('STUB_INTERRUPT') == 'body':
+        open(os.path.join(state, 'interrupt-body'), 'w').write('1')
     if os.environ.get('STUB_INTERRUPT') == 'edit':
         # A person presses Ctrl-C while the edit is in flight, after it has landed.
         import signal, time
@@ -294,7 +302,9 @@ with tempfile.TemporaryDirectory() as ROOT:
 
     def run(*argv, **env):
         full = dict(os.environ, PATH=BIN + os.pathsep + os.environ['PATH'], STUB_STATE=STATE, **env)
-        done = subprocess.run([sys.executable, SCRIPT, *argv], capture_output=True, text=True, env=full)
+        # A shell that starts this suite in the background ignores SIGINT, so restore it for the stand-in's interrupts.
+        done = subprocess.run([sys.executable, SCRIPT, *argv], capture_output=True, text=True, env=full,
+                              preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))
         return done.returncode, done.stdout + done.stderr
 
     def revise(*extra, pull='o/r#5', **env):
@@ -1674,6 +1684,10 @@ Closes #109
     code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#31', STUB_CLOSES_FAIL='1')
     check('a failed closing read after a revision edit says the edit landed', code != 0 and 'The edit landed' in out)
     seed(31)
+    code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#31', STUB_INTERRUPT='closes')
+    check('an interrupt during the closing read after a revision edit says the edit landed', code != 0
+          and 'Interrupted. The edit landed' in out and 'Traceback' not in out)
+    seed(31)
     code, out = revise('--line', '`ccccccc` answers round 3, part of #117.', pull='o/r#31')
     check('revision accepts a line that is part of an issue, which closes nothing', code == 0 and state(31)['edits'] == 1)
     seed(30, SECTIONED)
@@ -1773,7 +1787,7 @@ Closes #109
     seed(40, WORDED)
     code, out = reword('stalled.', 'stalled, and fixes #99.', 'o/r#247')
     check('reword refuses before sending a new text that closes an issue --closes does not name', code != 0
-          and 'would read the body as closing o/r#99' in out and state(40).get('edits') is None)
+          and 'names o/r#99 after a closing keyword' in out and state(40).get('edits') is None)
     seed(40, WORDED)
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_LAG='2', STUB_GAIN='99')
     check('reword keeps reading after a stale read that matches, when --closes asks for the set the body already closed',
@@ -1789,7 +1803,7 @@ Closes #109
     code, out = reword('stalled.', 'stalled, \\`fixes #99\\`.', 'o/r#247', STUB_LAG='1000')
     check('reword reads a keyword between escaped backticks', code != 0 and 'o/r#99' in out and state(40).get('edits') is None)
     seed(40, WORDED)
-    code, out = reword('which closes #247,', 'which tracks #247,', 'none', '--wait', '1', STUB_CLOSES_SEQ='[[], [77]]')
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none', '--wait', '1', STUB_CLOSES_SEQ='[[], [77], []]')
     check('reword keeps reading after the first match until the wait runs out', code != 0 and 'now closes o/r#77' in out)
     for label, old_text, new_text, closes in (('wraps the passage in a code span', 'o/r#265, which closes #247', '`o/r#265, which closes #247`', 'none'),
                                                ('appends to the passage', 'which closes #247,', 'which closes #247, and tracks #248,', '#247')):
@@ -1873,7 +1887,17 @@ Closes #109
     check('reword reads no closing words inside a code fence in the body', code == 0 and 'as --closes asks' in out)
     seed(40, WORDED)
     code, out = reword('stalled.', 'stalled, quoting `closes #5`.', 'o/r#247')
-    check('reword reads no closing words inside a code span in the new passage', code == 0 and 'as --closes asks' in out)
+    check('reword refuses a closing keyword a new passage adds inside a code span, which a squash commit carries as plain text',
+          code != 0 and 'inside a code span or not' in out and state(40).get('edits') is None)
+    seed(40, WORDED.replace('stalled.', 'stalled, quoting `closes #5`.'))
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247')
+    check('reword reads no closing words inside a code span the body already holds', code == 0 and 'as --closes asks' in out)
+    seed(40, WORDED)
+    code, out = reword('stalled.', 'stalled x`y`closes #5.', 'o/r#247')
+    check('reword reads a keyword right after a code span', code != 0 and 'o/r#5' in out and state(40).get('edits') is None)
+    seed(40, WORDED.replace('which closes #247,', 'which tracks #247,'))
+    code, out = reword('which tracks', 'Closes `x`', 'o/r#247')
+    check('a code span between a keyword and its reference leaves the keyword read', code == 0 and 'as --closes asks' in out)
     seed(40, WORDED)
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_CLOSES_FAIL='1')
     check('a failed closing read after a reword edit says the edit landed and names the body to restore', code != 0
@@ -1917,8 +1941,12 @@ Closes #109
     check('a reword dry run accepts any --wait, since it never waits', code == 0 and state(40).get('edits') is None)
     seed(40, WORDED)
     code, out = reword('stalled.', 'stalled, and closes #66.', 'o/r#247')
-    check('a refusal says when the edit adds the closing keyword, and leaves the lag out', code != 0
-          and 'The edit adds a closing keyword naming o/r#66' in out and 'has not yet re-read' not in out)
+    check('a refusal of a closing keyword the new text adds leaves the lag out', code != 0
+          and 'names o/r#66 after a closing keyword' in out and 'has not yet re-read' not in out)
+    seed(40, WORDED.replace('which closes #247,', 'which tracks #247,'))
+    code, out = reword('tracks', 'closes', 'o/r#99')
+    check('a refusal says when the edit forms a closing keyword with a reference outside it, and leaves the lag out', code != 0
+          and 'The edit adds a closing keyword naming o/r#247' in out and 'pull request' in out and 'has not yet re-read' not in out)
     seed(40, WORDED)
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_GAIN='9', STUB_GAIN_BEFORE='1')
     check('a refusal says when GitHub lists an issue no line names', code != 0 and 'GitHub lists o/r#9 with no closing keyword' in out
@@ -1939,6 +1967,10 @@ Closes #109
     code, out = reword(' and closes #50,', ',', 'o/r#247', STUB_GAIN='50', STUB_GAIN_BEFORE='1')
     check('an issue both linked by hand and named, whose name the edit removes, sends and then reports the mismatch',
           code != 0 and state(40)['edits'] == 1 and 'still closes o/r#50' in out)
+    seed(40, WORDED)
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_INTERRUPT='body')
+    check('an interrupt during the read-back says so and that the edit may have landed', code != 0
+          and 'Interrupted. The edit may have landed' in out and 'Traceback' not in out)
     seed(40, WORDED)
     code, out = reword('Adds the', 'Brings the', 'none')
     check('reword refuses a passage the body holds more than once', code != 0 and '3 times' in out and state(40).get('edits') is None)

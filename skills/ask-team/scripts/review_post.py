@@ -98,25 +98,31 @@ GitHub re-reads the closing keywords some time after an edit, so it then reads
 GitHub's `closingIssuesReferences` for SECS seconds, 60 by default. A matching
 read may be GitHub catching up on an earlier edit rather than this one, so once
 a read matches, every read until the wait runs out must match too. Where REFS
-is the set before, that holds from the first read. It reads a code span as
-CommonMark does, so a run of backticks with no closing run of the same length
-hides no keyword, though it reads spans one line at a time and does not treat a
-backslash before a run of backticks as escaping only the first. It does not end
-a code fence opened inside a list item when the list ends. A keyword in those
-forms is missed, and only the wait can catch it. A squash merge carries the
-body to the default branch as plain text, so the refusals advise rewording a
-closing phrase rather than quoting it in a code span. A lag longer than the wait still reads as
-success in that case, so the check before sending is what catches an edit the
-patterns read. On a mismatch it
-exits non-zero naming each issue still closed or no longer closed, with the
+is the set before, that holds from the first read, and a lag longer than the
+wait still reads as success, so the check before sending is what catches an
+edit the patterns read. On a mismatch it exits non-zero naming each issue it
+still closes, now closes, no longer closes or does not yet close, with the
 body from before the edit to restore. A rerun sent nothing, so it points at
-the earlier run's own message and GitHub's edit history instead. A rerun finds the
-new passage, with every copy of the old one inside it, sends nothing, refuses
-a body that names an issue REFS leaves out, and checks again. A rerun cannot
-tell an edit that never landed from one that landed and was put back by hand,
-so it sends again over a body put back. A passage removed outright
-leaves nothing to find, so its rerun stops as missing. `--dry-run` prints the
-diff, what GitHub reads now and what REFS asks for.
+the earlier run's own message and GitHub's edit history instead.
+
+A squash merge carries the body to the default branch as plain text, so a
+code span gives no cover there. The check before sending refuses a new
+passage that adds a closing keyword with a reference REFS leaves out, inside a
+code span or not, and the refusals advise rewording rather than quoting.
+Whether GitHub closes an issue on such a commit is not yet checked, which
+l3a0/claude-plugins#126 holds. Otherwise it reads a code span as CommonMark
+does, so a run of backticks with no closing run of the same length hides no
+keyword. It misses a keyword in five forms, which only the wait can catch: a
+code span across a line break, a backslash before a run of backticks, a code
+fence opened inside a list item and left open after it, a fence line inside an
+HTML block, and a backtick inside an autolink or an HTML attribute.
+
+A rerun finds the new passage, with every copy of the old one inside it, sends
+nothing, refuses a body that names an issue REFS leaves out, and checks again.
+A rerun cannot tell an edit that never landed from one that landed and was
+put back by hand, so it sends again over a body put back. A passage removed
+outright leaves nothing to find, so its rerun stops as missing. `--dry-run`
+prints the diff, what GitHub reads now and what REFS asks for.
 
 `comment` takes each comment's heading from its file's first line. It refuses a
 file that does not start with a heading and name the round, its anchor and the
@@ -462,7 +468,7 @@ def revision(args):
     try:
         back = view(repo, num, "body")
     except (SystemExit, KeyboardInterrupt) as failed:
-        sys.exit(f"{failed or 'Interrupted.'} The edit may have landed, so the outcome is unknown. Rerun this command, which "
+        sys.exit(f"{str(failed) or 'Interrupted.'} The edit may have landed, so the outcome is unknown. Rerun this command, which "
                  f"looks before it writes. As read: {saved}. As sent: {sent}")
     if back != new:
         sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
@@ -574,11 +580,12 @@ def closing_numbers(repo, num):
 CLOSED_REF = re.compile(r"(?:https://github\.com/)?(?:([\w.-]+/[\w.-]+)(?:/issues/|#)|#)(\d+)", re.IGNORECASE)
 
 
-def closing_refs(text, repo):
+def closing_refs(text, repo, spans=True):
     """Return each issue a closing keyword names in text, outside fences and code spans, as closing_numbers names it."""
     found = set()
     for _, line in outside_fences(text.split("\n")):
-        plain = CODE_SPAN.sub(" ", line)
+        # spans=False reads keywords inside code spans too, as a squash commit's plain text would carry them.
+        plain = CODE_SPAN.sub(" ", line) if spans else line
         for m in CLOSES.finditer(plain):
             ref = CLOSED_REF.search(plain, m.start())
             if ref:
@@ -587,10 +594,13 @@ def closing_refs(text, repo):
 
 
 def added_closing(old, new):
-    """Return the lines new holds, outside fences and code spans, that may close an issue and old does not hold."""
+    """Return the lines new holds outside fences, code spans included, that may close an issue and old does not hold.
+
+    A squash merge carries the body to the default branch as plain text, so a code span gives no cover there.
+    """
     kept = {line.strip() for _, line in outside_fences(old.split("\n"))}
     return [line.strip() for _, line in outside_fences(new.split("\n"))
-            if CLOSES.search(CODE_SPAN.sub(" ", line)) and line.strip() not in kept]
+            if CLOSES.search(line) and line.strip() not in kept]
 
 
 def unchanged_rerun(repo, num, what):
@@ -607,9 +617,9 @@ def closing_changed(repo, num, before, what, saved, remedy):
     """Exit naming each issue GitHub now reads the body as closing, or no longer reads it as closing, after an edit."""
     try:
         after = closing_numbers(repo, num)
-    except SystemExit as failed:
-        sys.exit(f"{failed} The edit landed, and GitHub's reading of what the body closes is unknown. "
-                 f"The body as read before the edit is at {saved}")
+    except (SystemExit, KeyboardInterrupt) as failed:
+        sys.exit(f"{str(failed) or 'Interrupted.'} The edit landed, and GitHub's reading of what the body closes is "
+                 f"unknown. The body as read before the edit is at {saved}")
     lost, gained = sorted(before - after), sorted(after - before)
     if not (lost or gained):
         return
@@ -670,7 +680,7 @@ def section(args):
     try:
         back = view(repo, num, "body")
     except (SystemExit, KeyboardInterrupt) as failed:
-        sys.exit(f"{failed or 'Interrupted.'} The edit may have landed, so the outcome is unknown. Rerun this command, which "
+        sys.exit(f"{str(failed) or 'Interrupted.'} The edit may have landed, so the outcome is unknown. Rerun this command, which "
                  f"looks before it writes. As read: {saved}. As sent: {sent}")
     if back != new:
         sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
@@ -722,7 +732,8 @@ def why_added(added, before, unnamed, named):
     parts = []
     for ref in added:
         if ref in named and ref not in unnamed:
-            parts.append(f"The edit adds a closing keyword naming {ref}, so add it to --closes, or {reword_it}.")
+            parts.append(f"The edit adds a closing keyword naming {ref}, so add it to --closes, unless the number "
+                         f"names a pull request, which GitHub never lists as closed, or {reword_it}.")
         elif ref in named and ref not in before:
             parts.append(f"The body already names {ref} after a closing keyword and GitHub's list lacks it. Either "
                          "GitHub has not yet re-read an earlier edit, and waiting and rerunning helps, or GitHub does "
@@ -801,6 +812,14 @@ def reword(args):
         # GitHub's list also holds issues linked by hand, which no body names, so start from what GitHub reads now, less
         # what the edit stops naming. GitHub's list can lag an earlier edit, so add every issue the new body names,
         # not only those this edit starts naming.
+        # A keyword inside a code span closes nothing in the body, but a squash commit carries it as plain text, so
+        # refuse one the edit adds there unless --closes names it.
+        quoted = sorted(closing_refs(new_text, repo, spans=False) - closing_refs(old, repo, spans=False) - want)
+        if quoted:
+            sys.exit(f"{repo}#{num}: the new text names {', '.join(quoted)} after a closing keyword, inside a code "
+                     "span or not, and --closes does not name it. A squash merge carries the body to the default "
+                     "branch as plain text, so reword the line so no closing keyword comes right before the "
+                     f"reference. The body as read is at {saved}")
         named, unnamed = closing_refs(new, repo), closing_refs(body, repo)
         predicted = (before - (unnamed - named)) | named
         added, dropped = sorted(predicted - want), sorted(want - predicted)
@@ -831,14 +850,12 @@ def reword(args):
         try:
             back = view(repo, num, "body")
         except (SystemExit, KeyboardInterrupt) as failed:
-            sys.exit(f"{failed or 'Interrupted.'} The edit may have landed, so the outcome is unknown. Rerun this command, which "
+            sys.exit(f"{str(failed) or 'Interrupted.'} The edit may have landed, so the outcome is unknown. Rerun this command, which "
                      f"looks before it writes. As read: {saved}. As sent: {sent}")
         if back != new:
             sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
                      f"As read before the edit: {saved}. As sent: {sent}")
     # GitHub re-reads a body's closing keywords some time after an edit, so one read can still show the old set.
-    # Where --closes asks for a set other than the one before, read until GitHub shows it. Where it asks for the
-    # same set, a read that matches may not have re-read the body yet, so every read until --wait runs out must match.
     limit = time.monotonic() + args.wait
     pause = min(2.0, max(args.wait / 10, 0.05))
     steady = want == before
