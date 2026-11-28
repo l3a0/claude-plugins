@@ -75,6 +75,21 @@ if args[0] not in ('pr', 'issue') or args[3] != '-R': fail()
 path = os.path.join(state, ('issue-' if args[0] == 'issue' else '') + args[4].replace('/', '-') + '-' + args[2] + '.json')
 if not os.path.exists(path): fail()
 pr = json.load(open(path))
+if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesReferences':
+    # GitHub's own reading of closing keywords, approximated: a keyword, an optional colon, then #N, outside fences.
+    import re
+    text, fence = [], False
+    for line in pr['body'].split(chr(10)):
+        if line.lstrip().startswith('```'):
+            fence = not fence
+        elif not fence:
+            text.append(re.sub('`[^`]*`', '', line))
+    nums = re.findall('(?i)(?:^|[^A-Za-z0-9_])(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?):?[ ]+#([0-9]+)', chr(10).join(text))
+    # STUB_LOSE stands for a form GitHub reads that the script's patterns miss: closed before the edit, not after.
+    if os.environ.get('STUB_LOSE') and not pr.get('edits'):
+        nums.append(os.environ['STUB_LOSE'])
+    print(json.dumps({'closingIssuesReferences': [{'number': int(n)} for n in dict.fromkeys(nums)]}))
+    sys.exit(0)
 if args[1] == 'view' and args[5] == '--json':
     hide = os.path.join(state, 'hide')
     if args[6] == 'comments' and os.path.exists(hide):
@@ -1317,7 +1332,8 @@ Closes #109
         code, out = part('## Scope', 'New.\n')
         check(f'section keeps a closing line with a colon outside the last section: {closing}', code == 0
               and f'## Scope\n\nNew.\n\n{closing}\n\n🤖' in state(30)['body'])
-    for closing in ('Closes https://github.com/l3a0/other/issues/3', '- Closes #12', 'Fixes #1; fixes #2'):
+    for closing in ('Closes https://github.com/l3a0/other/issues/3', '- Closes #12', 'Fixes #1; fixes #2', '1. Closes #12',
+                    'This change fixes #12.'):
         seed(30, SECTIONED.replace('Closes #109', closing))
         code, out = part('## Scope', 'New.\n')
         check(f'section refuses to remove a closing line it cannot read: {closing}', code != 0
@@ -1339,6 +1355,19 @@ Closes #109
         code, out = part('## Scope', 'New.\n')
         check(f'section keeps a closing line with several references outside the last section: {closing}', code == 0
               and f'## Scope\n\nNew.\n\n{closing}\n\n🤖' in state(30)['body'])
+    for label, line, text in (('a reworded mention of a fix in passing', 'Fixed the stale link from #12 in round 3.', 'New.\n'),
+                              ('an example in a code span', '- `Closes #12` now counts as a closing line.', 'New.\n'),
+                              ('a closing line kept with other indentation', '  Fixes #12 in the parser.', 'New.\n\nFixes #12 in the parser.\n')):
+        seed(30, SECTIONED.replace('Out of scope: nothing.', 'Out of scope: nothing.\n\n' + line))
+        code, out = part('## Scope', text)
+        check(f'section takes {label}', code == 0 and state(30)['edits'] == 1)
+    seed(30, SECTIONED.replace('Out of scope: nothing.', 'Out of scope: nothing.\n\nFixes #12 in the parser.'))
+    code, out = part('## Scope', 'New.\n\n```text\nFixes #12 in the parser.\n```\n')
+    check('section refuses to count a closing line moved into a code fence as kept', code != 0 and 'which may close an issue' in out)
+    seed(30, SECTIONED)
+    code, out = part('## Scope', 'New.\n', STUB_LOSE='12')
+    check('section reports an issue GitHub no longer reads as closed after the edit, naming it and the body to restore',
+          code != 0 and 'no longer reads it as closing #12' in out and 'gh pr edit --body-file' in out)
     module = load()
     inside = SECTIONED.replace('Two facts decide it.', 'One fact decides it.')
     check('the guard passes a change inside the section', not module.changed_outside_section(SECTIONED, inside, '## Decision'))

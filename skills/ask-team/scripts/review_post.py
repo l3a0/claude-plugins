@@ -29,8 +29,11 @@ Headings inside code fences do not count. A line that is wholly a closing
 line, such as `Closes #12`, `Closes: #12` or `Closes #12, part of #9.`, starts
 the closing lines. Any other line that may close an issue, such as a bullet, a
 full issue address, or a sentence that opens with a closing word, stays inside
-the section, and the command refuses an edit that would remove it, because
-its patterns cannot know every form GitHub reads. It finds the
+the section, and the command refuses an edit that would remove a line holding
+a closing keyword and a reference anywhere outside code. Its patterns cannot
+know every form GitHub reads, so after the read back it also compares the
+issues GitHub says the body closes with those it closed before, and exits
+non-zero naming any it lost, with the body as read to restore. It finds the
 heading by its whole line, ignoring trailing spaces. It sends nothing on a body
 where that line appears more than once, or, when it appears nowhere, where the
 heading's words appear on no heading or on more than one at any level, or on
@@ -370,9 +373,10 @@ _KEYWORD = r"(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|part of):?"
 _REF = r"(?:no issue|(?:[\w.-]+/[\w.-]+)?#\d+)"
 # A whole closing line: a keyword and a reference, then more references, each after a comma or "and" and a keyword.
 CLOSING_LINE = re.compile(rf"^{_KEYWORD}\s+{_REF}(?:\s*(?:,|\band\b)\s*(?:{_KEYWORD}\s+)?{_REF})*\.?\s*$", re.IGNORECASE)
-# Any line that may close an issue or name the one it is part of, in whatever form GitHub reads, such as a
-# bullet, a colon after the keyword, or a full issue address. Deleting one of these is refused.
-MAY_CLOSE = re.compile(r"^\W*(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|part of)\b.*?(?:#\d|/issues/\d)", re.IGNORECASE)
+# A closing keyword followed by a reference, anywhere in a line, as GitHub reads it in a body: in a bullet, after
+# a colon, mid-sentence, or with a full issue address. Deleting a line that holds one is refused.
+MAY_CLOSE = re.compile(r"\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?|part of)\b:?\s+\S*?(?:#\d|/issues/\d)", re.IGNORECASE)
+CODE_SPAN = re.compile(r"(`+).+?\1")
 
 
 def section_end_limit(lines):
@@ -427,8 +431,10 @@ def removed_closing(old, new, heading):
     """Return the lines the edit removes from the section that may close an issue, apart from how the edit was built."""
     a = old.split("\n")
     start, end = section_bounds(a, heading)
-    kept = new.split("\n")
-    return [line.strip() for line in a[start + 1:end] if MAY_CLOSE.match(line.strip()) and line not in kept]
+    # GitHub reads no keyword inside code, so a line counts only outside fences and code spans, on both sides.
+    kept = {line.strip() for _, line in outside_fences(new.split("\n"))}
+    section = [line for i, line in outside_fences(a) if start < i < end]
+    return [line.strip() for line in section if MAY_CLOSE.search(CODE_SPAN.sub("", line)) and line.strip() not in kept]
 
 
 def changed_outside_section(old, new, heading):
@@ -443,6 +449,10 @@ def changed_outside_section(old, new, heading):
     while tail < shared - head and a[-1 - tail] == b[-1 - tail]:
         tail += 1
     return head <= start or len(a) - tail > end
+
+
+def closing_numbers(repo, num):
+    return {ref["number"] for ref in view(repo, num, "closingIssuesReferences")}
 
 
 def section(args):
@@ -463,6 +473,7 @@ def section(args):
         sys.exit(f"{args.file} holds the heading {inner[0].strip()!r}, which would end the section early. "
                  "Remove it, or edit by hand")
     body = view(repo, num, "body")
+    closes = closing_numbers(repo, num)
     os.makedirs(args.scratch, exist_ok=True)
     name = f"body-{repo.replace('/', '-')}-{num}-"
     saved = keep(name, args.scratch, body)
@@ -493,6 +504,12 @@ def section(args):
     if back != new:
         sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
                  f"As read before the edit: {saved}. As sent: {sent}")
+    # GitHub's own reading of the closing keywords is the check the patterns above can only approach.
+    lost = closes - closing_numbers(repo, num)
+    if lost:
+        sys.exit(f"{repo}#{num}: {args.heading} was updated, and GitHub no longer reads it as closing "
+                 f"{', '.join(f'#{n}' for n in sorted(lost))}. Put the closing line back, such as by sending the body as "
+                 f"read with gh pr edit --body-file {saved}, and report it")
     print(f"{repo}#{num}: {args.heading} updated and read back")
 
 
