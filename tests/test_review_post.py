@@ -108,7 +108,13 @@ if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesRefere
     # GitHub's own reading of closing keywords, approximated: a keyword, an optional colon, then #N, outside fences.
     import re
     text, fence = [], False
-    for line in pr['body'].split(chr(10)):
+    source = pr['body']
+    # STUB_LAG stands for GitHub re-reading a body some time after an edit: that many reads still see the body before it.
+    if os.environ.get('STUB_LAG') and pr.get('edits') and pr.get('lag_reads', 0) < int(os.environ['STUB_LAG']):
+        source = pr['prev_body']
+        pr['lag_reads'] = pr.get('lag_reads', 0) + 1
+        json.dump(pr, open(path, 'w'))
+    for line in source.split(chr(10)):
         if line.lstrip().startswith('```'):
             fence = not fence
         elif not fence:
@@ -135,7 +141,13 @@ if args[1] == 'view' and args[5] == '--json':
         print(json.dumps({'comments': [c for c in pr['comments'] if c.get('url') != gone]}))
     else:
         print(json.dumps({args[6]: pr[args[6]]}))
+        # STUB_OWNER_EDIT stands for the owner editing the body after the script's first read of it.
+        if args[6] == 'body' and os.environ.get('STUB_OWNER_EDIT') and not pr.get('owner_edit'):
+            pr['body'] += os.environ['STUB_OWNER_EDIT']
+            pr['owner_edit'] = True
+            json.dump(pr, open(path, 'w'))
 elif args[1] == 'edit' and args[5] == '--body-file' and args[0] == 'pr':
+    pr['prev_body'] = pr['body']
     pr['body'] = open(args[6], newline='').read() + os.environ.get('STUB_EDIT_ADDS', '')
     pr['edits'] = pr.get('edits', 0) + 1
     json.dump(pr, open(path, 'w'))
@@ -1597,5 +1609,71 @@ Closes #109
     check('a lost section edit says the outcome is unknown', code != 0 and 'outcome is unknown' in out)
     code, out = part('## Decision', 'One fact.\n')
     check('the retry after a lost section edit sends nothing more', code == 0 and state(30)['edits'] == 1 and 'nothing changed' in out)
+
+    # reword: the route for a line that may close an issue, checked against what GitHub then reads the body as closing.
+    WORDED = BODY.replace('Because.', 'Round 1 of the review of o/r#265, which closes #247, stalled.')
+
+    def reword(old, new, closes, *extra, num=40, **env):
+        paths = []
+        for label, text in (('old', old), ('new', new)):
+            p = os.path.join(ROOT, f'{label}.txt')
+            with open(p, 'w', newline='') as f:
+                f.write(text + '\n')
+            paths.append(p)
+        return run('reword', f'o/r#{num}', '--old', paths[0], '--new', paths[1], '--closes', closes,
+                   '--scratch', SCRATCH, '--wait', '0.5', *extra, **env)
+
+    seed(40, WORDED)
+    why = os.path.join(ROOT, 'why.txt')
+    with open(why, 'w') as f:
+        f.write('Round 1 stalled.\n')
+    code, out = run('section', 'o/r#40', '--heading', '## Why', '--scratch', SCRATCH, '--file', why)
+    check('section points at reword when it refuses to remove a closing line', code != 0 and 'reword' in out and state(40).get('edits') is None)
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none')
+    check('reword replaces the passage and confirms GitHub no longer reads it as closing', code == 0
+          and state(40)['body'] == WORDED.replace('which closes #247,', 'which tracks #247,') and 'as --closes asks' in out)
+    check('reword changes nothing outside the passage', state(40)['body'].replace('which tracks #247,', 'which closes #247,') == WORDED)
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none')
+    check('a rerun after reword sends nothing and checks again', code == 0 and state(40)['edits'] == 1 and 'nothing was sent' in out)
+    seed(40, WORDED)
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none', STUB_LAG='3')
+    check('reword waits while GitHub still reads the old body as closing', code == 0 and 'as --closes asks' in out)
+    seed(40, WORDED)
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none', STUB_LAG='1000')
+    check('reword exits non-zero naming the issue still closed once its wait runs out', code != 0
+          and 'still closes o/r#247' in out and 'gh pr edit --body-file' in out)
+    seed(40, WORDED)
+    code, out = reword('which closes #247,', 'which fixes #247,', 'none')
+    check('reword names a new wording that still closes the issue', code != 0 and 'still closes o/r#247' in out)
+    seed(40, WORDED)
+    code, out = reword('which closes #247,', 'which tracks #247,', '#247')
+    check('reword names an issue --closes asks for that the body no longer closes', code != 0 and 'no longer closes o/r#247' in out)
+    seed(40, WORDED)
+    code, out = reword('Adds the', 'Brings the', 'none')
+    check('reword refuses a passage the body holds more than once', code != 0 and '3 times' in out and state(40).get('edits') is None)
+    code, out = reword('not in the body', 'x', 'none')
+    check('reword refuses a passage the body does not hold', code != 0 and 'missing' in out and state(40).get('edits') is None)
+    code, out = reword('', 'x', 'none')
+    check('reword refuses an empty passage', code != 0 and 'holds no passage' in out and state(40).get('edits') is None)
+    code, out = reword('## What', '## Changes', 'none')
+    check('reword refuses a passage that holds a heading', code != 0 and 'heading' in out and state(40).get('edits') is None)
+    code, out = reword('`bbbbbbb` answers round 2.', '`bbbbbbb` answers round two.', 'none')
+    check('reword leaves a Revision line to revision', code != 0 and 'revision with --replace' in out and state(40).get('edits') is None)
+    code, out = reword('which closes #247,', 'which tracks #247,', 'o/r#x')
+    check('reword refuses a --closes it cannot read', code != 0 and '--closes takes' in out and state(40).get('edits') is None)
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none', '--dry-run')
+    check('a reword dry run sends nothing and prints the diff and both closing sets', code == 0 and state(40).get('edits') is None
+          and '+Round 1 of the review of o/r#265, which tracks #247, stalled.' in out and 'closing o/r#247 now' in out)
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none', STUB_OWNER_EDIT='\nAn owner note.')
+    check('reword sends nothing over an edit made after its first read', code != 0 and 'changed after it was read' in out
+          and state(40).get('edits') is None)
+    seed(40, WORDED)
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none', STUB_LOST='edit')
+    check('a lost reword edit says the outcome is unknown', code != 0 and 'outcome is unknown' in out)
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none')
+    check('the retry after a lost reword edit sends nothing more', code == 0 and state(40)['edits'] == 1)
+    seed(40, WORDED)
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none', STUB_EDIT_ADDS='changed')
+    check('a reword edit that reads back differently is reported', code != 0 and 'differs from what was sent' in out)
 
 sys.exit(1 if failures else 0)

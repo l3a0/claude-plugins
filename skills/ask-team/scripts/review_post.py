@@ -4,6 +4,7 @@
 Usage:
     review_post.py revision OWNER/REPO#N --scratch DIR --file PATH [--replace ITEM] [--dry-run]
     review_post.py section OWNER/REPO#N --heading HEADING --scratch DIR --file PATH [--dry-run]
+    review_post.py reword OWNER/REPO#N --old PATH --new PATH --closes REFS --scratch DIR [--wait SECS] [--dry-run]
     review_post.py comment --round R OWNER/REPO#N=HEAD=ANCHOR=FILE [...] [--dry-run]
     review_post.py check OWNER/REPO#N=HEAD=ANCHOR=FILE | OWNER/REPO@BRANCH=ANCHOR=FILE [...]
     review_post.py cost --round R OWNER/REPO#ISSUE --pull OWNER/REPO#N --anchor ANCHOR --file PATH [--dry-run]
@@ -46,6 +47,27 @@ fence, which would end the section early. Like `revision`, it saves the body
 as read, sends only when every changed line sits inside the section, read
 from the body as it was, and a second run would change nothing, and reads the
 body back. So a retry changes nothing.
+
+`reword` replaces the one passage of the body that the file at --old holds
+with the text the file at --new holds, and then checks which issues GitHub
+reads the body as closing. It is the route for a line `section` refuses to
+remove because it may close an issue, such as a sentence that names another
+repository's issue after "closes". Each file's last newline is not part of its
+passage. REFS is every issue the body should close once the edit lands, as
+`none` or a comma list of OWNER/REPO#N, where `#N` means this repository, so
+the run states what it means to close rather than what it means to stop
+closing. It sends nothing when the body holds the old passage other than once,
+or when either passage holds a heading, which `section` or a hand edit
+changes, or when the passage sits in `## Revision`, whose lines `revision`
+keeps. It saves the body as read, reads it again just before sending and sends
+nothing when that differs, sends, and reads the body back. GitHub re-reads the
+closing keywords some time after an edit, so it then reads GitHub's
+`closingIssuesReferences` until they match REFS, for up to SECS seconds, 60 by
+default, and exits non-zero naming each issue still closed or no longer closed,
+with the body as read to restore. A rerun after a send finds the new passage
+and not the old, sends nothing and checks again. A passage removed outright
+leaves nothing to find, so its rerun stops as missing. `--dry-run` prints the
+diff, what GitHub reads now and what REFS asks for.
 
 `comment` takes each comment's heading from its file's first line. It refuses a
 file that does not start with a heading and name the round, its anchor and the
@@ -172,6 +194,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
 
 SPEC = re.compile(r"^(?P<repo>[\w.-]+/[\w.-]+)#(?P<num>\d+)$")
@@ -503,7 +526,8 @@ def section(args):
     gone = removed_closing(body, new, args.heading)
     if gone:
         sys.exit(f"{repo}#{num}: refusing to send, the edit removes {gone[0]!r}, which may close an issue. Keep it in "
-                 f"{args.file}, or edit by hand. The body as read is at {saved}")
+                 f"{args.file}, or change it with reword, which checks what GitHub then reads the body as closing. "
+                 f"The body as read is at {saved}")
     if changed_outside_section(body, new, args.heading):
         sys.exit(f"{repo}#{num}: refusing to send, a line changed outside {args.heading}. The body as read is at {saved}")
     if replace_section(new, args.heading, text) is not None:
@@ -530,6 +554,113 @@ def section(args):
                  f"{', '.join(sorted(lost))}. Put the closing line back, such as by sending the body as "
                  f"read with gh pr edit --body-file {saved}, and report it")
     print(f"{repo}#{num}: {args.heading} updated and read back")
+
+
+CLOSES_REF = re.compile(r"^(?:(?P<repo>[\w.-]+/[\w.-]+))?#(?P<num>\d+)$")
+
+
+def expected_closes(spec, repo):
+    """Parse --closes, 'none' or a comma list of OWNER/REPO#N or #N, into the form closing_numbers returns."""
+    if spec.strip().lower() == "none":
+        return set()
+    found = set()
+    for part in spec.split(","):
+        m = CLOSES_REF.match(part.strip())
+        if not m:
+            sys.exit(f"--closes takes 'none' or a comma list of OWNER/REPO#N or #N, not {part.strip()!r}")
+        found.add(f"{m['repo'] or repo}#{m['num']}".lower())
+    return found
+
+
+def read_passage(path):
+    with open(path, encoding="utf-8", newline="") as f:
+        text = f.read()
+    # A file ends in one newline that is not part of the passage, so a passage can end mid-line.
+    return text[:-1] if text.endswith("\n") else text
+
+
+def where_in(body, passage):
+    """Return the line numbers the one copy of passage spans in body."""
+    at = body.index(passage)
+    first = body.count("\n", 0, at)
+    return first, first + passage.count("\n")
+
+
+def reword(args):
+    m = SPEC.match(args.pull)
+    if not m:
+        sys.exit(f"not OWNER/REPO#N: {args.pull}")
+    repo, num = m["repo"], m["num"]
+    want = expected_closes(args.closes, repo)
+    old, new_text = read_passage(args.old), read_passage(args.new)
+    if not old.strip():
+        sys.exit(f"{args.old} holds no passage to replace")
+    if old == new_text:
+        sys.exit(f"{args.old} and {args.new} hold the same text, so there is nothing to reword")
+    for path, text in ((args.old, old), (args.new, new_text)):
+        heads = [line for _, line in outside_fences(text.split("\n")) if heading_level(line)]
+        if heads:
+            sys.exit(f"{path} holds the heading {heads[0].strip()!r}. reword changes words inside a section, and "
+                     "section or an edit by hand changes headings")
+    body = view(repo, num, "body")
+    before = closing_numbers(repo, num)
+    os.makedirs(args.scratch, exist_ok=True)
+    name = f"body-{repo.replace('/', '-')}-{num}-"
+    saved = keep(name, args.scratch, body)
+    count, done = body.count(old), body.count(new_text) if new_text else 0
+    if count == 0 and done == 1:
+        print(f"{repo}#{num}: the body already holds the new text and not the old, so nothing was sent")
+        if args.dry_run:
+            return
+    elif count != 1:
+        sys.exit(f"{repo}#{num}: the body holds the text in {args.old} {count} times, so the passage to replace is "
+                 f"{'missing' if not count else 'ambiguous'}. Quote more of it, or edit by hand. "
+                 f"The body as read is at {saved}")
+    else:
+        found = find_section(body.split("\n"))
+        first, last = where_in(body, old)
+        if found and found[0] <= last and first < found[1]:
+            sys.exit(f"{repo}#{num}: the passage sits in {SECTION}, whose numbered lines the revision command keeps. "
+                     "Use revision with --replace")
+        new = body.replace(old, new_text, 1)
+        if args.dry_run:
+            print("\n".join(difflib.unified_diff(body.split("\n"), new.split("\n"), "as read",
+                                                 "as it would be sent", lineterm="")))
+            print(f"GitHub reads it as closing {', '.join(sorted(before)) or 'nothing'} now, "
+                  f"and --closes asks for {', '.join(sorted(want)) or 'nothing'}")
+            return
+        # The owner can edit the body at any time, so read it again just before sending, and send nothing over an edit.
+        if view(repo, num, "body") != body:
+            sys.exit(f"{repo}#{num}: the body changed after it was read, so nothing was sent. Rerun this command. "
+                     f"The body as first read is at {saved}")
+        sent = keep("sent-" + name, args.scratch, new)
+        write("gh", "pr", "edit", num, "-R", repo, "--body-file", sent, where=f"As read: {saved}. As sent: {sent}. ")
+        try:
+            back = view(repo, num, "body")
+        except SystemExit as failed:
+            sys.exit(f"{failed} The edit may have landed, so the outcome is unknown. Rerun this command, which "
+                     f"looks before it writes. As read: {saved}. As sent: {sent}")
+        if back != new:
+            sys.exit(f"{repo}#{num}: the body read back differs from what was sent, so nothing was resent. "
+                     f"As read before the edit: {saved}. As sent: {sent}")
+    # GitHub re-reads a body's closing keywords some time after an edit, so one read can still show the old set.
+    # Read until it matches what --closes asks for, or until --wait runs out.
+    limit = time.monotonic() + args.wait
+    pause = min(2.0, max(args.wait / 10, 0.05))
+    now = closing_numbers(repo, num)
+    while now != want and time.monotonic() < limit:
+        time.sleep(pause)
+        now = closing_numbers(repo, num)
+    if now != want:
+        extra, missing = sorted(now - want), sorted(want - now)
+        sys.exit(f"{repo}#{num}: after {args.wait:g} s GitHub reads the body as closing "
+                 f"{', '.join(sorted(now)) or 'nothing'}, not {', '.join(sorted(want)) or 'nothing'}"
+                 f"{'. It still closes ' + ', '.join(extra) if extra else ''}"
+                 f"{'. It no longer closes ' + ', '.join(missing) if missing else ''}. "
+                 f"Read it again later, since GitHub may still be re-reading it, then reword again or restore the "
+                 f"body as read with gh pr edit --body-file {saved}")
+    print(f"{repo}#{num}: reworded and read back, and GitHub reads it as closing "
+          f"{', '.join(sorted(now)) or 'nothing'}, as --closes asks")
 
 
 def first_line(text):
@@ -1043,6 +1174,16 @@ def main():
     part.add_argument("--file", required=True)
     part.add_argument("--dry-run", action="store_true")
     part.set_defaults(handler=section)
+
+    words = commands.add_parser("reword")
+    words.add_argument("pull")
+    words.add_argument("--old", required=True)
+    words.add_argument("--new", required=True)
+    words.add_argument("--closes", required=True)
+    words.add_argument("--scratch", required=True)
+    words.add_argument("--wait", type=float, default=60.0)
+    words.add_argument("--dry-run", action="store_true")
+    words.set_defaults(handler=reword)
 
     post = commands.add_parser("comment")
     post.add_argument("targets", nargs="+")
