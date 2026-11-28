@@ -66,7 +66,9 @@ exact access). Reports of particular interest:
   issue steers what it posts, or where it writes outside the body's
   `## Revision` section, the one section its `section` command names or the
   one passage its `reword` command names, or where an edit changes which issues
-  GitHub reads the body as closing and the script reports success.
+  GitHub reads the body as closing, other than as `reword`'s `--closes` names,
+  and the script reports success. A lag in GitHub's re-read longer than the
+  wait each command states is a limit its docstring names.
 - `diagram_words.py`, in `ask-team`, writes a local page that draws a
   repository's diagrams, whoever wrote them, with Mermaid loaded from
   `cdn.jsdelivr.net`. A content security policy on the page confines it. In

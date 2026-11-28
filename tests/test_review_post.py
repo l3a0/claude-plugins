@@ -21,7 +21,9 @@ args = sys.argv[1:]
 login = os.environ.get('STUB_LOGIN', 'me')
 def fail(): sys.exit('stand-in gh: unexpected call: ' + ' '.join(args))
 if os.environ.get('STUB_READ_FAIL') == ' '.join(args[:2]): sys.exit('stand-in gh: 401 bad credentials')
-if os.environ.get('STUB_READ_FAIL') == 'after edit' and args[1] == 'view' and json.load(open(os.path.join(state, 'o-r-5.json'))).get('edits'):
+if os.environ.get('STUB_READ_FAIL') == 'after edit' and args[1] == 'view' and len(args) > 4 and \
+        os.path.exists(os.path.join(state, args[4].replace('/', '-') + '-' + args[2] + '.json')) and \
+        json.load(open(os.path.join(state, args[4].replace('/', '-') + '-' + args[2] + '.json'))).get('edits'):
     sys.exit('stand-in gh: 502')
 if args[:2] == ['api', 'user']:
     if args[2:4] != ['--jq', '.login']: fail()
@@ -119,12 +121,18 @@ if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesRefere
             fence = not fence
         elif not fence:
             text.append(re.sub('`[^`]*`', '', line))
-    nums = re.findall('(?i)(?:^|[^A-Za-z0-9_])(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?):?[ ]+#([0-9]+)', chr(10).join(text))
+    found = re.findall('(?i)(?:^|[^A-Za-z0-9_])(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?):?[ ]+((?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?)#([0-9]+)', chr(10).join(text))
+    nums = [n for r, n in found if not r]
+    others = [(r, n) for r, n in found if r]
     # STUB_LOSE stands for a form GitHub reads that the script's patterns miss: closed before the edit, not after.
     if os.environ.get('STUB_LOSE') and not pr.get('edits'):
         nums.append(os.environ['STUB_LOSE'])
+    # STUB_GAIN stands for a form GitHub reads that the script's patterns miss: closed after the edit, not before.
+    if os.environ.get('STUB_GAIN') and pr.get('edits'):
+        nums.append(os.environ['STUB_GAIN'])
     owner, name = args[4].split('/')
     refs = [{'number': int(n), 'repository': {'name': name, 'owner': {'login': owner}}} for n in dict.fromkeys(nums)]
+    refs += [{'number': int(n), 'repository': {'name': r.split('/')[1], 'owner': {'login': r.split('/')[0]}}} for r, n in dict.fromkeys(others)]
     # STUB_LOSE_OTHER names another repository's issue that only the body before the edit closes.
     if os.environ.get('STUB_LOSE_OTHER') and not pr.get('edits'):
         o, rest = os.environ['STUB_LOSE_OTHER'].split('/')
@@ -148,6 +156,7 @@ if args[1] == 'view' and args[5] == '--json':
             json.dump(pr, open(path, 'w'))
 elif args[1] == 'edit' and args[5] == '--body-file' and args[0] == 'pr':
     pr['prev_body'] = pr['body']
+    pr['lag_reads'] = 0
     pr['body'] = open(args[6], newline='').read() + os.environ.get('STUB_EDIT_ADDS', '')
     pr['edits'] = pr.get('edits', 0) + 1
     json.dump(pr, open(path, 'w'))
@@ -1585,11 +1594,33 @@ Closes #109
           and 'closing l3a0/other#3' in out)
     seed(30, SECTIONED)
     code, out = part('## Decision', 'This change closes #77 as well.\n')
-    check('section reports an issue the edit makes GitHub read as closed, naming it and the body to restore',
+    check('section refuses before sending an edit that adds a closing line, and points at reword',
+          code != 0 and 'adds' in out and 'may close an issue' in out and 'reword' in out and state(30).get('edits') is None)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'One fact.\n', STUB_GAIN='77')
+    check('section reports an issue GitHub reads as closed after the edit in a form its pattern misses, naming the body to restore',
           code != 0 and 'now reads it as closing o/r#77' in out and 'gh pr edit --body-file' in out and 'reword' in out)
     seed(31)
     code, out = revise('--line', '`ccccccc` answers round 3, which closes #78.', pull='o/r#31')
-    check('revision reports an issue its line makes GitHub read as closed', code != 0 and 'now reads it as closing o/r#78' in out)
+    check('revision refuses before sending a line that may close an issue', code != 0 and 'closes nothing' in out
+          and state(31).get('edits') is None)
+    seed(32, SECTIONED)
+    part('## Decision', 'One fact.\n', num=32, STUB_LOST='edit')
+    pr = state(32)
+    pr['body'] = pr['body'].replace('Out of scope: nothing.', 'Out of scope: nothing. This closes #55.')
+    json.dump(pr, open(os.path.join(STATE, 'o-r-32.json'), 'w'))
+    code, out = part('## Decision', 'One fact.\n', num=32)
+    check('a section rerun refuses a body that holds a closing line the earlier run did not read', code != 0
+          and 'This closes #55.' in out and 'earlier run' in out)
+    seed(33)
+    revise('--line', '`ccccccc` answers round 3.', pull='o/r#33', STUB_LOST='edit')
+    code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#33')
+    check('a revision rerun after a lost edit checks the body against the one the earlier run read', code == 0
+          and 'already holds this text' in out and 'no closing check ran' not in out)
+    seed(31)
+    code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#31', STUB_GAIN='78')
+    check('revision reports an issue GitHub reads as closed after its edit, naming revision --replace',
+          code != 0 and 'now reads it as closing o/r#78' in out and 'revision --replace' in out)
     seed(31)
     code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#31', STUB_LOSE='12')
     check('revision reports an issue GitHub no longer reads as closed after its edit', code != 0 and 'no longer reads it as closing o/r#12' in out)
@@ -1599,6 +1630,8 @@ Closes #109
     grown = SECTIONED.replace('2. The second fact.\n', '2. The second fact.\n\nA paragraph added at the end.\n')
     check('the guard passes a paragraph added at the end of the section', grown != SECTIONED
           and not module.changed_outside_section(SECTIONED, grown, '## Decision'))
+    check('the guard refuses a new body shorter than the lines around the section',
+          module.changed_outside_section(SECTIONED, SECTIONED.split('## Decision')[0], '## Decision'))
     # The last section before the closing lines ends on a blank line, which the old guard counted twice.
     last = BARE.replace('1. Adds the first thing.\n', '1. Adds the first thing.\n\nA paragraph added at the end.\n')
     check('the guard passes a paragraph added at the end of the section before the closing lines', last != BARE
@@ -1653,9 +1686,12 @@ Closes #109
           and state(40)['body'] == WORDED.replace('which closes #247,', 'which tracks #247,') and 'as --closes asks' in out)
     check('reword changes nothing outside the passage', state(40)['body'].replace('which tracks #247,', 'which closes #247,') == WORDED)
     code, out = reword('which closes #247,', 'which tracks #247,', 'none')
-    check('a rerun after reword sends nothing and checks again', code == 0 and state(40)['edits'] == 1 and 'nothing was sent' in out)
+    check('a rerun after reword sends nothing and checks again', code == 0 and state(40)['edits'] == 1 and 'nothing was sent' in out
+          and 'as --closes asks' in out)
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none', STUB_GAIN='300')
+    check('a rerun after reword still compares what GitHub reads with --closes', code != 0 and 'still closes o/r#300' in out)
     seed(40, WORDED)
-    code, out = reword('which closes #247,', 'which tracks #247,', 'none', STUB_LAG='3')
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none', '--wait', '5', STUB_LAG='3')
     check('reword waits while GitHub still reads the old body as closing', code == 0 and 'as --closes asks' in out)
     seed(40, WORDED)
     code, out = reword('which closes #247,', 'which tracks #247,', 'none', STUB_LAG='1000')
@@ -1665,8 +1701,67 @@ Closes #109
     code, out = reword('which closes #247,', 'which fixes #247,', 'none')
     check('reword names a new wording that still closes the issue', code != 0 and 'still closes o/r#247' in out)
     seed(40, WORDED)
-    code, out = reword('which closes #247,', 'which tracks #247,', '#247')
-    check('reword names an issue --closes asks for that the body no longer closes', code != 0 and 'no longer closes o/r#247' in out)
+    code, out = reword('which closes #247,', 'the fix for #247,', '#247')
+    check('reword refuses before sending a new text that drops an issue --closes still names', code != 0
+          and 'no longer names o/r#247' in out and state(40).get('edits') is None)
+    seed(40, WORDED)
+    code, out = reword('stalled.', 'stalled, and fixes #99.', 'o/r#247')
+    check('reword refuses before sending a new text that closes an issue --closes does not name', code != 0
+          and 'names o/r#99' in out and state(40).get('edits') is None)
+    seed(40, WORDED)
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_LAG='1000', STUB_GAIN='99')
+    check('reword keeps reading for the whole wait when --closes asks for the set the body already closed',
+          code != 0 and 'still closes o/r#99' in out)
+    seed(40, WORDED)
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_LAG='2')
+    check('reword reports a steady read once every read for the whole wait matches', code == 0 and 'on every read' in out)
+    for label, old_text, new_text, closes in (('wraps the passage in a code span', 'o/r#265, which closes #247', '`o/r#265, which closes #247`', 'none'),
+                                               ('appends to the passage', 'which closes #247,', 'which closes #247, and tracks #248,', '#247')):
+        seed(40, WORDED)
+        reword(old_text, new_text, closes, STUB_LOST='edit')
+        code, out = reword(old_text, new_text, closes)
+        check(f'a rerun after a lost reword edit that {label} sends nothing more', code == 0 and state(40)['edits'] == 1
+              and state(40)['body'].count(new_text) == 1 and 'nothing was reworded' in out)
+    seed(40, WORDED.replace('stalled.', 'stalled. Closes #123.'))
+    code, out = reword('Closes #12', 'Part of #12', 'none')
+    check('reword refuses a passage that ends inside a number', code != 0 and 'inside a word or a number' in out
+          and state(40).get('edits') is None)
+    seed(40, WORDED)
+    code, out = reword('loses #247', 'tracks #247', 'none')
+    check('reword refuses a passage that starts inside a word', code != 0 and 'inside a word or a number' in out
+          and state(40).get('edits') is None)
+    seed(40, WORDED)
+    code, out = reword('What', 'Changes', 'none')
+    check('reword refuses an edit that changes a heading', code != 0 and 'heading or a code fence' in out
+          and state(40).get('edits') is None)
+    code, out = reword('Adds the third thing.', 'Adds the third thing.\n```', 'none')
+    check('reword refuses an edit that opens a code fence', code != 0 and 'heading or a code fence' in out
+          and state(40).get('edits') is None)
+    seed(40, WORDED.replace('stalled.', 'stalled. ab ab ab'))
+    code, out = reword('ab ab', 'cd', 'none')
+    check('reword counts copies of the passage that overlap', code != 0 and '2 times' in out and state(40).get('edits') is None)
+    seed(40, WORDED)
+    reword('Adds the first', 'Adds the 1st', 'o/r#247')
+    code, out = reword('Adds the first', 'Adds the 1st', 'o/r#247')
+    check('a rerun after a finished reword says nothing was reworded', code == 0 and 'nothing was reworded' in out)
+    seed(40, WORDED.replace('#247', 'l3a0/other#247'))
+    code, out = reword('which closes l3a0/other#247,', 'which tracks l3a0/other#247,', 'none')
+    check('reword drops a closing line that names another repository', code == 0 and 'as --closes asks' in out)
+    seed(40, WORDED.replace('#247', 'l3a0/other#247'))
+    code, out = reword('Round 1 of', 'Round one of', 'l3a0/other#247')
+    check('reword keeps an issue of another repository that --closes names with its repository', code == 0 and 'as --closes asks' in out)
+    seed(40, WORDED.replace('#247', 'l3a0/other#247'))
+    code, out = reword('Round 1 of', 'Round one of', '#247')
+    check('reword reads #N in --closes as this repository, not another', code != 0 and 'l3a0/other#247' in out)
+    seed(40, WORDED)
+    code, out = reword('Round 1 of', 'Round one of', 'O/R#247')
+    check('reword reads --closes without regard to case', code == 0 and 'as --closes asks' in out)
+    seed(40, WORDED)
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_READ_FAIL='after edit')
+    check('a failed read after a reword edit says the edit may have landed', code != 0 and 'may have landed' in out and 'As sent' in out)
+    seed(40, WORDED)
+    code, out = reword('Adds the first thing.', '## Adds the first thing.', 'none')
+    check('reword refuses a new passage that holds a heading', code != 0 and 'heading' in out and state(40).get('edits') is None)
     seed(40, WORDED)
     code, out = reword('Adds the', 'Brings the', 'none')
     check('reword refuses a passage the body holds more than once', code != 0 and '3 times' in out and state(40).get('edits') is None)
