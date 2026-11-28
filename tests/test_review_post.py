@@ -108,8 +108,13 @@ if not os.path.exists(path): fail()
 pr = json.load(open(path))
 if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesReferences' and os.environ.get('STUB_CLOSES_FAIL') and pr.get('edits'):
     sys.exit('stand-in gh: 502 on closingIssuesReferences')
+if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesReferences' and os.environ.get('STUB_INTERRUPT') == 'closes' and pr.get('edits'):
+    # A person presses Ctrl-C while the script reads what GitHub closes after its edit landed.
+    import signal, time
+    os.kill(os.getppid(), signal.SIGINT)
+    time.sleep(2)
 if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesReferences' and os.environ.get('STUB_CLOSES_FAIL_AT'):
-    # STUB_CLOSES_FAIL_AT fails the N-th closing read of this run, counted in a file the test clears.
+    # STUB_CLOSES_FAIL_AT fails the N-th closing read since the pull request was last seeded, counted in a file seed clears.
     count = os.path.join(state, 'closes-reads')
     n = int(open(count).read()) + 1 if os.path.exists(count) else 1
     open(count, 'w').write(str(n))
@@ -170,6 +175,11 @@ elif args[1] == 'edit' and args[5] == '--body-file' and args[0] == 'pr':
     pr['edits'] = pr.get('edits', 0) + 1
     json.dump(pr, open(path, 'w'))
     if os.environ.get('STUB_LOST') == 'edit': sys.exit('stand-in gh: connection lost')
+    if os.environ.get('STUB_INTERRUPT') == 'edit':
+        # A person presses Ctrl-C while the edit is in flight, after it has landed.
+        import signal, time
+        os.kill(os.getppid(), signal.SIGINT)
+        time.sleep(2)
 elif args[1] == 'comment' and args[5] == '--body-file':
     if os.environ.get('STUB_COMMENT_FAIL') == args[2]: sys.exit('stand-in gh: comment refused')
     # Like GitHub, each comment gets a link whose number rises with every post.
@@ -260,6 +270,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     def seed(num, body=BODY, head='a' * 40, comments=(), repo='o-r', login='me', ancestors=('b' * 40, 'c' * 40),
              elsewhere=(), later=(), silent=(), twins=(), later_than=None, replaced=()):
         # later_than maps an anchor to the commits the head holds after it, which is the head alone unless given.
+        if os.path.exists(os.path.join(STATE, 'closes-reads')): os.remove(os.path.join(STATE, 'closes-reads'))
         with open(os.path.join(STATE, f'{repo}-{num}.json'), 'w') as f:
             json.dump({'body': body, 'headRefOid': head, 'ancestors': list(ancestors), 'elsewhere': list(elsewhere), 'later': list(later), 'silent': list(silent), 'twins': list(twins),
                        'later_than': later_than or {}, 'replaced': list(replaced),
@@ -1632,7 +1643,11 @@ Closes #109
           and 'by hand' in out and state(34).get('edits') is None)
     seed(31)
     code, out = revise('--line', '`ccccccc` answers round 3, where `fixes #5` was the old wording.', pull='o/r#31')
-    check('revision accepts closing words inside a code span', code == 0 and state(31)['edits'] == 1)
+    check('revision refuses closing words even inside a code span, since a Revision line needs none', code != 0
+          and 'even inside a code span' in out and state(31).get('edits') is None)
+    seed(31)
+    code, out = revise('--line', '``fixes #99` answers round 3.', pull='o/r#31')
+    check('revision refuses a closing keyword after a run of backticks that never closes', code != 0 and state(31).get('edits') is None)
     seed(36, BODY.replace('2. `bbbbbbb` answers round 2.', '2. `bbbbbbb` moved the lag out, part of #12.'))
     code, out = revise('--line', '`bbbbbbb` moved the lag out, part of #12, and more.', '--replace', '2', pull='o/r#36')
     check('revision --replace changes an item that is part of an issue', code == 0 and state(36)['edits'] == 1)
@@ -1754,6 +1769,16 @@ Closes #109
     seed(40, WORDED)
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_LAG='2')
     check('reword reports a steady read once every read for the whole wait matches', code == 0 and 'on every read' in out)
+    seed(40, WORDED)
+    code, out = reword('stalled.', 'stalled, ``fixes #99`.', 'o/r#247', STUB_LAG='1000')
+    check('reword reads a keyword after a run of backticks that never closes', code != 0 and 'o/r#99' in out
+          and state(40).get('edits') is None)
+    seed(40, WORDED)
+    code, out = reword('stalled.', 'stalled, \\`fixes #99\\`.', 'o/r#247', STUB_LAG='1000')
+    check('reword reads a keyword between escaped backticks', code != 0 and 'o/r#99' in out and state(40).get('edits') is None)
+    seed(40, WORDED)
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none', '--wait', '1', STUB_LAG='1', STUB_GAIN='77')
+    check('reword keeps reading after the first match until the wait runs out', code != 0 and 'still closes o/r#77' in out)
     for label, old_text, new_text, closes in (('wraps the passage in a code span', 'o/r#265, which closes #247', '`o/r#265, which closes #247`', 'none'),
                                                ('appends to the passage', 'which closes #247,', 'which closes #247, and tracks #248,', '#247')):
         seed(40, WORDED)
@@ -1854,7 +1879,8 @@ Closes #109
     json.dump(pr, open(os.path.join(STATE, 'o-r-40.json'), 'w'))
     code, out = reword('Adds the first', 'Adds the 1st', 'o/r#247', STUB_LAG='1000')
     check('reword refuses before sending a body that names an issue GitHub has not yet re-read, naming both causes', code != 0
-          and 'would read the body as closing o/r#9' in out and 'has not yet re-read' in out and 'does not count' in out)
+          and 'would read the body as closing o/r#9' in out and 'has not yet re-read' in out and 'does not count' in out
+          and state(40)['edits'] == 1)
     seed(40, WORDED)
     reword('Round 1 of', 'Round one of', 'o/r#247')
     pr = state(40)
@@ -1869,13 +1895,38 @@ Closes #109
     if os.path.exists(os.path.join(STATE, 'closes-reads')): os.remove(os.path.join(STATE, 'closes-reads'))
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_CLOSES_FAIL_AT='2')
     check('a failed closing read during a rerun\'s wait says nothing was sent and names no body', code != 0
-          and 'Nothing was sent' in out and 'from before the edit is at' not in out)
+          and 'Nothing was sent' in out and 'which looks before it writes' in out and 'from before the edit is at' not in out)
     seed(40, WORDED)
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247')
-    check('a successful reword names the body from before the edit', code == 0 and 'The body from before the edit is at' in out)
+    named = out.split('The body from before the edit is at ')[-1].strip() if 'The body from before the edit is at ' in out else ''
+    check('a successful reword names the body from before the edit', code == 0 and named and open(named).read() == WORDED)
     seed(40, WORDED)
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', '--dry-run', '--wait', '0')
     check('a reword dry run accepts any --wait, since it never waits', code == 0 and state(40).get('edits') is None)
+    seed(40, WORDED)
+    code, out = reword('stalled.', 'stalled, and closes #66.', 'o/r#247')
+    check('a refusal says when the edit adds the closing keyword, and leaves the lag out', code != 0
+          and 'The edit adds a closing keyword naming o/r#66' in out and 'has not yet re-read' not in out)
+    seed(40, WORDED)
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_GAIN='9', STUB_GAIN_BEFORE='1')
+    check('a refusal says when GitHub lists an issue no line names', code != 0 and 'GitHub lists o/r#9 with no closing keyword' in out
+          and 'reword that line' not in out)
+    seed(40, WORDED)
+    code, out = reword('stalled.', 'stalled, and closes #7.', 'o/r#247,#7', '--wait', '0.5', STUB_LAG='1000')
+    check('a mismatch says an issue GitHub never closed does not yet close, not that it no longer closes', code != 0
+          and 'does not yet close o/r#7' in out and 'no longer closes o/r#7' not in out)
+    seed(40, WORDED)
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_INTERRUPT='edit')
+    check('an interrupt during the edit says the outcome is unknown and names the saved bodies', code != 0
+          and 'interrupted' in out and 'outcome is unknown' in out and 'As sent' in out and 'Traceback' not in out)
+    seed(40, WORDED)
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_INTERRUPT='closes')
+    check('an interrupt during the wait says the edit landed and names the body from before it', code != 0
+          and 'interrupted' in out and 'The edit landed' in out and 'from before the edit is at' in out and 'Traceback' not in out)
+    seed(40, WORDED.replace('which closes #247,', 'which closes #247 and closes #50,'))
+    code, out = reword(' and closes #50,', ',', 'o/r#247', STUB_GAIN='50', STUB_GAIN_BEFORE='1')
+    check('an issue both linked by hand and named, whose name the edit removes, sends and then reports the mismatch',
+          code != 0 and state(40)['edits'] == 1 and 'still closes o/r#50' in out)
     seed(40, WORDED)
     code, out = reword('Adds the', 'Brings the', 'none')
     check('reword refuses a passage the body holds more than once', code != 0 and '3 times' in out and state(40).get('edits') is None)
