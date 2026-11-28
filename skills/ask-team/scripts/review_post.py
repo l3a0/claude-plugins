@@ -75,7 +75,10 @@ GitHub reads now, less the issues the edit stops naming after a closing
 keyword anywhere in the body, plus every issue the new body names after one.
 A keyword outside the passage counts, GitHub also lists issues linked by hand,
 and GitHub's list can lag an earlier edit, which is why every named issue
-counts. It refuses an edit whose prediction differs from REFS. An issue both
+counts. It refuses an edit whose prediction differs from REFS. An issue the
+body names that GitHub does not count, such as one inside an HTML comment or on
+a pull request whose base is not the default branch, looks the same as one
+GitHub has not yet re-read, so the run refuses and names both causes. An issue both
 linked by hand and named, whose name the edit removes, is predicted dropped,
 so that run sends and then reports the mismatch. SECS must be above 0. It sends nothing when the body holds the old passage
 other than once, counting copies that overlap, when the passage starts or ends
@@ -723,8 +726,9 @@ def reword(args):
         extra = sorted(closing_refs(body, repo) - want)
         if extra:
             sys.exit(f"{repo}#{num}: the body names {', '.join(extra)} after a closing keyword, which --closes does "
-                     "not name, so GitHub will read it as closing that once it re-reads the body. Reword it again, "
-                     "or restore the body from before the edit from GitHub's edit history")
+                     "not name, so GitHub will read it as closing that once it re-reads the body, unless GitHub does "
+                     "not count that line, such as one inside an HTML comment. Reword it again, or restore the body "
+                     "from before the edit from GitHub's edit history")
         if args.dry_run:
             print(f"GitHub reads it as closing {', '.join(sorted(before)) or 'nothing'} now, "
                   f"and --closes asks for {', '.join(sorted(want)) or 'nothing'}")
@@ -755,9 +759,15 @@ def reword(args):
         predicted = (before - (unnamed - named)) | named
         added, dropped = sorted(predicted - want), sorted(want - predicted)
         if added:
+            unread = sorted(set(added) & unnamed & named - before)
             sys.exit(f"{repo}#{num}: after the edit GitHub would read the body as closing {', '.join(added)}, which "
                      "--closes does not name. Add it to --closes, or reword the line that names it so it closes "
-                     f"nothing, such as by putting it in a code span. The body as read is at {saved}")
+                     "nothing, such as by putting it in a code span."
+                     + (f" The body already names {', '.join(unread)} and GitHub's list lacks it, which means either "
+                        "GitHub has not yet re-read an earlier edit, so wait and rerun, or GitHub does not count that "
+                        "line, such as one inside an HTML comment or on a pull request whose base is not the default "
+                        "branch, so move it into a code span or edit the body by hand" if unread else "")
+                     + f". The body as read is at {saved}")
         if dropped:
             sys.exit(f"{repo}#{num}: after the edit GitHub would not read the body as closing {', '.join(dropped)}, "
                      "which --closes names. Keep the closing words, or leave it out of --closes. An issue linked by "

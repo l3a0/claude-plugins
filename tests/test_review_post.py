@@ -1853,8 +1853,8 @@ Closes #109
     pr['prev_body'], pr['edits'] = WORDED, 1
     json.dump(pr, open(os.path.join(STATE, 'o-r-40.json'), 'w'))
     code, out = reword('Adds the first', 'Adds the 1st', 'o/r#247', STUB_LAG='1000')
-    check('reword refuses before sending a body that names an issue GitHub has not yet re-read', code != 0
-          and 'would read the body as closing o/r#9' in out)
+    check('reword refuses before sending a body that names an issue GitHub has not yet re-read, naming both causes', code != 0
+          and 'would read the body as closing o/r#9' in out and 'has not yet re-read' in out and 'does not count' in out)
     seed(40, WORDED)
     reword('Round 1 of', 'Round one of', 'o/r#247')
     pr = state(40)
