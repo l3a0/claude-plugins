@@ -164,7 +164,8 @@ with tempfile.TemporaryDirectory() as root:
     done = run('rewrite_calls.py', 'f', 'g({0}, code={code})', path)
     check('a comment between arguments that only {args} carries stops a {0} template', done.returncode == 2)
 
-    write(path, 'x = 1\n\x0c\nf(1)\nf(2)\n')
+    with open(path, 'w', encoding='utf-8') as f:  # not write(), whose dedent can drop a line holding only a form feed
+        f.write('x = 1\n\x0c\nf(1)\nf(2)\n')
     done = run('rewrite_calls.py', 'f', '--list', path)
     check('a form feed does not shift line numbers', done.stdout == f'0: {path}:3: f(1)\n1: {path}:4: f(2)\n')
     done = run('rewrite_calls.py', 'f', 'g({args})', path)
