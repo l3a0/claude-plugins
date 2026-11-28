@@ -130,7 +130,8 @@ if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesRefere
     if os.environ.get('STUB_LOSE') and not pr.get('edits'):
         nums.append(os.environ['STUB_LOSE'])
     # STUB_GAIN stands for a form GitHub reads that the script's patterns miss: closed after the edit, not before.
-    if os.environ.get('STUB_GAIN') and pr.get('edits') and not lagged:
+    # With STUB_GAIN_BEFORE it is closed before the edit too, as an issue linked by hand is.
+    if os.environ.get('STUB_GAIN') and ((pr.get('edits') and not lagged) or os.environ.get('STUB_GAIN_BEFORE')):
         nums.append(os.environ['STUB_GAIN'])
     owner, name = args[4].split('/')
     refs = [{'number': int(n), 'repository': {'name': name, 'owner': {'login': owner}}} for n in dict.fromkeys(nums)]
@@ -1621,11 +1622,18 @@ Closes #109
           and 'already holds this text' in out and 'GitHub reads the body as closing' in out)
     seed(34, BODY.replace('2. `bbbbbbb` answers round 2.', '2. `bbbbbbb` answers round 2, and fixes #12.'))
     code, out = revise('--line', '`bbbbbbb` answers round 2.', '--replace', '2', pull='o/r#34')
-    check('revision refuses to replace an item that holds closing words', code != 0 and 'holds' in out
+    check('revision refuses to replace an item that holds closing words', code != 0 and 'o/r#12' in out
           and 'by hand' in out and state(34).get('edits') is None)
     seed(31)
     code, out = revise('--line', '`ccccccc` answers round 3, where `fixes #5` was the old wording.', pull='o/r#31')
     check('revision accepts closing words inside a code span', code == 0 and state(31)['edits'] == 1)
+    seed(36, BODY.replace('2. `bbbbbbb` answers round 2.', '2. `bbbbbbb` moved the lag out, part of #12.'))
+    code, out = revise('--line', '`bbbbbbb` moved the lag out, part of #12, and more.', '--replace', '2', pull='o/r#36')
+    check('revision --replace changes an item that is part of an issue', code == 0 and state(36)['edits'] == 1)
+    seed(37, BODY.replace('2. `bbbbbbb` answers round 2.', '2. `bbbbbbb` answers round 2,\n   and closes #6.'))
+    code, out = revise('--line', '`bbbbbbb` answers round 2.', '--replace', '2', pull='o/r#37')
+    check('revision --replace refuses to drop closing words on an item continuation line', code != 0
+          and 'o/r#6' in out and state(37).get('edits') is None)
     seed(31)
     code, out = revise('--line', '`ccccccc` answers round 3, part of #117.', pull='o/r#31')
     check('revision accepts a line that is part of an issue, which closes nothing', code == 0 and state(31)['edits'] == 1)
@@ -1715,18 +1723,18 @@ Closes #109
     seed(40, WORDED)
     code, out = reword('which closes #247,', 'which fixes #247,', 'none')
     check('reword refuses before sending a new wording that still closes an issue --closes leaves out', code != 0
-          and 'names o/r#247' in out and state(40).get('edits') is None)
+          and 'would read the body as closing o/r#247' in out and state(40).get('edits') is None)
     seed(40, WORDED.replace('Because.', 'x').replace('stalled.', 'stalled.\n\nRun this, which closes #247:'))
     code, out = reword('Run this, which closes #247:', 'Run this:', '#247')
     check('reword drops a closing phrase from one line while another still closes the issue', code == 0 and 'as --closes asks' in out)
     seed(40, WORDED)
     code, out = reword('which closes #247,', 'the fix for #247,', '#247')
     check('reword refuses before sending a new text that drops an issue --closes still names', code != 0
-          and 'does not name o/r#247' in out and state(40).get('edits') is None)
+          and 'would not read the body as closing o/r#247' in out and state(40).get('edits') is None)
     seed(40, WORDED)
     code, out = reword('stalled.', 'stalled, and fixes #99.', 'o/r#247')
     check('reword refuses before sending a new text that closes an issue --closes does not name', code != 0
-          and 'names o/r#99' in out and state(40).get('edits') is None)
+          and 'would read the body as closing o/r#99' in out and state(40).get('edits') is None)
     seed(40, WORDED)
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_LAG='2', STUB_GAIN='99')
     check('reword keeps reading after a stale read that matches, when --closes asks for the set the body already closed',
@@ -1793,7 +1801,7 @@ Closes #109
     seed(40, WORDED.replace('which closes #247,', 'which tracks #247,'))
     code, out = reword('tracks', 'closes', 'none', STUB_LAG='1000')
     check('reword refuses before sending a passage that turns on a keyword outside it', code != 0
-          and 'names o/r#247 after a closing keyword' in out and state(40).get('edits') is None)
+          and 'would read the body as closing o/r#247' in out and state(40).get('edits') is None)
     seed(40, WORDED)
     code, out = reword('#247', '#248', '#247', STUB_LAG='1000')
     check('reword refuses before sending a passage that changes the reference after a keyword outside it', code != 0
@@ -1805,9 +1813,8 @@ Closes #109
     seed(40, WORDED)
     reword('which closes #247,', 'which tracks #247,', 'none', STUB_LAG='1000')
     code, out = reword('which closes #247,', 'which tracks #247,', 'none', STUB_LAG='1000')
-    named = out.split('--body-file ')[-1].strip() if '--body-file ' in out else ''
-    check('a rerun that still finds a mismatch names a body from before the edit to restore', code != 0 and named
-          and 'which closes #247,' in open(named).read())
+    check('a rerun that still finds a mismatch names no saved body, since it sent nothing', code != 0
+          and 'This run sent nothing' in out and '--body-file' not in out)
     seed(40, WORDED)
     code, out = reword('stalled.', 'stalled, and closes l3a0/other#5.', 'o/r#247,#5')
     check('reword refuses before sending an issue of another repository that --closes names only as #N', code != 0
@@ -1825,6 +1832,9 @@ Closes #109
     seed(35, BODY.replace('2. `bbbbbbb` answers round 2.\n\nCloses no issue.', '2. `bbbbbbb` answers round 2.\nCloses no issue.'))
     code, out = reword('Closes no issue.', 'Part of no issue.', 'none', num=35)
     check('reword edits the line right after the Revision list', code == 0 and 'as --closes asks' in out)
+    seed(40, WORDED)
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247,#8', STUB_GAIN='8', STUB_GAIN_BEFORE='1')
+    check('reword keeps an issue GitHub lists that no body names, such as one linked by hand', code == 0 and 'as --closes asks' in out)
     seed(40, WORDED)
     code, out = reword('Adds the', 'Brings the', 'none')
     check('reword refuses a passage the body holds more than once', code != 0 and '3 times' in out and state(40).get('edits') is None)
