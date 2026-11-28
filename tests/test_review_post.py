@@ -289,7 +289,7 @@ with tempfile.TemporaryDirectory() as ROOT:
     def seed(num, body=BODY, head='a' * 40, comments=(), repo='o-r', login='me', ancestors=('b' * 40, 'c' * 40),
              elsewhere=(), later=(), silent=(), twins=(), later_than=None, replaced=()):
         # later_than maps an anchor to the commits the head holds after it, which is the head alone unless given.
-        for counter in ('closes-reads', 'closes-seq'):
+        for counter in ('closes-reads', 'closes-seq', 'interrupt-body'):
             if os.path.exists(os.path.join(STATE, counter)): os.remove(os.path.join(STATE, counter))
         with open(os.path.join(STATE, f'{repo}-{num}.json'), 'w') as f:
             json.dump({'body': body, 'headRefOid': head, 'ancestors': list(ancestors), 'elsewhere': list(elsewhere), 'later': list(later), 'silent': list(silent), 'twins': list(twins),
@@ -1687,6 +1687,20 @@ Closes #109
     code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#31', STUB_INTERRUPT='closes')
     check('an interrupt during the closing read after a revision edit says the edit landed', code != 0
           and 'Interrupted. The edit landed' in out and 'Traceback' not in out)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'Two facts.\n\n```text\nfixes #7\n```\n')
+    check('section refuses a closing line it adds inside a code fence', code != 0 and 'fixes #7' in out
+          and state(30).get('edits') is None)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'One fact decides it. Closes `x` #5.\n')
+    check('section refuses a closing line whose reference follows a code span', code != 0 and state(30).get('edits') is None)
+    seed(31)
+    code, out = revise('--line', '`ccccccc` closes `x` #5.', pull='o/r#31')
+    check('revision refuses a closing keyword whose reference follows a code span', code != 0 and state(31).get('edits') is None)
+    seed(30, SECTIONED)
+    code, out = part('## Decision', 'One fact, quoting `closes #5`.\n')
+    check('section refuses a closing keyword it adds inside a code span', code != 0 and 'inside a code span or a fence cannot' in out
+          and state(30).get('edits') is None)
     seed(31)
     code, out = revise('--line', '`ccccccc` answers round 3, part of #117.', pull='o/r#31')
     check('revision accepts a line that is part of an issue, which closes nothing', code == 0 and state(31)['edits'] == 1)
@@ -1787,7 +1801,7 @@ Closes #109
     seed(40, WORDED)
     code, out = reword('stalled.', 'stalled, and fixes #99.', 'o/r#247')
     check('reword refuses before sending a new text that closes an issue --closes does not name', code != 0
-          and 'names o/r#99 after a closing keyword' in out and state(40).get('edits') is None)
+          and 'would read the body as closing o/r#99' in out and state(40).get('edits') is None)
     seed(40, WORDED)
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_LAG='2', STUB_GAIN='99')
     check('reword keeps reading after a stale read that matches, when --closes asks for the set the body already closed',
@@ -1888,7 +1902,11 @@ Closes #109
     seed(40, WORDED)
     code, out = reword('stalled.', 'stalled, quoting `closes #5`.', 'o/r#247')
     check('reword refuses a closing keyword a new passage adds inside a code span, which a squash commit carries as plain text',
-          code != 0 and 'inside a code span or not' in out and state(40).get('edits') is None)
+          code != 0 and 'inside a code span or a fence' in out and state(40).get('edits') is None)
+    seed(40, WORDED)
+    code, out = reword('stalled.', 'stalled, quoting `closes #5`.', 'o/r#247,#5')
+    check('reword refuses a code-span keyword even when --closes names it, since GitHub never lists it', code != 0
+          and 'would not read the body as closing o/r#5' in out and state(40).get('edits') is None)
     seed(40, WORDED.replace('stalled.', 'stalled, quoting `closes #5`.'))
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247')
     check('reword reads no closing words inside a code span the body already holds', code == 0 and 'as --closes asks' in out)
@@ -1942,7 +1960,7 @@ Closes #109
     seed(40, WORDED)
     code, out = reword('stalled.', 'stalled, and closes #66.', 'o/r#247')
     check('a refusal of a closing keyword the new text adds leaves the lag out', code != 0
-          and 'names o/r#66 after a closing keyword' in out and 'has not yet re-read' not in out)
+          and 'The edit adds a closing keyword naming o/r#66' in out and 'has not yet re-read' not in out)
     seed(40, WORDED.replace('which closes #247,', 'which tracks #247,'))
     code, out = reword('tracks', 'closes', 'o/r#99')
     check('a refusal says when the edit forms a closing keyword with a reference outside it, and leaves the lag out', code != 0
@@ -1971,6 +1989,14 @@ Closes #109
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_INTERRUPT='body')
     check('an interrupt during the read-back says so and that the edit may have landed', code != 0
           and 'Interrupted. The edit may have landed' in out and 'Traceback' not in out)
+    seed(40, WORDED.replace('stalled.', 'stalled. See `fixes PLACEHOLDER` here.'))
+    code, out = reword('PLACEHOLDER', '#7', 'o/r#247')
+    check('reword refuses a reference it completes inside a code span that starts outside the passage', code != 0
+          and 'o/r#7' in out and state(40).get('edits') is None)
+    seed(40, WORDED.replace('stalled.', 'stalled.\n\n```text\nfixes PLACEHOLDER\n```'))
+    code, out = reword('PLACEHOLDER', '#7', 'o/r#247')
+    check('reword refuses a reference it completes inside a code fence', code != 0 and 'o/r#7' in out
+          and state(40).get('edits') is None)
     seed(40, WORDED)
     code, out = reword('Adds the', 'Brings the', 'none')
     check('reword refuses a passage the body holds more than once', code != 0 and '3 times' in out and state(40).get('edits') is None)

@@ -35,9 +35,13 @@ Headings inside code fences do not count. A line that is wholly a closing
 line, such as `Closes #12`, `Closes: #12` or `Closes #12, part of #9.`, starts
 the closing lines. Any other line that may close an issue, such as a bullet, a
 full issue address, or a sentence that opens with a closing word, stays inside
-the section, and the command refuses an edit that would remove or add a line
-holding a closing keyword and a reference anywhere outside code, and names
-`reword` for that change. Its patterns cannot
+the section, and the command refuses an edit that would remove a line holding
+a closing keyword and a reference outside code, or add one anywhere, code
+spans and fences included, editing a line that already holds one too, and
+names `reword` for a plain closing line. A closing keyword inside a code span
+or a fence can go in through neither command, only by rewording it. A removal
+still treats a code span as cover, since dropping a closing phrase closes
+nothing. Its patterns cannot
 know every form GitHub reads, so after the read back it also compares the
 issues GitHub says the body closes with those it closed before, each named
 with its repository, and exits non-zero naming any it lost or gained, with the
@@ -106,9 +110,11 @@ body from before the edit to restore. A rerun sent nothing, so it points at
 the earlier run's own message and GitHub's edit history instead.
 
 A squash merge carries the body to the default branch as plain text, so a
-code span gives no cover there. The check before sending refuses a new
-passage that adds a closing keyword with a reference REFS leaves out, inside a
-code span or not, and the refusals advise rewording rather than quoting.
+code span or a fence gives no cover there. The check before sending reads the
+whole body before and after the edit as plain text, fences and code spans
+included, and refuses an edit that adds a closing keyword there, whatever REFS
+names, since GitHub does not list such an issue for the body. The refusals
+advise rewording rather than quoting.
 Whether GitHub closes an issue on such a commit is not yet checked, which
 l3a0/claude-plugins#126 holds. Otherwise it reads a code span as CommonMark
 does, so a run of backticks with no closing run of the same length hides no
@@ -455,7 +461,7 @@ def revision(args):
     if splice(new, text, args.replace) is not None:
         sys.exit(f"{repo}#{num}: refusing to send, a second run would change the body again, so {SECTION} "
                  f"was not found as written. Edit it by hand. The body as read is at {saved}")
-    added = added_closing(body, new) or ([text] if CLOSES.search(text) else [])
+    added = added_closing(body, new) or ([text] if CLOSES.search(text) or CLOSES.search(CODE_SPAN.sub(" ", text)) else [])
     if added:
         sys.exit(f"{repo}#{num}: refusing to send, the line holds {added[0]!r}, which may close an issue, and a "
                  f"{SECTION} line closes nothing, even inside a code span. Remove the closing words from {args.file}")
@@ -580,12 +586,15 @@ def closing_numbers(repo, num):
 CLOSED_REF = re.compile(r"(?:https://github\.com/)?(?:([\w.-]+/[\w.-]+)(?:/issues/|#)|#)(\d+)", re.IGNORECASE)
 
 
-def closing_refs(text, repo, spans=True):
-    """Return each issue a closing keyword names in text, outside fences and code spans, as closing_numbers names it."""
+def closing_refs(text, repo, plain_text=False):
+    """Return each issue a closing keyword names in text, outside fences and code spans, as closing_numbers names it.
+
+    plain_text=True reads every line, fences and code spans included, as a squash commit's plain text carries them.
+    """
     found = set()
-    for _, line in outside_fences(text.split("\n")):
-        # spans=False reads keywords inside code spans too, as a squash commit's plain text would carry them.
-        plain = CODE_SPAN.sub(" ", line) if spans else line
+    lines = enumerate(text.split("\n")) if plain_text else outside_fences(text.split("\n"))
+    for _, line in lines:
+        plain = line if plain_text else CODE_SPAN.sub(" ", line)
         for m in CLOSES.finditer(plain):
             ref = CLOSED_REF.search(plain, m.start())
             if ref:
@@ -594,13 +603,15 @@ def closing_refs(text, repo, spans=True):
 
 
 def added_closing(old, new):
-    """Return the lines new holds outside fences, code spans included, that may close an issue and old does not hold.
+    """Return the lines new holds, fences and code spans included, that may close an issue and old does not hold.
 
-    A squash merge carries the body to the default branch as plain text, so a code span gives no cover there.
+    A squash merge carries the body to the default branch as plain text, so neither a code span nor a fence gives
+    cover there.
     """
-    kept = {line.strip() for _, line in outside_fences(old.split("\n"))}
-    return [line.strip() for _, line in outside_fences(new.split("\n"))
-            if CLOSES.search(line) and line.strip() not in kept]
+    kept = {line.strip() for line in old.split("\n")}
+    # Read each line both raw and with code spans removed, since a span can sit between a keyword and its reference.
+    return [line.strip() for line in new.split("\n")
+            if (CLOSES.search(line) or CLOSES.search(CODE_SPAN.sub(" ", line))) and line.strip() not in kept]
 
 
 def unchanged_rerun(repo, num, what):
@@ -669,7 +680,9 @@ def section(args):
     added = added_closing(body, new)
     if added:
         sys.exit(f"{repo}#{num}: refusing to send, the edit adds {added[0]!r}, which may close an issue. Remove it "
-                 f"from {args.file}, or add it with reword, which takes the issues the body should close. "
+                 f"from {args.file}, or reword the line so no closing keyword comes right before the reference. "
+                 "A plain closing line can go in with reword, which takes the issues the body should close, but "
+                 "one inside a code span or a fence cannot, since GitHub does not list it for the body. "
                  f"The body as read is at {saved}")
     if args.dry_run:
         print("\n".join(difflib.unified_diff(body.split("\n"), new.split("\n"), "as read", "as it would be sent",
@@ -812,14 +825,6 @@ def reword(args):
         # GitHub's list also holds issues linked by hand, which no body names, so start from what GitHub reads now, less
         # what the edit stops naming. GitHub's list can lag an earlier edit, so add every issue the new body names,
         # not only those this edit starts naming.
-        # A keyword inside a code span closes nothing in the body, but a squash commit carries it as plain text, so
-        # refuse one the edit adds there unless --closes names it.
-        quoted = sorted(closing_refs(new_text, repo, spans=False) - closing_refs(old, repo, spans=False) - want)
-        if quoted:
-            sys.exit(f"{repo}#{num}: the new text names {', '.join(quoted)} after a closing keyword, inside a code "
-                     "span or not, and --closes does not name it. A squash merge carries the body to the default "
-                     "branch as plain text, so reword the line so no closing keyword comes right before the "
-                     f"reference. The body as read is at {saved}")
         named, unnamed = closing_refs(new, repo), closing_refs(body, repo)
         predicted = (before - (unnamed - named)) | named
         added, dropped = sorted(predicted - want), sorted(want - predicted)
@@ -830,6 +835,15 @@ def reword(args):
             sys.exit(f"{repo}#{num}: after the edit GitHub would not read the body as closing {', '.join(dropped)}, "
                      "which --closes names. Keep the closing words, or leave it out of --closes. An issue linked by "
                      f"hand in the sidebar still closes, so check there too. The body as read is at {saved}")
+        # A keyword inside a code span or a fence closes nothing in the body, but a squash commit carries it as plain
+        # text, so refuse one the edit adds there.
+        # GitHub never lists such an issue for the body, so --closes cannot name it either: refuse it outright.
+        quoted = sorted(closing_refs(new, repo, plain_text=True) - closing_refs(body, repo, plain_text=True) - named)
+        if quoted:
+            sys.exit(f"{repo}#{num}: after the edit the body names {', '.join(quoted)} after a closing keyword inside "
+                     "a code span or a fence, which GitHub does not list for the body. A squash merge carries the body to the default "
+                     "branch as plain text, so reword the line so no closing keyword comes right before the "
+                     f"reference. The body as read is at {saved}")
         if structure(new) != structure(body):
             sys.exit(f"{repo}#{num}: the edit would add, remove or change a heading or a code fence in the body. "
                      f"reword changes words, and section or an edit by hand changes structure. "
