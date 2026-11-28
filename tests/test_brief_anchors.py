@@ -28,7 +28,11 @@ case "$*" in
   "api repos/$(cat "$d/last_repo")/compare/${STUB_BASE:-main}...$(cat "$d/last_sha") "*)
     case "$*" in *merge_base_commit*) echo "${STUB_MB:-bbbbbbb2222}";; *) echo "ddddddd3333";; esac;;
   "api repos/$(cat "$d/last_repo")/compare/"*"...$(cat "$d/last_sha") --jq .status"|\
-  "api repos/$(cat "$d/last_repo")/compare/"*"...${STUB_FIX:-none} --jq .status")
+  "api repos/$(cat "$d/last_repo")/compare/"*"...${STUB_FIX:-none} --jq .status"|\
+  "api repos/o/s/compare/"*"...${STUB_FIX_S:-none} --jq .status")
+    # STUB_OLD_STATUS_S answers every compare on o/s, so one companion can move as a fix while the other was
+    # force-pushed.
+    if [ "$(cat "$d/last_repo")" = o/s ] && [ -n "${STUB_OLD_STATUS_S:-}" ]; then echo "$STUB_OLD_STATUS_S"; exit 0; fi
     # The fix against the head answers STUB_FIX_STATUS, and the last round's head against the fix STUB_OLD_STATUS.
     # A status of 404 answers as GitHub does for a commit the repository lacks.
     span="${2#repos/*/compare/}"
@@ -232,6 +236,26 @@ with tempfile.TemporaryDirectory() as BIN:
 
     check('--next names no line for a pull request whose head did not move', 'still names' not in out)
 
+    # A force push on one companion: that pull request's part of the blank names the whole change, and the other's
+    # still names the round's fixes.
+    code, out = nxt(r1b, 'two-pushed.md', 'o/r#5=eeeeeee5555', 'o/s#6=1111111', STUB_SHA='eeeeeee5555',
+                    STUB_LOCAL='eeeeeee5555', STUB_SHA_S='1111111bbbb', STUB_OLD_STATUS='diverged')
+    tp = read(os.path.join(SCRATCH, 'two-pushed.md')) if code == 0 else ''
+    check('--next names the whole change only for the companion a force push replaced', code == 0
+          and "<This round reads the whole change, `git -C /co diff bbbbbbb eeeeeee`, on o/r PR #5, because a force "
+              "push replaced round 1's head aaaaaaa; round 1's fixes, `git -C <checkout> diff 1111111 1111111`, on "
+              "o/s PR #6, leaving out what a merge of the base brought, and any passage" in tp)
+    # The other companion moved as a fix, from 1111111 to 3333333, under a merge at 2222222, so its part names its
+    # last head and its fix, and neither its new head nor the merge base.
+    code, out = nxt(r1b, 'two-moved.md', 'o/r#5=eeeeeee5555', 'o/s#6=2222222', '--fix', 'o/s#6=3333333',
+                    STUB_SHA='eeeeeee5555', STUB_LOCAL='eeeeeee5555', STUB_SHA_S='2222222bbbb', STUB_FIX_S='3333333',
+                    STUB_OLD_STATUS='diverged', STUB_OLD_STATUS_S='ahead')
+    tm = read(os.path.join(SCRATCH, 'two-moved.md')) if code == 0 else ''
+    check('--next names the last head and the fix for a companion that moved as a fix beside one a force push '
+          'replaced', code == 0 and "on o/r PR #5, because a force push replaced round 1's head aaaaaaa; round 1's "
+          "fixes, `git -C <checkout> diff 1111111 3333333`, on o/s PR #6," in tm
+          and 'bbbbbbb 2222222' not in tm[tm.find('<This round reads'):])
+
     code, out = nxt(r1b, 'two-bare.md', 'eeeeeee5555')
     check('--next refuses a bare head for two pull requests', code != 0 and 'bare HEAD' in out)
     code, out = nxt(r1b, 'two-short.md', 'o/r#5=eeeeeee5555')
@@ -426,15 +450,19 @@ with tempfile.TemporaryDirectory() as BIN:
                     **merged)
     check('--next stops on a fix GitHub cannot compare', code != 0 and 'Not Found' in out
           and not os.path.exists(os.path.join(SCRATCH, 'fixture-unknown.md')))
-    # A force push, such as a rebase, leaves the last head outside the head's history. The diff then holds more than
-    # the round's fixes, so the run writes the brief and says so on standard error.
+    # A force push, such as a rebase, leaves the last head outside the head's history. The diff then holds the whole
+    # rebase rather than the round's fixes, so the run says so on standard error and the blank names the whole change.
     for status in ('diverged', 'behind'):
         code, out = nxt(fixture, f'fixture-old-{status}.md', '--fix', 'eeeeeee5555', 'ccccccc9999',
                         STUB_OLD_STATUS=status, **merged)
         written = read(os.path.join(SCRATCH, f'fixture-old-{status}.md')) if code == 0 else ''
         check(f'--next warns when the last head is {status} against the fix and the head, as after a force push, '
               'and writes the brief', code == 0 and "not in the head's history" in out
-              and 'more than the round' in out and '#108' in out and 'diff aaaaaaa eeeeeee' in written)
+              and 'more than the round' in out and '#108' not in out and "review-round.md's step 1" in out)
+        check(f'--next names the whole change from the merge base when the last head is {status}, not the diff '
+              'from that head', "<This round reads the whole change, `git -C /co diff bbbbbbb ccccccc`, on o/r PR #5, "
+              "because a force push replaced round 1's head aaaaaaa, and any passage" in written
+              and 'diff aaaaaaa eeeeeee' not in written and "round 1's fixes" not in written)
     # A fix from before the last head, while the head still holds that head, is a mistake rather than a force push.
     for status in ('behind', 'diverged'):
         code, out = nxt(fixture, f'fixture-early-{status}.md', '--fix', 'eeeeeee5555', 'ccccccc9999',
@@ -486,9 +514,14 @@ with tempfile.TemporaryDirectory() as BIN:
     code, out = nxt(fixture, 'fixture-ahead.md', '--fix', 'eeeeeee5555', 'ccccccc9999', **merged)
     check('--next says nothing of a force push when the last head is in the fix\'s history', code == 0
           and 'more than the round' not in out)
+    check('--next names the round\'s fixes, not the whole change, when the last head is in the fix\'s history',
+          "<This round reads round 1's fixes: `git -C /co diff aaaaaaa eeeeeee`" in read(
+              os.path.join(SCRATCH, 'fixture-ahead.md')) and 'the whole change, `' not in read(
+              os.path.join(SCRATCH, 'fixture-ahead.md')))
     code, out = nxt(fixture, 'fixture-old-pushed.md', 'ccccccc9999', STUB_OLD_STATUS='diverged',
                     **dict(merged, STUB_FIX='none'))
-    check('--next warns on a force-pushed head with no --fix too', code == 0 and "not in the head's history" in out)
+    check('--next warns on a force-pushed head with no --fix too', code == 0 and "not in the head's history" in out
+          and 'diff bbbbbbb ccccccc' in read(os.path.join(SCRATCH, 'fixture-old-pushed.md')))
     code, out = nxt(fixture, 'fixture-old-unknown.md', 'ccccccc9999', STUB_OLD_STATUS='404',
                     **dict(merged, STUB_FIX='none'))
     check('--next stops when GitHub no longer holds the last head', code != 0 and 'Not Found' in out
