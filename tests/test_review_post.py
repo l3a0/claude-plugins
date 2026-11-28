@@ -106,6 +106,8 @@ if args[0] not in ('pr', 'issue') or args[3] != '-R': fail()
 path = os.path.join(state, ('issue-' if args[0] == 'issue' else '') + args[4].replace('/', '-') + '-' + args[2] + '.json')
 if not os.path.exists(path): fail()
 pr = json.load(open(path))
+if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesReferences' and os.environ.get('STUB_CLOSES_FAIL') and pr.get('edits'):
+    sys.exit('stand-in gh: 502 on closingIssuesReferences')
 if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesReferences':
     # GitHub's own reading of closing keywords, approximated: a keyword, an optional colon, then #N, outside fences.
     import re
@@ -1617,6 +1619,13 @@ Closes #109
     code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#33')
     check('a revision rerun after a lost edit says what GitHub reads the body as closing', code == 0
           and 'already holds this text' in out and 'GitHub reads the body as closing' in out)
+    seed(34, BODY.replace('2. `bbbbbbb` answers round 2.', '2. `bbbbbbb` answers round 2, and fixes #12.'))
+    code, out = revise('--line', '`bbbbbbb` answers round 2.', '--replace', '2', pull='o/r#34')
+    check('revision refuses to replace an item that holds closing words', code != 0 and 'holds' in out
+          and 'by hand' in out and state(34).get('edits') is None)
+    seed(31)
+    code, out = revise('--line', '`ccccccc` answers round 3, where `fixes #5` was the old wording.', pull='o/r#31')
+    check('revision accepts closing words inside a code span', code == 0 and state(31)['edits'] == 1)
     seed(31)
     code, out = revise('--line', '`ccccccc` answers round 3, part of #117.', pull='o/r#31')
     check('revision accepts a line that is part of an issue, which closes nothing', code == 0 and state(31)['edits'] == 1)
@@ -1705,11 +1714,15 @@ Closes #109
           and 'still closes o/r#247' in out and 'gh pr edit --body-file' in out)
     seed(40, WORDED)
     code, out = reword('which closes #247,', 'which fixes #247,', 'none')
-    check('reword names a new wording that still closes the issue', code != 0 and 'still closes o/r#247' in out)
+    check('reword refuses before sending a new wording that still closes an issue --closes leaves out', code != 0
+          and 'names o/r#247' in out and state(40).get('edits') is None)
+    seed(40, WORDED.replace('Because.', 'x').replace('stalled.', 'stalled.\n\nRun this, which closes #247:'))
+    code, out = reword('Run this, which closes #247:', 'Run this:', '#247')
+    check('reword drops a closing phrase from one line while another still closes the issue', code == 0 and 'as --closes asks' in out)
     seed(40, WORDED)
     code, out = reword('which closes #247,', 'the fix for #247,', '#247')
     check('reword refuses before sending a new text that drops an issue --closes still names', code != 0
-          and 'no longer names o/r#247' in out and state(40).get('edits') is None)
+          and 'does not name o/r#247' in out and state(40).get('edits') is None)
     seed(40, WORDED)
     code, out = reword('stalled.', 'stalled, and fixes #99.', 'o/r#247')
     check('reword refuses before sending a new text that closes an issue --closes does not name', code != 0
@@ -1737,10 +1750,10 @@ Closes #109
     check('reword refuses a passage that starts inside a word', code != 0 and 'inside a word or a number' in out
           and state(40).get('edits') is None)
     seed(40, WORDED)
-    code, out = reword('What', 'Changes', 'none')
+    code, out = reword('What', 'Changes', 'o/r#247')
     check('reword refuses an edit that changes a heading', code != 0 and 'heading or a code fence' in out
           and state(40).get('edits') is None)
-    code, out = reword('Adds the third thing.', 'Adds the third thing.\n```', 'none')
+    code, out = reword('Adds the third thing.', 'Adds the third thing.\n```', 'o/r#247')
     check('reword refuses an edit that opens a code fence', code != 0 and 'heading or a code fence' in out
           and state(40).get('edits') is None)
     seed(40, WORDED.replace('stalled.', 'stalled. ab ab ab'))
@@ -1766,14 +1779,52 @@ Closes #109
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_READ_FAIL='after edit')
     check('a failed read after a reword edit says the edit may have landed', code != 0 and 'may have landed' in out and 'As sent' in out)
     seed(40, WORDED)
-    code, out = reword('Adds the first thing.', '## Adds the first thing.', 'none')
-    check('reword refuses a new passage that holds a heading', code != 0 and 'heading' in out and state(40).get('edits') is None)
+    code, out = reword('Round 1 of', '## Round 1 of', 'o/r#247')
+    check('reword refuses a new passage that makes a heading', code != 0 and 'heading or a code fence' in out and state(40).get('edits') is None)
+    seed(40, WORDED.replace('stalled.', 'stalled.\n\n```bash\n# run the tests\nmake test\n```'))
+    code, out = reword('make test', 'make check', 'o/r#247')
+    check('reword edits a line inside a code fence beside a comment that looks like a heading', code == 0 and 'as --closes asks' in out)
     seed(40, WORDED)
     code, out = reword('which closes #247,', 'which closes #247, part of #14,', '#247')
     check('reword accepts a new passage that is part of an issue --closes does not name', code == 0 and 'as --closes asks' in out)
     seed(40, WORDED.replace('stalled.', 'stalled.\n\n```x``` is the command to run.'))
     code, out = reword('is the command to run.', 'is the command to use.', 'o/r#247')
     check('reword accepts an edit beside a line of inline triple backticks', code == 0 and 'as --closes asks' in out)
+    seed(40, WORDED.replace('which closes #247,', 'which tracks #247,'))
+    code, out = reword('tracks', 'closes', 'none', STUB_LAG='1000')
+    check('reword refuses before sending a passage that turns on a keyword outside it', code != 0
+          and 'names o/r#247 after a closing keyword' in out and state(40).get('edits') is None)
+    seed(40, WORDED)
+    code, out = reword('#247', '#248', '#247', STUB_LAG='1000')
+    check('reword refuses before sending a passage that changes the reference after a keyword outside it', code != 0
+          and 'o/r#248' in out and state(40).get('edits') is None)
+    for wait in ('0', '-5', 'nan'):
+        code, out = run('reword', 'o/r#40', '--old', os.path.join(ROOT, 'old.txt'), '--new', os.path.join(ROOT, 'new.txt'),
+                        '--closes', 'none', '--scratch', SCRATCH, '--wait', wait)
+        check(f'reword refuses --wait {wait}', code != 0 and 'above 0' in out and state(40).get('edits') is None)
+    seed(40, WORDED)
+    reword('which closes #247,', 'which tracks #247,', 'none', STUB_LAG='1000')
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none', STUB_LAG='1000')
+    named = out.split('--body-file ')[-1].strip() if '--body-file ' in out else ''
+    check('a rerun that still finds a mismatch names a body from before the edit to restore', code != 0 and named
+          and 'which closes #247,' in open(named).read())
+    seed(40, WORDED)
+    code, out = reword('stalled.', 'stalled, and closes l3a0/other#5.', 'o/r#247,#5')
+    check('reword refuses before sending an issue of another repository that --closes names only as #N', code != 0
+          and 'l3a0/other#5' in out and state(40).get('edits') is None)
+    seed(40, WORDED.replace('stalled.', 'stalled.\n\n```text\ncloses #5\n```'))
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247')
+    check('reword reads no closing words inside a code fence in the body', code == 0 and 'as --closes asks' in out)
+    seed(40, WORDED)
+    code, out = reword('stalled.', 'stalled, quoting `closes #5`.', 'o/r#247')
+    check('reword reads no closing words inside a code span in the new passage', code == 0 and 'as --closes asks' in out)
+    seed(40, WORDED)
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_CLOSES_FAIL='1')
+    check('a failed closing read after a reword edit says the edit landed and names the body to restore', code != 0
+          and 'The edit landed' in out and 'from before the edit is at' in out)
+    seed(35, BODY.replace('2. `bbbbbbb` answers round 2.\n\nCloses no issue.', '2. `bbbbbbb` answers round 2.\nCloses no issue.'))
+    code, out = reword('Closes no issue.', 'Part of no issue.', 'none', num=35)
+    check('reword edits the line right after the Revision list', code == 0 and 'as --closes asks' in out)
     seed(40, WORDED)
     code, out = reword('Adds the', 'Brings the', 'none')
     check('reword refuses a passage the body holds more than once', code != 0 and '3 times' in out and state(40).get('edits') is None)
@@ -1781,8 +1832,8 @@ Closes #109
     check('reword refuses a passage the body does not hold', code != 0 and 'missing' in out and state(40).get('edits') is None)
     code, out = reword('', 'x', 'none')
     check('reword refuses an empty passage', code != 0 and 'holds no passage' in out and state(40).get('edits') is None)
-    code, out = reword('## What', '## Changes', 'none')
-    check('reword refuses a passage that holds a heading', code != 0 and 'heading' in out and state(40).get('edits') is None)
+    code, out = reword('## What', '## Changes', 'o/r#247')
+    check('reword refuses a passage that changes a heading', code != 0 and 'heading or a code fence' in out and state(40).get('edits') is None)
     code, out = reword('`bbbbbbb` answers round 2.', '`bbbbbbb` answers round two.', 'none')
     check('reword leaves a Revision line to revision', code != 0 and 'revision with --replace' in out and state(40).get('edits') is None)
     code, out = reword('which closes #247,', 'which tracks #247,', 'o/r#x')

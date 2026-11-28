@@ -22,7 +22,7 @@ number or bullet of its own, such as `1. `, because the script numbers the
 item itself and would write `2. 1. `. It refuses rather than strips the mark,
 so the line in PATH is the line the section holds, and a retry finds it.
 It refuses a line that may close an issue, because a Revision line closes
-nothing. After the read back it compares the issues GitHub reads the body as
+nothing, and refuses to replace an item that holds one. After the read back it compares the issues GitHub reads the body as
 closing with those before, as `section` does, and exits non-zero naming any
 change.
 
@@ -69,25 +69,31 @@ lands, as `none` or a comma list of OWNER/REPO#N, where `#N` means this
 repository, so the run states what it means to close rather than what it means
 to stop closing.
 
-Before reading the body it compares the two passages' closing keywords with
-REFS, and refuses a new passage that names an issue REFS leaves out, or drops
-one REFS still names. It sends nothing when the body holds the old passage
+It reads the closing keywords of the whole body as it would be after the
+edit, since a keyword outside the passage counts too, and refuses an edit
+after which the body names an issue REFS leaves out, or does not name one
+REFS names. SECS must be above 0. It sends nothing when the body holds the old passage
 other than once, counting copies that overlap, when the passage starts or ends
 inside a word or a number, when the edit would change the body's headings or
 code fences, which `section` or a hand edit changes, or when the passage sits
 in `## Revision`, whose lines `revision` keeps. It saves the body as read,
 reads it again just before sending and sends nothing when that differs, sends,
-and reads the body back.
+and reads the body back. GitHub's edit takes no condition on what it replaces,
+so an owner's edit in the moment between that last read and the send is
+overwritten, and GitHub's edit history keeps it.
 
 GitHub re-reads the closing keywords some time after an edit, so it then reads
 GitHub's `closingIssuesReferences` for up to SECS seconds, 60 by default. Where
 REFS differs from the set before, it reads until they match. Where REFS is the
 set before, a matching read may not have re-read the body yet, so every read
 for the whole wait must match. A lag longer than the wait still reads as
-success in that case, which the check before sending narrows. On a mismatch it
+success in that case, so the check before sending is what catches an edit the
+patterns read. On a mismatch it
 exits non-zero naming each issue still closed or no longer closed, with the
-body as read to restore. A rerun finds the new passage, with every copy of the
-old one inside it, sends nothing and checks again. A passage removed outright
+body from before the edit to restore, which on a rerun is the oldest body an
+earlier run saved in DIR that still holds the old passage. A rerun finds the
+new passage, with every copy of the old one inside it, sends nothing and checks
+again. A passage removed outright
 leaves nothing to find, so its rerun stops as missing. `--dry-run` prints the
 diff, what GitHub reads now and what REFS asks for.
 
@@ -211,6 +217,7 @@ against a stand-in `gh`, so no test covers what the real one prints.
 import argparse
 import difflib
 import json
+import math
 import os
 import re
 import subprocess
@@ -400,6 +407,12 @@ def revision(args):
     if new is None:
         unchanged_rerun(repo, num, SECTION)
         return
+    if args.replace is not None:
+        found = find_section(body.split("\n"))
+        old_item = items(body.split("\n"), *found)[args.replace][1] if found else ""
+        if MAY_CLOSE.search(CODE_SPAN.sub("", old_item)) and old_item.strip() not in text:
+            sys.exit(f"{repo}#{num}: refusing to send, item {args.replace} holds {old_item.strip()!r}, which may close "
+                     f"an issue, and replacing it would drop that. Edit {SECTION} by hand. The body as read is at {saved}")
     if changed_outside(body, new):
         sys.exit(f"{repo}#{num}: refusing to send, a line changed outside {SECTION}. The body as read is at {saved}")
     if splice(new, text, args.replace) is not None:
@@ -670,20 +683,8 @@ def reword(args):
         sys.exit(f"{args.old} holds no passage to replace")
     if old == new_text:
         sys.exit(f"{args.old} and {args.new} hold the same text, so there is nothing to reword")
-    for path, text in ((args.old, old), (args.new, new_text)):
-        heads = [line for _, line in outside_fences(text.split("\n")) if heading_level(line)]
-        if heads:
-            sys.exit(f"{path} holds the heading {heads[0].strip()!r}. reword changes words inside a section, and "
-                     "section or an edit by hand changes headings")
-    # Predict the edit from the closing keywords in the two passages, before anything is sent.
-    named, unnamed = closing_refs(new_text, repo), closing_refs(old, repo)
-    added, dropped = sorted(named - unnamed - want), sorted((unnamed - named) & want)
-    if added:
-        sys.exit(f"{args.new} names {', '.join(added)} after a closing keyword, and --closes does not name it. "
-                 "Add it to --closes, or reword it so it closes nothing, such as by putting it in a code span")
-    if dropped:
-        sys.exit(f"{args.new} no longer names {', '.join(dropped)} after a closing keyword, which {args.old} does, "
-                 "and --closes still names it. Keep the closing words, or leave it out of --closes")
+    if not math.isfinite(args.wait) or args.wait <= 0:
+        sys.exit(f"--wait takes a number of seconds above 0, not {args.wait:g}, because GitHub re-reads a body late")
     body = view(repo, num, "body")
     before = closing_numbers(repo, num)
     os.makedirs(args.scratch, exist_ok=True)
@@ -694,9 +695,18 @@ def reword(args):
             not at or (old in new_text and all(body.index(new_text) <= i <= body.index(new_text) + len(new_text)
                                                - len(old) for i in at))):
         # Every copy of the old passage sits inside the one copy of the new, so an earlier run made this edit.
-        print(f"{repo}#{num}: the body already holds the new text, so nothing was sent")
+        print(f"{repo}#{num}: the body already holds the new text"
+              f"{'' if at else ' and not the text in ' + args.old + ', which a mistyped passage also explains'}"
+              ", so nothing was sent")
         sent_now = False
+        # This run read the body after the edit, so the body to restore is the one an earlier run saved before it.
+        before_edit = [os.path.join(args.scratch, f) for f in os.listdir(args.scratch)
+                       if f.startswith(name) and os.path.join(args.scratch, f) != saved
+                       and old in open(os.path.join(args.scratch, f), encoding="utf-8", newline="").read()]
+        restore = min(before_edit, key=os.path.getmtime) if before_edit else None
         if args.dry_run:
+            print(f"GitHub reads it as closing {', '.join(sorted(before)) or 'nothing'} now, "
+                  f"and --closes asks for {', '.join(sorted(want)) or 'nothing'}")
             return
     elif len(at) != 1:
         sys.exit(f"{repo}#{num}: the body holds the text in {args.old} {len(at)} times, so the passage to replace is "
@@ -715,6 +725,18 @@ def reword(args):
             sys.exit(f"{repo}#{num}: the passage sits in {SECTION}, whose numbered lines the revision command keeps. "
                      "Use revision with --replace")
         new = body[:i] + new_text + body[i + len(old):]
+        # Predict the edit from the closing keywords in the whole body before and after it, because a keyword can sit
+        # outside the passage and the passage can change the reference after it.
+        named = closing_refs(new, repo)
+        added, dropped = sorted(named - want), sorted(want - named)
+        if added:
+            sys.exit(f"{repo}#{num}: after the edit the body names {', '.join(added)} after a closing keyword, and "
+                     "--closes does not name it. Add it to --closes, or reword it so it closes nothing, such as by "
+                     f"putting it in a code span. The body as read is at {saved}")
+        if dropped:
+            sys.exit(f"{repo}#{num}: after the edit the body does not name {', '.join(dropped)} after a closing "
+                     "keyword, and --closes names it. Keep the closing words, or leave it out of --closes. "
+                     f"The body as read is at {saved}")
         if structure(new) != structure(body):
             sys.exit(f"{repo}#{num}: the edit would add, remove or change a heading or a code fence in the body. "
                      f"reword changes words, and section or an edit by hand changes structure. "
@@ -731,7 +753,7 @@ def reword(args):
                      f"The body as first read is at {saved}")
         sent = keep("sent-" + name, args.scratch, new)
         write("gh", "pr", "edit", num, "-R", repo, "--body-file", sent, where=f"As read: {saved}. As sent: {sent}. ")
-        sent_now = True
+        sent_now, restore = True, saved
         try:
             back = view(repo, num, "body")
         except SystemExit as failed:
@@ -746,20 +768,31 @@ def reword(args):
     limit = time.monotonic() + args.wait
     pause = min(2.0, max(args.wait / 10, 0.05))
     steady = want == before
-    now = closing_numbers(repo, num)
+
+    def read_closes():
+        try:
+            return closing_numbers(repo, num)
+        except SystemExit as failed:
+            sys.exit(f"{failed} {'The edit landed' if sent_now else 'Nothing was sent'}, and GitHub's reading of "
+                     f"what the body closes is unknown. Rerun this command, which looks before it writes"
+                     f"{f'. The body from before the edit is at {restore}' if restore else ''}")
+
+    now = read_closes()
     while (now != want or steady) and time.monotonic() < limit:
         if steady and now != want:
             break
         time.sleep(pause)
-        now = closing_numbers(repo, num)
+        now = read_closes()
     if now != want:
         extra, missing = sorted(now - want), sorted(want - now)
         sys.exit(f"{repo}#{num}: after {args.wait:g} s GitHub reads the body as closing "
                  f"{', '.join(sorted(now)) or 'nothing'}, not {', '.join(sorted(want)) or 'nothing'}"
                  f"{'. It still closes ' + ', '.join(extra) if extra else ''}"
                  f"{'. It no longer closes ' + ', '.join(missing) if missing else ''}. "
-                 f"Read it again later, since GitHub may still be re-reading it, then reword again or restore the "
-                 f"body as read with gh pr edit --body-file {saved}")
+                 f"Read it again later, since GitHub may still be re-reading it, then reword again or "
+                 + (f"restore the body from before the edit with gh pr edit --body-file {restore}" if restore else
+                    f"restore the body from before the edit, which no run saved in {args.scratch}, from GitHub's "
+                    "edit history"))
     if not sent_now:
         print(f"{repo}#{num}: nothing was reworded, and GitHub reads it as closing "
               f"{', '.join(sorted(now)) or 'nothing'}, as --closes asks")
