@@ -1586,6 +1586,15 @@ Closes #109
     module = load()
     inside = SECTIONED.replace('Two facts decide it.', 'One fact decides it.')
     check('the guard passes a change inside the section', not module.changed_outside_section(SECTIONED, inside, '## Decision'))
+    grown = SECTIONED.replace('2. The second fact.\n', '2. The second fact.\n\nA paragraph added at the end.\n')
+    check('the guard passes a paragraph added at the end of the section', grown != SECTIONED
+          and not module.changed_outside_section(SECTIONED, grown, '## Decision'))
+    # The last section before the closing lines ends on a blank line, which the old guard counted twice.
+    last = BARE.replace('1. Adds the first thing.\n', '1. Adds the first thing.\n\nA paragraph added at the end.\n')
+    check('the guard passes a paragraph added at the end of the section before the closing lines', last != BARE
+          and not module.changed_outside_section(BARE, last, '## What'))
+    check('the guard still refuses a change to the closing line after that section',
+          module.changed_outside_section(BARE, last.replace('Part of #33', 'Part of #34'), '## What'))
     for label, changed in (('before the section', SECTIONED.replace('Because.', 'Why not.')),
                            ('in the heading itself', SECTIONED.replace('\n## Decision\n\nTwo', '\n## Decided\n\nTwo')),
                            ('after the section', SECTIONED.replace('Out of scope: nothing.', 'Out of scope: all.')),

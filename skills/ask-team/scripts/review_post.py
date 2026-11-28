@@ -477,14 +477,10 @@ def changed_outside_section(old, new, heading):
     """True when new differs from old outside the section, with the bounds read from old, apart from replace_section."""
     a, b = old.split("\n"), new.split("\n")
     start, end = section_bounds(a, heading)
-    shared = min(len(a), len(b))
-    head = 0
-    while head < shared and a[head] == b[head]:
-        head += 1
-    tail = 0
-    while tail < shared - head and a[-1 - tail] == b[-1 - tail]:
-        tail += 1
-    return head <= start or len(a) - tail > end
+    # Compare the lines before the section and after it exactly. Matching the shared start and end instead lets the
+    # two runs overlap when the new text ends like the lines after the section, so an added paragraph read as outside.
+    after = len(a) - end
+    return len(b) < start + 1 + after or b[:start + 1] != a[:start + 1] or b[len(b) - after:] != a[end:]
 
 
 def closing_numbers(repo, num):
