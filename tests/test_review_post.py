@@ -113,6 +113,17 @@ if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesRefere
     import signal, time
     os.kill(os.getppid(), signal.SIGINT)
     time.sleep(2)
+if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesReferences' and os.environ.get('STUB_CLOSES_SEQ') and pr.get('edits'):
+    # STUB_CLOSES_SEQ gives the issue numbers GitHub lists on each read after an edit, as a JSON list of lists, the last
+    # repeating, such as a read that matches because GitHub is catching up on an earlier edit, then one that does not.
+    seq = json.loads(os.environ['STUB_CLOSES_SEQ'])
+    count = os.path.join(state, 'closes-seq')
+    n = int(open(count).read()) if os.path.exists(count) else 0
+    open(count, 'w').write(str(n + 1))
+    owner, name = args[4].split('/')
+    print(json.dumps({'closingIssuesReferences': [{'number': k, 'repository': {'name': name, 'owner': {'login': owner}}}
+                                                  for k in seq[min(n, len(seq) - 1)]]}))
+    sys.exit(0)
 if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesReferences' and os.environ.get('STUB_CLOSES_FAIL_AT'):
     # STUB_CLOSES_FAIL_AT fails the N-th closing read since the pull request was last seeded, counted in a file seed clears.
     count = os.path.join(state, 'closes-reads')
@@ -270,7 +281,8 @@ with tempfile.TemporaryDirectory() as ROOT:
     def seed(num, body=BODY, head='a' * 40, comments=(), repo='o-r', login='me', ancestors=('b' * 40, 'c' * 40),
              elsewhere=(), later=(), silent=(), twins=(), later_than=None, replaced=()):
         # later_than maps an anchor to the commits the head holds after it, which is the head alone unless given.
-        if os.path.exists(os.path.join(STATE, 'closes-reads')): os.remove(os.path.join(STATE, 'closes-reads'))
+        for counter in ('closes-reads', 'closes-seq'):
+            if os.path.exists(os.path.join(STATE, counter)): os.remove(os.path.join(STATE, counter))
         with open(os.path.join(STATE, f'{repo}-{num}.json'), 'w') as f:
             json.dump({'body': body, 'headRefOid': head, 'ancestors': list(ancestors), 'elsewhere': list(elsewhere), 'later': list(later), 'silent': list(silent), 'twins': list(twins),
                        'later_than': later_than or {}, 'replaced': list(replaced),
@@ -1777,7 +1789,7 @@ Closes #109
     code, out = reword('stalled.', 'stalled, \\`fixes #99\\`.', 'o/r#247', STUB_LAG='1000')
     check('reword reads a keyword between escaped backticks', code != 0 and 'o/r#99' in out and state(40).get('edits') is None)
     seed(40, WORDED)
-    code, out = reword('which closes #247,', 'which tracks #247,', 'none', '--wait', '1', STUB_LAG='1', STUB_GAIN='77')
+    code, out = reword('which closes #247,', 'which tracks #247,', 'none', '--wait', '1', STUB_CLOSES_SEQ='[[], [77]]')
     check('reword keeps reading after the first match until the wait runs out', code != 0 and 'still closes o/r#77' in out)
     for label, old_text, new_text, closes in (('wraps the passage in a code span', 'o/r#265, which closes #247', '`o/r#265, which closes #247`', 'none'),
                                                ('appends to the passage', 'which closes #247,', 'which closes #247, and tracks #248,', '#247')):
