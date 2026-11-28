@@ -108,6 +108,12 @@ if not os.path.exists(path): fail()
 pr = json.load(open(path))
 if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesReferences' and os.environ.get('STUB_CLOSES_FAIL') and pr.get('edits'):
     sys.exit('stand-in gh: 502 on closingIssuesReferences')
+if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesReferences' and os.environ.get('STUB_CLOSES_FAIL_AT'):
+    # STUB_CLOSES_FAIL_AT fails the N-th closing read of this run, counted in a file the test clears.
+    count = os.path.join(state, 'closes-reads')
+    n = int(open(count).read()) + 1 if os.path.exists(count) else 1
+    open(count, 'w').write(str(n))
+    if n == int(os.environ['STUB_CLOSES_FAIL_AT']): sys.exit('stand-in gh: 502 on closingIssuesReferences')
 if args[1] == 'view' and args[5] == '--json' and args[6] == 'closingIssuesReferences':
     # GitHub's own reading of closing keywords, approximated: a keyword, an optional colon, then #N, outside fences.
     import re
@@ -1634,6 +1640,12 @@ Closes #109
     code, out = revise('--line', '`bbbbbbb` answers round 2.', '--replace', '2', pull='o/r#37')
     check('revision --replace refuses to drop closing words on an item continuation line', code != 0
           and 'o/r#6' in out and state(37).get('edits') is None)
+    seed(38, BODY.replace('2. `bbbbbbb` answers round 2.', '2. `bbbbbbb` answers round 2, and closes #6.').replace('Closes no issue.', 'Closes #6'))
+    code, out = revise('--line', '`bbbbbbb` answers round 2.', '--replace', '2', pull='o/r#38')
+    check('revision --replace changes an item whose issue another line still closes', code == 0 and state(38)['edits'] == 1)
+    seed(31)
+    code, out = revise('--line', '`ccccccc` answers round 3.', pull='o/r#31', STUB_CLOSES_FAIL='1')
+    check('a failed closing read after a revision edit says the edit landed', code != 0 and 'The edit landed' in out)
     seed(31)
     code, out = revise('--line', '`ccccccc` answers round 3, part of #117.', pull='o/r#31')
     check('revision accepts a line that is part of an issue, which closes nothing', code == 0 and state(31)['edits'] == 1)
@@ -1790,8 +1802,8 @@ Closes #109
     code, out = reword('Round 1 of', '## Round 1 of', 'o/r#247')
     check('reword refuses a new passage that makes a heading', code != 0 and 'heading or a code fence' in out and state(40).get('edits') is None)
     seed(40, WORDED.replace('stalled.', 'stalled.\n\n```bash\n# run the tests\nmake test\n```'))
-    code, out = reword('make test', 'make check', 'o/r#247')
-    check('reword edits a line inside a code fence beside a comment that looks like a heading', code == 0 and 'as --closes asks' in out)
+    code, out = reword('# run the tests', '# run every test', 'o/r#247')
+    check('reword edits a comment line inside a code fence that looks like a heading', code == 0 and 'as --closes asks' in out)
     seed(40, WORDED)
     code, out = reword('which closes #247,', 'which closes #247, part of #14,', '#247')
     check('reword accepts a new passage that is part of an issue --closes does not name', code == 0 and 'as --closes asks' in out)
@@ -1835,6 +1847,35 @@ Closes #109
     seed(40, WORDED)
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247,#8', STUB_GAIN='8', STUB_GAIN_BEFORE='1')
     check('reword keeps an issue GitHub lists that no body names, such as one linked by hand', code == 0 and 'as --closes asks' in out)
+    seed(40, WORDED)
+    pr = state(40)
+    pr['body'] = pr['body'].replace('stalled.', 'stalled. Closes #9.')
+    pr['prev_body'], pr['edits'] = WORDED, 1
+    json.dump(pr, open(os.path.join(STATE, 'o-r-40.json'), 'w'))
+    code, out = reword('Adds the first', 'Adds the 1st', 'o/r#247', STUB_LAG='1000')
+    check('reword refuses before sending a body that names an issue GitHub has not yet re-read', code != 0
+          and 'would read the body as closing o/r#9' in out)
+    seed(40, WORDED)
+    reword('Round 1 of', 'Round one of', 'o/r#247')
+    pr = state(40)
+    pr['body'] = pr['body'].replace('stalled.', 'stalled. Closes #9.')
+    json.dump(pr, open(os.path.join(STATE, 'o-r-40.json'), 'w'))
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247')
+    check('a rerun refuses a body that names an issue --closes leaves out', code != 0 and 'names o/r#9' in out)
+    seed(40, WORDED)
+    reword('Round 1 of', 'Round one of', 'o/r#247')
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_CLOSES_FAIL='1')
+    check('a failed first closing read on a rerun says nothing was sent', code != 0 and 'Nothing was sent' in out)
+    if os.path.exists(os.path.join(STATE, 'closes-reads')): os.remove(os.path.join(STATE, 'closes-reads'))
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_CLOSES_FAIL_AT='2')
+    check('a failed closing read during a rerun\'s wait says nothing was sent and names no body', code != 0
+          and 'Nothing was sent' in out and 'from before the edit is at' not in out)
+    seed(40, WORDED)
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247')
+    check('a successful reword names the body from before the edit', code == 0 and 'The body from before the edit is at' in out)
+    seed(40, WORDED)
+    code, out = reword('Round 1 of', 'Round one of', 'o/r#247', '--dry-run', '--wait', '0')
+    check('a reword dry run accepts any --wait, since it never waits', code == 0 and state(40).get('edits') is None)
     seed(40, WORDED)
     code, out = reword('Adds the', 'Brings the', 'none')
     check('reword refuses a passage the body holds more than once', code != 0 and '3 times' in out and state(40).get('edits') is None)
