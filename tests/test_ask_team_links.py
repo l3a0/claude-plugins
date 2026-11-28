@@ -149,8 +149,12 @@ check("the round points at step 6 for the form", "`SKILL.md`'s step 6 gives, wit
 
 step3 = ROUND.split("## 3. Run the blind round")[1].split("## 4. Verify")[0]
 mutate = (ROOT / "skills/fast-mutation/scripts/mutate.py").read_text()
-check("a mutating lens is told to skip escalation, by the flag fast-mutation's runner takes",
-      "with `fast-mutation` it passes `--no-escalate`" in step3 and 'add_argument("--no-escalate"' in mutate)
+check("every mutating role or lens is told never to escalate, by the flag fast-mutation's runner takes",
+      "every role or lens that may mutate code" in step3
+      and "never in a mode that re-runs a survivor against the whole suite" in step3
+      and "it passes `--no-escalate`." in step3 and '"--no-escalate"' in mutate)
+check("the one escalated run names the runner's flag for a single mutant",
+      "`mutate.py <spec> --only <name>`" in step3 and '"--only"' in mutate)
 check("a lens reports a scoped survivor as a survivor whose whole-suite run was not made",
       "reports a survivor of the scoped run as a survivor" in step3 and "its run against the whole suite was not made" in step3)
 
