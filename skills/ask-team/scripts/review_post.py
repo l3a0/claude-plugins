@@ -100,9 +100,12 @@ read may be GitHub catching up on an earlier edit rather than this one, so once
 a read matches, every read until the wait runs out must match too. Where REFS
 is the set before, that holds from the first read. It reads a code span as
 CommonMark does, so a run of backticks with no closing run of the same length
-hides no keyword. It does not end a code fence opened inside a list item when
-the list ends, so a keyword after such a list is missed, and only the wait can
-catch it. A lag longer than the wait still reads as
+hides no keyword, though it reads spans one line at a time and does not treat a
+backslash before a run of backticks as escaping only the first. It does not end
+a code fence opened inside a list item when the list ends. A keyword in those
+forms is missed, and only the wait can catch it. A squash merge carries the
+body to the default branch as plain text, so the refusals advise rewording a
+closing phrase rather than quoting it in a code span. A lag longer than the wait still reads as
 success in that case, so the check before sending is what catches an edit the
 patterns read. On a mismatch it
 exits non-zero naming each issue still closed or no longer closed, with the
@@ -545,7 +548,7 @@ def removed_closing(old, new, heading):
     # GitHub reads no keyword inside code, so a line counts only outside fences and code spans, on both sides.
     kept = {line.strip() for _, line in outside_fences(new.split("\n"))}
     section = [line for i, line in outside_fences(a) if start < i < end]
-    return [line.strip() for line in section if MAY_CLOSE.search(CODE_SPAN.sub("", line)) and line.strip() not in kept]
+    return [line.strip() for line in section if MAY_CLOSE.search(CODE_SPAN.sub(" ", line)) and line.strip() not in kept]
 
 
 def changed_outside_section(old, new, heading):
@@ -575,7 +578,7 @@ def closing_refs(text, repo):
     """Return each issue a closing keyword names in text, outside fences and code spans, as closing_numbers names it."""
     found = set()
     for _, line in outside_fences(text.split("\n")):
-        plain = CODE_SPAN.sub("", line)
+        plain = CODE_SPAN.sub(" ", line)
         for m in CLOSES.finditer(plain):
             ref = CLOSED_REF.search(plain, m.start())
             if ref:
@@ -587,7 +590,7 @@ def added_closing(old, new):
     """Return the lines new holds, outside fences and code spans, that may close an issue and old does not hold."""
     kept = {line.strip() for _, line in outside_fences(old.split("\n"))}
     return [line.strip() for _, line in outside_fences(new.split("\n"))
-            if CLOSES.search(CODE_SPAN.sub("", line)) and line.strip() not in kept]
+            if CLOSES.search(CODE_SPAN.sub(" ", line)) and line.strip() not in kept]
 
 
 def unchanged_rerun(repo, num, what):
@@ -713,20 +716,25 @@ UNCOUNTED = ("GitHub does not count that line, such as one inside an HTML commen
 
 def why_added(added, before, unnamed, named):
     """Say, for each issue a prediction adds, why it is there and what to do about it."""
+    # A squash merge carries the body to the default branch as plain text, so a code span gives no cover there, and
+    # the advice is to reword rather than to quote.
+    reword_it = "reword the line so no closing keyword comes right before the reference"
     parts = []
     for ref in added:
         if ref in named and ref not in unnamed:
-            parts.append(f"The edit adds a closing keyword naming {ref}, so add it to --closes, or put it in a code span.")
+            parts.append(f"The edit adds a closing keyword naming {ref}, so add it to --closes, or {reword_it}.")
         elif ref in named and ref not in before:
-            parts.append(f"The body already names {ref} and GitHub's list lacks it, so either GitHub has not yet re-read "
-                         f"an earlier edit, and waiting and rerunning helps, or {UNCOUNTED}, and only an edit by hand "
-                         "or moving that line into a code span helps.")
+            parts.append(f"The body already names {ref} after a closing keyword and GitHub's list lacks it. Either "
+                         "GitHub has not yet re-read an earlier edit, and waiting and rerunning helps, or GitHub does "
+                         "not close on that line, because the number names a pull request, the line is in an HTML "
+                         "comment or is a form GitHub does not read, or the pull request's base is not the default "
+                         f"branch. Waiting does not help then, so {reword_it}, or edit the body by hand.")
         elif ref in named:
-            parts.append(f"The body names {ref} after a closing keyword, so add it to --closes, or reword that line.")
+            parts.append(f"The body names {ref} after a closing keyword, so add it to --closes, or {reword_it}.")
         else:
-            parts.append(f"GitHub lists {ref} with no closing keyword in the body naming it, because it is linked by "
-                         "hand in the sidebar or GitHub has not yet re-read an earlier edit that removed it, so add it "
-                         "to --closes.")
+            parts.append(f"GitHub lists {ref} with no closing keyword in the body naming it. If it is linked by hand "
+                         "in the sidebar, add it to --closes. If GitHub has not yet re-read an earlier edit that "
+                         "removed it, wait and rerun.")
     return " ".join(parts)
 
 
@@ -764,7 +772,8 @@ def reword(args):
         extra = sorted(closing_refs(body, repo) - want)
         if extra:
             sys.exit(f"{repo}#{num}: the body names {', '.join(extra)} after a closing keyword, which --closes does "
-                     f"not name, so GitHub will read it as closing that once it re-reads the body, unless {UNCOUNTED}. "
+                     f"not name, so GitHub will read it as closing that once it re-reads the body, unless {UNCOUNTED} "
+                     "or the number names a pull request. "
                      "Reword it again, or restore the body from before the edit from GitHub's edit history")
         if args.dry_run:
             print(f"GitHub reads it as closing {', '.join(sorted(before)) or 'nothing'} now, "
@@ -861,9 +870,12 @@ def reword(args):
         extra, missing = sorted(now - want), sorted(want - now)
         lost = [r for r in missing if r in before]
         never = [r for r in missing if r not in before]
-        sys.exit(f"{repo}#{num}: after {args.wait:g} s GitHub reads the body as closing "
+        kept, gained = [r for r in extra if r in before], [r for r in extra if r not in before]
+        took = args.wait - max(0.0, limit - time.monotonic())
+        sys.exit(f"{repo}#{num}: after {took:.1f} s GitHub reads the body as closing "
                  f"{', '.join(sorted(now)) or 'nothing'}, not {', '.join(sorted(want)) or 'nothing'}"
-                 f"{'. It still closes ' + ', '.join(extra) if extra else ''}"
+                 f"{'. It still closes ' + ', '.join(kept) if kept else ''}"
+                 f"{'. It now closes ' + ', '.join(gained) if gained else ''}"
                  f"{'. It no longer closes ' + ', '.join(lost) if lost else ''}"
                  f"{'. It does not yet close ' + ', '.join(never) if never else ''}. "
                  f"GitHub may still be re-reading it, or {UNCOUNTED}. Read it again later, then reword again or "

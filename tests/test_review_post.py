@@ -1777,7 +1777,7 @@ Closes #109
     seed(40, WORDED)
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_LAG='2', STUB_GAIN='99')
     check('reword keeps reading after a stale read that matches, when --closes asks for the set the body already closed',
-          code != 0 and 'still closes o/r#99' in out)
+          code != 0 and 'now closes o/r#99' in out)
     seed(40, WORDED)
     code, out = reword('Round 1 of', 'Round one of', 'o/r#247', STUB_LAG='2')
     check('reword reports a steady read once every read for the whole wait matches', code == 0 and 'on every read' in out)
@@ -1790,7 +1790,7 @@ Closes #109
     check('reword reads a keyword between escaped backticks', code != 0 and 'o/r#99' in out and state(40).get('edits') is None)
     seed(40, WORDED)
     code, out = reword('which closes #247,', 'which tracks #247,', 'none', '--wait', '1', STUB_CLOSES_SEQ='[[], [77]]')
-    check('reword keeps reading after the first match until the wait runs out', code != 0 and 'still closes o/r#77' in out)
+    check('reword keeps reading after the first match until the wait runs out', code != 0 and 'now closes o/r#77' in out)
     for label, old_text, new_text, closes in (('wraps the passage in a code span', 'o/r#265, which closes #247', '`o/r#265, which closes #247`', 'none'),
                                                ('appends to the passage', 'which closes #247,', 'which closes #247, and tracks #248,', '#247')):
         seed(40, WORDED)
@@ -1891,7 +1891,7 @@ Closes #109
     json.dump(pr, open(os.path.join(STATE, 'o-r-40.json'), 'w'))
     code, out = reword('Adds the first', 'Adds the 1st', 'o/r#247', STUB_LAG='1000')
     check('reword refuses before sending a body that names an issue GitHub has not yet re-read, naming both causes', code != 0
-          and 'would read the body as closing o/r#9' in out and 'has not yet re-read' in out and 'does not count' in out
+          and 'would read the body as closing o/r#9' in out and 'has not yet re-read' in out and 'does not close on that line' in out
           and state(40)['edits'] == 1)
     seed(40, WORDED)
     reword('Round 1 of', 'Round one of', 'o/r#247')
